@@ -1,6 +1,59 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { HESTIA } from "@/content/kaline";
 import type { ApiErrorDetails } from "@/lib/hestia/api";
+
+/**
+ * Serialização estável para clipboard: pretty print (2 espaços) + chaves
+ * ordenadas alfabeticamente em qualquer profundidade. Garante que dois
+ * erros idênticos produzam bytes idênticos, facilitando diff e busca.
+ */
+export function stableStringify(value: unknown): string {
+  return JSON.stringify(value, sortedReplacer(), 2);
+}
+
+function sortedReplacer() {
+  const seen = new WeakSet<object>();
+  return function (_key: string, val: unknown) {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      if (seen.has(val as object)) return "[Circular]";
+      seen.add(val as object);
+      return Object.keys(val as Record<string, unknown>)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, k) => {
+          acc[k] = (val as Record<string, unknown>)[k];
+          return acc;
+        }, {});
+    }
+    return val;
+  };
+}
+
+async function copyErrorJson(payload: unknown) {
+  const text = stableStringify(payload);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    toast.success("JSON copiado", {
+      description: `${text.length} caracteres · chaves ordenadas`,
+    });
+  } catch (err) {
+    toast.error("Não foi possível copiar", {
+      description: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 
 const ORIGIN_LABEL: Record<ApiErrorDetails["origin"], string> = {
   "no-base": "Sem host local",
