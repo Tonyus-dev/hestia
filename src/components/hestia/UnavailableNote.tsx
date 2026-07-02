@@ -33,13 +33,33 @@ export function UnavailableNote({
   details?: ApiErrorDetails;
 }) {
   const [open, setOpen] = useState(false);
+  const showInline = details?.origin === "http";
   return (
     <div className="rounded-lg border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-glass)] p-4 text-[13px] text-[color:var(--kaline-muted)]">
-      <p className="kaline-eyebrow text-[color:var(--kaline-amber)]">{HESTIA.waiting}</p>
-      <p className="mt-2">{message ?? "API local indisponível"}</p>
-      <p className="mt-1 text-[color:var(--kaline-faint)] text-[12px]">
-        Sem leitura real ainda · Nenhuma métrica será inventada
+      <p className="kaline-eyebrow text-[color:var(--kaline-amber)]">
+        {showInline
+          ? `HTTP ${details.httpStatus ?? "?"} · ${ORIGIN_LABEL[details.origin]}`
+          : HESTIA.waiting}
       </p>
+      <p className="mt-2">{message ?? "API local indisponível"}</p>
+
+      {showInline && (
+        <dl className="mt-3 grid grid-cols-[70px_1fr] gap-y-1 gap-x-3 font-mono text-[12px] border-t border-[color:var(--kaline-border-copper)]/50 pt-3">
+          <InlineField label="error" value={details.error} />
+          <InlineField label="code" value={details.code} />
+          <InlineField label="detail" value={details.detail} />
+          <InlineField label="route" value={details.route} />
+          <InlineField label="hint" value={details.hint} />
+          <InlineField label="at" value={details.at} />
+        </dl>
+      )}
+
+      {!showInline && (
+        <p className="mt-1 text-[color:var(--kaline-faint)] text-[12px]">
+          Sem leitura real ainda · Nenhuma métrica será inventada
+        </p>
+      )}
+
       {details && (
         <button
           type="button"
@@ -53,6 +73,17 @@ export function UnavailableNote({
         <ErrorModal message={message} details={details} onClose={() => setOpen(false)} />
       )}
     </div>
+  );
+}
+
+function InlineField({ label, value }: { label: string; value?: string }) {
+  return (
+    <>
+      <dt className="text-[color:var(--kaline-faint)] text-[10px] uppercase tracking-[0.2em] pt-0.5">
+        {label}
+      </dt>
+      <dd className="text-[color:var(--kaline-text)] break-all">{value || "—"}</dd>
+    </>
   );
 }
 
