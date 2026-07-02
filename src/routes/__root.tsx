@@ -13,7 +13,6 @@ import appCss from "../styles.css?url";
 import kaApple from "../assets/ka-apple.png.asset.json";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { PhaseFilterProvider } from "@/components/kaline/PhaseFilter";
 
 function NotFoundComponent() {
   return (
@@ -22,7 +21,7 @@ function NotFoundComponent() {
         <p className="kaline-eyebrow">Rota fora do mapa</p>
         <h1 className="mt-3 kaline-serif text-6xl text-[color:var(--kaline-text)]">404</h1>
         <p className="mt-3 text-[color:var(--kaline-muted)]">
-          Este cômodo da Estação ainda não existe.
+          Este cômodo da Héstia ainda não existe.
         </p>
         <div className="mt-6">
           <Link
@@ -78,18 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "K∧LINE CENTRAL — Estação Kaline" },
+      { title: "Héstia Console — Interface local da Héstia" },
       {
         name: "description",
         content:
-          "Painel vivo da Estação Kaline — uma presença doméstica em protótipo visual, sem backend e com estados honestos.",
+          "Console local somente leitura da Héstia, com Chama Local embutida para medir saúde, storage e serviços do servidor.",
       },
       { name: "author", content: "Estação Kaline" },
-      { property: "og:title", content: "K∧LINE CENTRAL — Estação Kaline" },
+      { property: "og:title", content: "Héstia Console — Interface local da Héstia" },
       {
         property: "og:description",
         content:
-          "Protótipo visual da central doméstica Kaline. Servidor, TV, Códice, Mapa da Estação — tudo com estados honestos.",
+          "Frontend local + Chama Local embutida. Somente leitura. Nenhuma métrica inventada.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -129,11 +128,9 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <PhaseFilterProvider>
-        <TooltipProvider delayDuration={300}>
-          <Outlet />
-        </TooltipProvider>
-      </PhaseFilterProvider>
+      <TooltipProvider delayDuration={300}>
+        <Outlet />
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

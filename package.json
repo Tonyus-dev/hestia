@@ -1,5 +1,6 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "hestia-console",
+  "version": "0.1.0",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -8,6 +9,9 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "start": "node server.js",
+    "dev:local": "node --watch server.js",
+    "hestia": "npm run build && node server.js",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

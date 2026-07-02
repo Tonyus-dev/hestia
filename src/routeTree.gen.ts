@@ -11,6 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StationRouteImport } from './routes/_station'
 import { Route as StationIndexRouteImport } from './routes/_station.index'
+import { Route as StationLogsRouteImport } from './routes/_station.logs'
+import { Route as StationEndpointsRouteImport } from './routes/_station.endpoints'
+import { Route as StationConfigRouteImport } from './routes/_station.config'
 
 const StationRoute = StationRouteImport.update({
   id: '/_station',
@@ -21,24 +24,54 @@ const StationIndexRoute = StationIndexRouteImport.update({
   path: '/',
   getParentRoute: () => StationRoute,
 } as any)
+const StationLogsRoute = StationLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => StationRoute,
+} as any)
+const StationEndpointsRoute = StationEndpointsRouteImport.update({
+  id: '/endpoints',
+  path: '/endpoints',
+  getParentRoute: () => StationRoute,
+} as any)
+const StationConfigRoute = StationConfigRouteImport.update({
+  id: '/config',
+  path: '/config',
+  getParentRoute: () => StationRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof StationIndexRoute
+  '/config': typeof StationConfigRoute
+  '/endpoints': typeof StationEndpointsRoute
+  '/logs': typeof StationLogsRoute
 }
 export interface FileRoutesByTo {
+  '/config': typeof StationConfigRoute
+  '/endpoints': typeof StationEndpointsRoute
+  '/logs': typeof StationLogsRoute
   '/': typeof StationIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_station': typeof StationRouteWithChildren
+  '/_station/config': typeof StationConfigRoute
+  '/_station/endpoints': typeof StationEndpointsRoute
+  '/_station/logs': typeof StationLogsRoute
   '/_station/': typeof StationIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/config' | '/endpoints' | '/logs'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/_station' | '/_station/'
+  to: '/config' | '/endpoints' | '/logs' | '/'
+  id:
+    | '__root__'
+    | '/_station'
+    | '/_station/config'
+    | '/_station/endpoints'
+    | '/_station/logs'
+    | '/_station/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -61,14 +94,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationIndexRouteImport
       parentRoute: typeof StationRoute
     }
+    '/_station/logs': {
+      id: '/_station/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof StationLogsRouteImport
+      parentRoute: typeof StationRoute
+    }
+    '/_station/endpoints': {
+      id: '/_station/endpoints'
+      path: '/endpoints'
+      fullPath: '/endpoints'
+      preLoaderRoute: typeof StationEndpointsRouteImport
+      parentRoute: typeof StationRoute
+    }
+    '/_station/config': {
+      id: '/_station/config'
+      path: '/config'
+      fullPath: '/config'
+      preLoaderRoute: typeof StationConfigRouteImport
+      parentRoute: typeof StationRoute
+    }
   }
 }
 
 interface StationRouteChildren {
+  StationConfigRoute: typeof StationConfigRoute
+  StationEndpointsRoute: typeof StationEndpointsRoute
+  StationLogsRoute: typeof StationLogsRoute
   StationIndexRoute: typeof StationIndexRoute
 }
 
 const StationRouteChildren: StationRouteChildren = {
+  StationConfigRoute: StationConfigRoute,
+  StationEndpointsRoute: StationEndpointsRoute,
+  StationLogsRoute: StationLogsRoute,
   StationIndexRoute: StationIndexRoute,
 }
 
