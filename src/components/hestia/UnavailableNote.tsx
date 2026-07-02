@@ -186,6 +186,23 @@ export function UnavailableNote({
         </p>
       )}
 
+      {payload && (
+        <div className="mt-3 border-t border-[color:var(--kaline-border-copper)]/50 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="kaline-eyebrow text-[color:var(--kaline-faint)]">Payload JSON</p>
+            <button
+              type="button"
+              onClick={toggleCompact}
+              className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+              aria-label={compact ? "Expandir JSON" : "Compactar JSON"}
+            >
+              {compact ? "pretty print" : "compacto"}
+            </button>
+          </div>
+          <JsonPreview payload={payload} compact={compact} />
+        </div>
+      )}
+
       <div className="mt-3 flex items-center gap-3 flex-wrap">
         {onRetry && (
           <button
@@ -209,14 +226,14 @@ export function UnavailableNote({
             </button>
             <button
               type="button"
-              onClick={() => copyErrorJson(buildPayload(message, details))}
+              onClick={() => copyErrorJson(payload)}
               className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
             >
               copiar json
             </button>
             <button
               type="button"
-              onClick={() => downloadErrorJson(buildPayload(message, details), details.route)}
+              onClick={() => downloadErrorJson(payload, details.route)}
               className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
             >
               baixar json
