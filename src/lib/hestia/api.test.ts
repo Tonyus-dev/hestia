@@ -35,7 +35,7 @@ function setLocation(hostname: string, protocol = "http:") {
 }
 
 function mockFetch(impl: (input: RequestInfo | URL) => Promise<Response> | Response) {
-  const fn = vi.fn(impl as never);
+  const fn = vi.fn(impl);
   vi.stubGlobal("fetch", fn);
   return fn;
 }
