@@ -414,6 +414,14 @@ function ErrorModal({
         <footer className="mt-6 flex justify-end gap-2">
           <button
             type="button"
+            onClick={() => copyReadableDetails(message, details)}
+            className="text-[11px] uppercase tracking-[0.22em] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)]"
+          >
+            copiar detalhes
+          </button>
+
+          <button
+            type="button"
             onClick={() => copyErrorJson(buildPayload(message, details))}
             className="text-[11px] uppercase tracking-[0.22em] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)]"
           >
