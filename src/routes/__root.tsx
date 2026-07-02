@@ -13,6 +13,8 @@ import appCss from "../styles.css?url";
 import kaApple from "../assets/ka-apple.png.asset.json";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "sonner";
+
 
 function NotFoundComponent() {
   return (
