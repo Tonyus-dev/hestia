@@ -1,11 +1,27 @@
 // Camada centralizada de chamadas à Chama Local.
 // Todas as leituras têm timeout, tratam erro e nunca inventam dados.
 
+export type ApiErrorDetails = {
+  route?: string;
+  httpStatus?: number;
+  code?: string;
+  detail?: string;
+  hint?: string;
+  timeoutMs?: number;
+  rawBody?: string;
+  origin: "network" | "timeout" | "http" | "no-base";
+};
+
 export type ApiState<T> =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ok"; data: T; fetchedAt: string }
-  | { status: "unavailable"; message: string; fetchedAt: string };
+  | {
+      status: "unavailable";
+      message: string;
+      fetchedAt: string;
+      details: ApiErrorDetails;
+    };
 
 export type Health = {
   ok: boolean;
