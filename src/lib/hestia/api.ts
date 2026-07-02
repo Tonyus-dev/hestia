@@ -54,7 +54,8 @@ export type ServiceStatus = {
 export type ServicesStatus = { items: ServiceStatus[] };
 
 export type LogItem = { timestamp: string; level: string; message: string };
-export type Logs = { items: LogItem[] };
+export type Logs = { items: LogItem[]; tail?: number; capacity?: number };
+
 
 export type Config = {
   appName: string;
