@@ -105,7 +105,22 @@ describe("hestiaApi.safeFetch — parser de erros estruturados", () => {
     // detail preferido sobre error quando ambos existem
     expect(s.details.detail).toBe("permission denied");
     expect(s.details.hint).toBe("rode com usuário com acesso de leitura");
+    expect(s.details.error).toBe("Falha ao ler /var/log");
     expect(s.details.rawBody).toContain("EACCES");
+  });
+
+  it("captura os campos `at` e `route` vindos do backend", async () => {
+    const body = {
+      error: "boom",
+      code: "EINTERNAL",
+      route: "GET /api/server/status",
+      at: "2026-07-02T12:34:56.000Z",
+    };
+    mockFetch(() => new Response(JSON.stringify(body), { status: 500 }));
+    const s = expectUnavailable(await hestiaApi.server());
+    expect(s.details.route).toBe("GET /api/server/status");
+    expect(s.details.at).toBe("2026-07-02T12:34:56.000Z");
+    expect(s.details.error).toBe("boom");
   });
 
   it("usa `error` como detail quando `detail` está ausente", async () => {
@@ -119,6 +134,7 @@ describe("hestiaApi.safeFetch — parser de erros estruturados", () => {
 
     const s = expectUnavailable(await hestiaApi.server());
     expect(s.details.detail).toBe("algo quebrou");
+    expect(s.details.error).toBe("algo quebrou");
     expect(s.details.code).toBe("EIO");
   });
 
