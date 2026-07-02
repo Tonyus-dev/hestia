@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { HESTIA } from "@/content/kaline";
 import type { ApiErrorDetails } from "@/lib/hestia/api";
