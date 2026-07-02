@@ -142,7 +142,21 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
         <Outlet />
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "var(--kaline-surface)",
+              border: "1px solid var(--kaline-border-copper)",
+              color: "var(--kaline-text)",
+              fontFamily: "var(--font-mono, ui-monospace, monospace)",
+              fontSize: "12.5px",
+            },
+          }}
+        />
       </TooltipProvider>
+
     </QueryClientProvider>
   );
 }
