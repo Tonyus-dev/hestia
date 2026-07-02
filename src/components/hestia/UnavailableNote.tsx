@@ -54,6 +54,33 @@ async function copyErrorJson(payload: unknown) {
   }
 }
 
+function downloadErrorJson(payload: unknown, route?: string) {
+  const text = stableStringify(payload);
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = buildDownloadFilename(route);
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast.success("JSON baixado", {
+    description: `${text.length} caracteres · chaves ordenadas · ${a.download}`,
+  });
+}
+
+export function buildDownloadFilename(route?: string): string {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const slug = route ? route.replace(/^\//, "").replace(/[^a-zA-Z0-9_-]/g, "_") : "error";
+  return `hestia-${slug || "error"}-${stamp}.json`;
+}
+
+function buildPayload(message: string | undefined, details: ApiErrorDetails) {
+  return { message: message ?? null, ...details };
+}
+
 
 const ORIGIN_LABEL: Record<ApiErrorDetails["origin"], string> = {
   "no-base": "Sem host local",
@@ -130,13 +157,29 @@ export function UnavailableNote({
           </button>
         )}
         {details && (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
-          >
-            Ver detalhes →
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => copyErrorJson(buildPayload(message, details))}
+              className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+            >
+              copiar json
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadErrorJson(buildPayload(message, details), details.route)}
+              className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+            >
+              baixar json
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+            >
+              Ver detalhes →
+            </button>
+          </>
         )}
       </div>
       {open && details && (
@@ -331,10 +374,18 @@ function ErrorModal({
         <footer className="mt-6 flex justify-end gap-2">
           <button
             type="button"
-            onClick={() => copyErrorJson({ message, ...details })}
+            onClick={() => copyErrorJson(buildPayload(message, details))}
             className="text-[11px] uppercase tracking-[0.22em] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)]"
           >
             copiar json
+          </button>
+
+          <button
+            type="button"
+            onClick={() => downloadErrorJson(buildPayload(message, details), details.route)}
+            className="text-[11px] uppercase tracking-[0.22em] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)]"
+          >
+            baixar json
           </button>
 
           <button

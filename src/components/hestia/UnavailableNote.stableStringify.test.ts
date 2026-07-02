@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { stableStringify } from "@/components/hestia/UnavailableNote";
+import {
+  buildDownloadFilename,
+  stableStringify,
+} from "@/components/hestia/UnavailableNote";
 
 describe("stableStringify", () => {
   it("orders keys alphabetically at any depth", () => {
@@ -23,5 +26,27 @@ describe("stableStringify", () => {
     const out = stableStringify(obj);
     expect(out).toContain('"self": "[Circular]"');
     expect(out).toContain('"name": "x"');
+  });
+});
+
+describe("buildDownloadFilename", () => {
+  it("uses route slug and timestamp", () => {
+    const name = buildDownloadFilename("/api/server/status");
+    expect(name).toMatch(/^hestia-api_server_status-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
+  });
+
+  it("falls back to error when route is absent", () => {
+    const name = buildDownloadFilename();
+    expect(name).toMatch(/^hestia-error-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
+  });
+
+  it("sanitizes special characters in route", () => {
+    const name = buildDownloadFilename("/api/logs?tail=100");
+    expect(name).toMatch(/^hestia-api_logs_tail_100-/);
+  });
+
+  it("falls back to error for empty slug after stripping slash", () => {
+    const name = buildDownloadFilename("/");
+    expect(name).toMatch(/^hestia-error-/);
   });
 });
