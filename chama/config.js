@@ -21,16 +21,14 @@ function loadUserConfig() {
     if (Array.isArray(raw.storagePaths))
       out.storagePaths = raw.storagePaths.filter((s) => typeof s === "string");
     if (Array.isArray(raw.services))
-      out.services = raw.services.filter(
-        // apenas nomes seguros: [a-zA-Z0-9._-], até 64 chars
-        (s) => typeof s === "string" && /^[a-zA-Z0-9._-]{1,64}$/.test(s),
-      );
+      out.services = raw.services.filter((s) => ALLOWED_SERVICES.includes(s));
     return out;
   } catch {
     return {};
   }
 }
 
+const ALLOWED_SERVICES = ["jellyfin", "syncthing", "smbd", "tailscaled"];
 const userCfg = loadUserConfig();
 
 export const config = {
@@ -50,5 +48,5 @@ export const config = {
   services:
     userCfg.services && userCfg.services.length > 0
       ? userCfg.services
-      : ["jellyfin", "syncthing", "smbd", "tailscaled"],
+      : ALLOWED_SERVICES,
 };

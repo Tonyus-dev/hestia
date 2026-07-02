@@ -94,14 +94,14 @@ const CHAMA_PORT = 4517;
 
 /**
  * Resolve base URL da Chama Local.
- * - No browser em localhost/LAN: usa host atual na porta 4517.
+ * - Se servido pela própria Héstia: usa a origin atual.
  * - Em qualquer outro ambiente (preview Lovable, produção hospedada):
  *   retorna null → NÃO dispara fetch (evita 500 do SSR que não conhece /api/*).
  * - No servidor (SSR): também retorna null.
  */
 function resolveBase(): string | null {
   if (typeof window === "undefined") return null;
-  const { hostname, protocol } = window.location;
+  const { hostname, protocol, port, origin } = window.location;
   const isLocal =
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
@@ -111,6 +111,7 @@ function resolveBase(): string | null {
     /^192\.168\./.test(hostname) ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
   if (!isLocal) return null;
+  if (port && port !== "5173") return origin;
   return `${protocol}//${hostname}:${CHAMA_PORT}`;
 }
 

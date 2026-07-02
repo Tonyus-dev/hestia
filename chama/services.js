@@ -14,6 +14,10 @@ async function check(name) {
     return { name, active: raw === "active", status: mapStatus(raw), checkedAt: now };
   } catch (err) {
     const raw = (err.stdout || "").toString().trim();
+    const stderr = (err.stderr || "").toString();
+    if (/not found|could not be found|not-found|not installed|not-loaded/i.test(stderr)) {
+      return { name, active: false, status: "not-installed", checkedAt: now };
+    }
     if (raw) return { name, active: false, status: mapStatus(raw), checkedAt: now };
     if (err.code === "ENOENT") {
       return { name, active: false, status: "unavailable", checkedAt: now };
