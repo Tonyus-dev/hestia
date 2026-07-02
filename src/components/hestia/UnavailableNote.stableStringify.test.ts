@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildDownloadFilename,
   buildReadableDetails,
+  formatJson,
   stableStringify,
 } from "@/components/hestia/UnavailableNote";
 import type { ApiErrorDetails } from "@/lib/hestia/api";
@@ -100,5 +101,24 @@ describe("buildReadableDetails", () => {
     expect(text).toContain("http: —");
     expect(text).toContain("code: —");
     expect(text).toContain("error: —");
+  });
+});
+
+describe("formatJson", () => {
+  const payload = { z: 1, a: 2, nested: { b: 3, a: 4 } };
+
+  it("returns pretty-printed sorted JSON when compact is false", () => {
+    const text = formatJson(payload, false);
+    expect(text).toContain('\n  "a": 2,');
+    expect(text).toContain('\n    "a": 4,');
+    expect(text).not.toMatch(/^\{[^\n]+\}$/);
+  });
+
+  it("returns compact sorted JSON when compact is true", () => {
+    const text = formatJson(payload, true);
+    expect(text).toMatch(/^\{.*\}$/);
+    expect(text).not.toContain("\n");
+    expect(text).toContain('"a":2');
+    expect(text).toContain('"nested":{"a":4,"b":3}');
   });
 });

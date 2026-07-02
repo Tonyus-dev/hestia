@@ -29,6 +29,12 @@ function sortedReplacer() {
   };
 }
 
+export function formatJson(value: unknown, compact: boolean): string {
+  return compact
+    ? JSON.stringify(value, sortedReplacer())
+    : stableStringify(value);
+}
+
 async function copyErrorJson(payload: unknown) {
   const text = stableStringify(payload);
   await copyToClipboard(
@@ -151,7 +157,11 @@ export function UnavailableNote({
   refreshing?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
   const showInline = details?.origin === "http";
+  const payload = details ? buildPayload(message, details) : null;
+  const toggleCompact = () => setCompact((c) => !c);
+
   return (
     <div className="rounded-lg border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-glass)] p-4 text-[13px] text-[color:var(--kaline-muted)]">
       <p className="kaline-eyebrow text-[color:var(--kaline-amber)]">
@@ -178,6 +188,23 @@ export function UnavailableNote({
         </p>
       )}
 
+      {payload && (
+        <div className="mt-3 border-t border-[color:var(--kaline-border-copper)]/50 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="kaline-eyebrow text-[color:var(--kaline-faint)]">Payload JSON</p>
+            <button
+              type="button"
+              onClick={toggleCompact}
+              className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+              aria-label={compact ? "Expandir JSON" : "Compactar JSON"}
+            >
+              {compact ? "pretty print" : "compacto"}
+            </button>
+          </div>
+          <JsonPreview payload={payload} compact={compact} />
+        </div>
+      )}
+
       <div className="mt-3 flex items-center gap-3 flex-wrap">
         {onRetry && (
           <button
@@ -201,14 +228,14 @@ export function UnavailableNote({
             </button>
             <button
               type="button"
-              onClick={() => copyErrorJson(buildPayload(message, details))}
+              onClick={() => copyErrorJson(payload)}
               className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
             >
               copiar json
             </button>
             <button
               type="button"
-              onClick={() => downloadErrorJson(buildPayload(message, details), details.route)}
+              onClick={() => downloadErrorJson(payload, details.route)}
               className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
             >
               baixar json
@@ -224,7 +251,13 @@ export function UnavailableNote({
         )}
       </div>
       {open && details && (
-        <ErrorModal message={message} details={details} onClose={() => setOpen(false)} />
+        <ErrorModal
+          message={message}
+          details={details}
+          onClose={() => setOpen(false)}
+          compact={compact}
+          onToggleCompact={toggleCompact}
+        />
       )}
     </div>
   );
@@ -255,13 +288,18 @@ function ErrorModal({
   message,
   details,
   onClose,
+  compact,
+  onToggleCompact,
 }: {
   message?: string;
   details: ApiErrorDetails;
   onClose: () => void;
+  compact: boolean;
+  onToggleCompact: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -400,6 +438,21 @@ function ErrorModal({
           </dl>
         </section>
 
+        <section className="mt-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="kaline-eyebrow">Payload JSON</p>
+            <button
+              type="button"
+              onClick={onToggleCompact}
+              className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+              aria-label={compact ? "Expandir JSON" : "Compactar JSON"}
+            >
+              {compact ? "pretty print" : "compacto"}
+            </button>
+          </div>
+          <JsonPreview payload={buildPayload(message, details)} compact={compact} />
+        </section>
+
         {details.rawBody && (
           <section className="mt-5">
             <div className="flex items-center justify-between mb-2">
@@ -512,6 +565,18 @@ function RawBody({ text }: { text: string }) {
       </code>
     </pre>
   );
+}
+
+function JsonPreview({ payload, compact }: { payload: unknown; compact: boolean }) {
+  const text = formatJson(payload, compact);
+  if (compact) {
+    return (
+      <pre className="overflow-auto rounded border border-[color:var(--kaline-border-copper)]/60 bg-[color:var(--kaline-obsidian)]/70 p-3 text-[11.5px] leading-[1.55] text-[color:var(--kaline-text)]/90 font-mono">
+        <code className="whitespace-pre-wrap break-all">{text}</code>
+      </pre>
+    );
+  }
+  return <RawBody text={text} />;
 }
 
 
