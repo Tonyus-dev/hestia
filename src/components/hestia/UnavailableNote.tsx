@@ -153,9 +153,11 @@ function ErrorModal({
             <Field label="origem" value={details.origin} />
             <Field label="rota" value={details.route} />
             <Field label="http" value={details.httpStatus?.toString()} />
+            <Field label="error" value={details.error} />
             <Field label="code" value={details.code} />
             <Field label="detail" value={details.detail} />
             <Field label="hint" value={details.hint} />
+            <Field label="at" value={details.at} />
             <Field
               label="timeout"
               value={details.timeoutMs != null ? `${details.timeoutMs}ms` : undefined}
