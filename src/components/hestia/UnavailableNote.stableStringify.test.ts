@@ -3,7 +3,6 @@ import {
   buildDownloadFilename,
   stableStringify,
 } from "@/components/hestia/UnavailableNote";
-import type { ApiErrorDetails } from "@/lib/hestia/api";
 
 describe("stableStringify", () => {
   it("orders keys alphabetically at any depth", () => {
