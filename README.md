@@ -91,6 +91,46 @@ HESTIA_STORAGE_PATH=/KALINE
 Só os campos acima são lidos. Nomes de serviço passam por regex
 `[a-zA-Z0-9._-]{1,64}` — qualquer coisa fora disso é ignorada.
 
+## Processo de construção
+
+1. Build do frontend TanStack Start para `dist/`
+2. Iniciar `hestia.js` (Fastify): servir API em `/api/*` e assets estáticos em `/*`
+3. Chama Local mede o host via `node:os`, `df`, `systemctl` e `journalctl`
+4. O frontend detecta se está em localhost/LAN e só então consulta `http://<host>:4517`
+5. Fora do ambiente local, o app mostra `Aguardando Chama Local` sem disparar requisições
+
+## Comandos npm
+
+| Comando | O que faz | Onde usar |
+|---|---|---|
+| `npm install` | Instala dependências | Uma vez no checkout |
+| `npm run dev` | Frontend Lovable com HMR | Preview / desenvolvimento de UI |
+| `npm run build` | Build de produção para `dist/` | Antes de iniciar a Chama |
+| `npm run hestia` | Build + inicia Chama Local em `http://localhost:4517` | Linux local |
+| `npm run dev:local` | Backend com hot reload | Desenvolvimento de `hestia.js/chama/*` |
+
+Verificações rápidas:
+
+```bash
+node hestia.js --help
+node hestia.js --port 4600
+npm run build
+npm run hestia
+```
+
+## Critérios de aceite
+
+- [x] Frontend renderiza sem 500 ao abrir no preview Lovable
+- [x] `/api/health`, `/api/server/status`, `/api/storage/status`, `/api/services/status` respondem em local
+- [x] `/api/logs?tail=N` respeita `1 ≤ N ≤ 200`
+- [x] CLI aceita `--port`, `--host` e `--help`
+- [x] `~/.chama/config.json` opcional whitelista serviços e paths
+- [x] Página `/endpoints` gera `curl` com URL local correta
+- [x] Página `/logs` permite escolher tail 50 / 100 / 200
+- [x] Build de produção passa sem erros
+
+Pendências fora do sandbox: testar em Linux real, smoke tests com Vitest, empacotamento como binário único.
+
 ## Segurança
 
 A v0 é somente leitura.
