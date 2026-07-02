@@ -44,27 +44,45 @@ async function copyErrorJson(payload: unknown) {
   );
 }
 
-function downloadErrorJson(payload: unknown, route?: string, at?: string) {
+function downloadErrorJson(payload: unknown, details: ApiErrorDetails) {
   const text = stableStringify(payload);
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = buildDownloadFilename(route, at);
+  a.download = buildDownloadFilename(details);
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast.success("JSON baixado", {
-    description: `${text.length} caracteres · chaves ordenadas · ${a.download}`,
+    description: `${text.length} caracteres · ${a.download}`,
   });
 }
 
-export function buildDownloadFilename(route?: string, at?: string): string {
-  const stamp = formatStamp(at);
-  const slug = sanitizeRouteSlug(route);
-  return `hestia-${slug}-${stamp}.json`;
+export function buildDownloadFilename(details: ApiErrorDetails): string {
+  const stamp = formatStamp(details.at);
+  const slug = sanitizeRouteSlug(details.route);
+  const type = errorTypeSegment(details);
+  return `hestia-${slug}-${type}-${stamp}.json`;
+}
+
+function errorTypeSegment(details: ApiErrorDetails): string {
+  switch (details.origin) {
+    case "http": {
+      const code = details.code || details.httpStatus?.toString() || "error";
+      return `http_${code}`;
+    }
+    case "timeout":
+      return "timeout";
+    case "network":
+      return "network";
+    case "no-base":
+      return "no_base";
+    default:
+      return "error";
+  }
 }
 
 function formatStamp(raw?: string): string {
