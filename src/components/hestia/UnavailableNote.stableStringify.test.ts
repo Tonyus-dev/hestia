@@ -34,7 +34,7 @@ describe("stableStringify", () => {
 });
 
 describe("buildDownloadFilename", () => {
-  it("uses route slug and timestamp", () => {
+  it("uses route slug and current timestamp when at is absent", () => {
     const name = buildDownloadFilename("/api/server/status");
     expect(name).toMatch(/^hestia-api_server_status-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
   });
@@ -52,6 +52,30 @@ describe("buildDownloadFilename", () => {
   it("falls back to error for empty slug after stripping slash", () => {
     const name = buildDownloadFilename("/");
     expect(name).toMatch(/^hestia-error-/);
+  });
+
+  it("uses the stable at timestamp when provided", () => {
+    const name1 = buildDownloadFilename("/api/server/status", "2026-07-02T17:00:00Z");
+    const name2 = buildDownloadFilename("/api/server/status", "2026-07-02T17:00:00Z");
+    expect(name1).toBe("hestia-api_server_status-2026-07-02T17-00-00.json");
+    expect(name2).toBe(name1);
+  });
+
+  it("falls back to current timestamp when at is invalid", () => {
+    const name = buildDownloadFilename("/api/server/status", "not-a-date");
+    expect(name).toMatch(/^hestia-api_server_status-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
+  });
+
+  it("truncates very long routes to stay within filesystem limits", () => {
+    const longRoute = "/api/" + "x".repeat(300);
+    const name = buildDownloadFilename(longRoute, "2026-07-02T17:00:00Z");
+    expect(name.length).toBeLessThan(160);
+    expect(name).toMatch(/^hestia-api_xxxx+-2026-07-02T17-00-00\.json$/);
+  });
+
+  it("collapses consecutive underscores and trims leading/trailing underscores", () => {
+    const name = buildDownloadFilename("/api///logs??tail=100", "2026-07-02T17:00:00Z");
+    expect(name).toBe("hestia-api_logs_tail_100-2026-07-02T17-00-00.json");
   });
 });
 
