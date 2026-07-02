@@ -217,9 +217,9 @@ describe("hestiaApi.ping", () => {
   });
 
   it("retorna {status,ok} em sucesso", async () => {
-    mockFetch(() => new Response("", { status: 204 }));
+    mockFetch(() => new Response("ok", { status: 200 }));
     const r = await hestiaApi.ping("/api/health");
-    expect(r).toEqual({ status: 204, ok: true });
+    expect(r).toEqual({ status: 200, ok: true });
   });
 
   it("retorna status=erro quando o fetch falha", async () => {
