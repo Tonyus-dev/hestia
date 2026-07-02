@@ -30,7 +30,9 @@ function sortedReplacer() {
 }
 
 export function formatJson(value: unknown, compact: boolean): string {
-  return compact ? stableStringify(value).replace(/\n\s*/g, "") : stableStringify(value);
+  return compact
+    ? JSON.stringify(value, sortedReplacer())
+    : stableStringify(value);
 }
 
 async function copyErrorJson(payload: unknown) {
