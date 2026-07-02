@@ -155,7 +155,11 @@ export function UnavailableNote({
   refreshing?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
   const showInline = details?.origin === "http";
+  const payload = details ? buildPayload(message, details) : null;
+  const toggleCompact = () => setCompact((c) => !c);
+
   return (
     <div className="rounded-lg border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-glass)] p-4 text-[13px] text-[color:var(--kaline-muted)]">
       <p className="kaline-eyebrow text-[color:var(--kaline-amber)]">
