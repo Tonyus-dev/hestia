@@ -108,6 +108,8 @@ Só os campos acima são lidos. Nomes de serviço passam por regex
 | `npm run build` | Build de produção para `dist/` | Antes de iniciar a Chama |
 | `npm run hestia` | Build + inicia Chama Local em `http://localhost:4517` | Linux local |
 | `npm run dev:local` | Backend com hot reload | Desenvolvimento de `hestia.js/chama/*` |
+| `npm test` | Roda a suite do Vitest uma vez | CI / verificação local |
+| `npm run test:watch` | Roda os testes em modo interativo | Durante refatorações |
 
 Verificações rápidas:
 
@@ -116,7 +118,27 @@ node hestia.js --help
 node hestia.js --port 4600
 npm run build
 npm run hestia
+npm test
 ```
+
+## Rodar os testes (Vitest)
+
+A suite usa [Vitest](https://vitest.dev/) com ambiente `jsdom` para testar o parser do cliente (`src/lib/hestia/api.ts`) e o helper `stableStringify`.
+
+```bash
+npm test              # roda uma vez e sai
+npm run test:watch    # modo interativo, re-runs ao salvar arquivos
+```
+
+Opções úteis:
+
+```bash
+npm test -- --reporter=verbose   # mostra nome de cada teste
+npm test -- src/lib/hestia/api.test.ts
+npm run test:watch -- --coverage  # requer @vitest/coverage-v8 instalado
+```
+
+Atualmente cobrimos: parsing de erros HTTP estruturados, fallback para 500 sem corpo JSON, timeout, falha de rede, proteção contra fetch fora de localhost, helpers de formatação e `stableStringify` ordenado.
 
 ## Critérios de aceite
 
