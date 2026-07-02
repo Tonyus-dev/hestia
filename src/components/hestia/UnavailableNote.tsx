@@ -31,27 +31,11 @@ function sortedReplacer() {
 
 async function copyErrorJson(payload: unknown) {
   const text = stableStringify(payload);
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
-    toast.success("JSON copiado", {
-      description: `${text.length} caracteres · chaves ordenadas`,
-    });
-  } catch (err) {
-    toast.error("Não foi possível copiar", {
-      description: err instanceof Error ? err.message : String(err),
-    });
-  }
+  await copyToClipboard(
+    text,
+    "JSON copiado",
+    `${text.length} caracteres · chaves ordenadas`,
+  );
 }
 
 function downloadErrorJson(payload: unknown, route?: string) {
@@ -79,6 +63,56 @@ export function buildDownloadFilename(route?: string): string {
 
 function buildPayload(message: string | undefined, details: ApiErrorDetails) {
   return { message: message ?? null, ...details };
+}
+
+export function buildReadableDetails(message: string | undefined, details: ApiErrorDetails): string {
+  const lines = [
+    `Héstia Console — detalhes do erro`,
+    ``,
+    `status: ${details.origin}`,
+    `rota: ${details.route ?? "—"}`,
+    `http: ${details.httpStatus?.toString() ?? "—"}`,
+    `code: ${details.code ?? "—"}`,
+    `error: ${details.error ?? "—"}`,
+    `hint: ${details.hint ?? "—"}`,
+    `at: ${details.at ?? "—"}`,
+    `timeout: ${details.timeoutMs != null ? `${details.timeoutMs}ms` : "—"}`,
+    ``,
+    `mensagem: ${message ?? "—"}`,
+  ];
+  return lines.join("\n");
+}
+
+
+async function copyToClipboard(text: string, successTitle: string, successDescription: string) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    toast.success(successTitle, { description: successDescription });
+  } catch (err) {
+    toast.error("Não foi possível copiar", {
+      description: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function copyReadableDetails(message: string | undefined, details: ApiErrorDetails) {
+  const text = buildReadableDetails(message, details);
+  await copyToClipboard(
+    text,
+    "Detalhes copiados",
+    `${text.length} caracteres · status, rota, code, error, hint, at`,
+  );
 }
 
 
@@ -158,6 +192,13 @@ export function UnavailableNote({
         )}
         {details && (
           <>
+            <button
+              type="button"
+              onClick={() => copyReadableDetails(message, details)}
+              className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+            >
+              copiar detalhes
+            </button>
             <button
               type="button"
               onClick={() => copyErrorJson(buildPayload(message, details))}
@@ -372,6 +413,14 @@ function ErrorModal({
         )}
 
         <footer className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => copyReadableDetails(message, details)}
+            className="text-[11px] uppercase tracking-[0.22em] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)]"
+          >
+            copiar detalhes
+          </button>
+
           <button
             type="button"
             onClick={() => copyErrorJson(buildPayload(message, details))}
