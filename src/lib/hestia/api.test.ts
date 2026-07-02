@@ -138,18 +138,36 @@ describe("hestiaApi.safeFetch — parser de erros estruturados", () => {
     expect(s.details.code).toBe("EIO");
   });
 
-  it("preserva rawBody e mensagem base quando o corpo NÃO é JSON", async () => {
+  it("aplica fallback claro quando o corpo NÃO é JSON, preservando status e rota", async () => {
     mockFetch(() => new Response("<html>bad gateway</html>", { status: 502 }));
 
     const s = expectUnavailable(await hestiaApi.storage());
+    // Status + statusText sempre visíveis
     expect(s.message).toContain("GET /api/storage/status respondeu 502");
-    // Sem parsing JSON, não deve concatenar sufixo " — ..."
-    expect(s.message).not.toContain(" — ");
     expect(s.details.origin).toBe("http");
     expect(s.details.httpStatus).toBe(502);
+    expect(s.details.route).toBe("GET /api/storage/status");
+    // rawBody preservado integralmente (até 2000 chars)
     expect(s.details.rawBody).toBe("<html>bad gateway</html>");
-    expect(s.details.code).toBeUndefined();
-    expect(s.details.detail).toBeUndefined();
+    // Fallback preenche code/detail/hint em vez de deixar em branco
+    expect(s.details.code).toBe("HTTP_502");
+    expect(s.details.detail).toContain("Corpo não-estruturado");
+    expect(s.details.detail).toContain("bad gateway");
+    expect(s.details.hint).toContain("não retornou JSON");
+    expect(s.details.error).toBeDefined();
+    // `at` é preenchido com timestamp do cliente quando ausente no corpo
+    expect(s.details.at).toMatch(/\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("aplica fallback específico quando o corpo está vazio", async () => {
+    mockFetch(() => new Response("", { status: 500, statusText: "Internal Server Error" }));
+
+    const s = expectUnavailable(await hestiaApi.health());
+    expect(s.message).toContain("respondeu 500");
+    expect(s.details.httpStatus).toBe(500);
+    expect(s.details.code).toBe("HTTP_500");
+    expect(s.details.detail).toContain("Resposta vazia");
+    expect(s.details.rawBody).toBe("");
   });
 
   it("trunca rawBody em 2000 chars", async () => {
