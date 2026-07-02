@@ -82,7 +82,7 @@ app.get("/api/config", async () => ({
   port: config.port,
   mode: config.mode,
   readonly: config.readonly,
-  lanEnabled: config.lanEnabled,
+  lanEnabled: config.host !== "127.0.0.1" && config.host !== "localhost",
   storagePaths: config.storagePaths,
   services: config.services,
 }));

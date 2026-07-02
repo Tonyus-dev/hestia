@@ -43,10 +43,9 @@ npm run dev:local       # reinicia a Chama a cada mudança em hestia.js/chama/*
 ```
 node hestia.js --help
 node hestia.js --port 4600
-node hestia.js --host 0.0.0.0 --port 4517
 ```
 
-Precedência: **CLI > env > `~/.chama/config.json` > padrões**.
+Precedência: **CLI > env > `~/.chama/config.json` > padrões**. A v0 é local-first em `127.0.0.1:4517`; LAN só depois com Tailscale/autenticação.
 
 ## Endpoints
 
@@ -88,15 +87,15 @@ HESTIA_STORAGE_PATH=/KALINE
 }
 ```
 
-Só os campos acima são lidos. Nomes de serviço passam por regex
-`[a-zA-Z0-9._-]{1,64}` — qualquer coisa fora disso é ignorada.
+Só os campos acima são lidos. Serviços são intersectados com a lista permitida:
+`jellyfin`, `syncthing`, `smbd`, `tailscaled`.
 
 ## Processo de construção
 
 1. Build do frontend TanStack Start para `dist/`
 2. Iniciar `hestia.js` (Fastify): servir API em `/api/*` e assets estáticos em `/*`
-3. Chama Local mede o host via `node:os`, `df`, `systemctl` e `journalctl`
-4. O frontend detecta se está em localhost/LAN e só então consulta `http://<host>:4517`
+3. Chama Local mede o host via `node:os`, `df`, `systemctl` e mantém logs internos em ring buffer da própria Chama Local
+4. O frontend usa a origin da própria Héstia ou `127.0.0.1:4517` no Vite local
 5. Fora do ambiente local, o app mostra `Aguardando Chama Local` sem disparar requisições
 
 ## Comandos npm
