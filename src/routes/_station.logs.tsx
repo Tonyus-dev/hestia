@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { hestiaApi, type ApiState, type Logs } from "@/lib/hestia/api";
+import { useState } from "react";
+import { hestiaApi } from "@/lib/hestia/api";
+import { useApi } from "@/lib/hestia/useApi";
 import { UnavailableNote } from "@/components/hestia/UnavailableNote";
 
 const TAIL_OPTIONS = [50, 100, 200] as const;
@@ -18,17 +19,9 @@ export const Route = createFileRoute("/_station/logs")({
 });
 
 function LogsPage() {
-  const [state, setState] = useState<ApiState<Logs>>({ status: "loading" });
   const [tail, setTail] = useState<number>(100);
+  const { state, retry, refreshing } = useApi(() => hestiaApi.logs(tail), [tail]);
 
-  useEffect(() => {
-    let alive = true;
-    setState({ status: "loading" });
-    hestiaApi.logs(tail).then((s) => alive && setState(s));
-    return () => {
-      alive = false;
-    };
-  }, [tail]);
 
   return (
     <div className="space-y-6">
