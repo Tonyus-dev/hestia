@@ -565,6 +565,18 @@ function RawBody({ text }: { text: string }) {
   );
 }
 
+function JsonPreview({ payload, compact }: { payload: unknown; compact: boolean }) {
+  const text = formatJson(payload, compact);
+  if (compact) {
+    return (
+      <pre className="overflow-auto rounded border border-[color:var(--kaline-border-copper)]/60 bg-[color:var(--kaline-obsidian)]/70 p-3 text-[11.5px] leading-[1.55] text-[color:var(--kaline-text)]/90 font-mono">
+        <code className="whitespace-pre-wrap break-all">{text}</code>
+      </pre>
+    );
+  }
+  return <RawBody text={text} />;
+}
+
 
 export function DataCard({
   title,
