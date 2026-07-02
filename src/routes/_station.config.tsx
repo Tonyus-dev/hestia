@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { hestiaApi, type ApiState, type Config } from "@/lib/hestia/api";
+import { hestiaApi } from "@/lib/hestia/api";
+import { useApi } from "@/lib/hestia/useApi";
 import { HESTIA } from "@/content/kaline";
 import { UnavailableNote, Row } from "@/components/hestia/UnavailableNote";
 
@@ -25,10 +25,8 @@ const expected = {
 };
 
 function ConfigPage() {
-  const [state, setState] = useState<ApiState<Config>>({ status: "loading" });
-  useEffect(() => {
-    hestiaApi.config().then(setState);
-  }, []);
+  const { state, retry, refreshing } = useApi(hestiaApi.config);
+
 
   return (
     <div className="space-y-6">
@@ -43,7 +41,7 @@ function ConfigPage() {
 
       {state.status === "unavailable" && (
         <>
-          <UnavailableNote message={state.message} details={state.details} />
+          <UnavailableNote message={state.message} details={state.details} onRetry={retry} refreshing={refreshing} />
           <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-5">
             <p className="kaline-eyebrow">Configuração esperada (não confirmada)</p>
             <div className="mt-3 flex flex-col gap-2">

@@ -28,9 +28,13 @@ function humanSummary(details?: ApiErrorDetails): string {
 export function UnavailableNote({
   message,
   details,
+  onRetry,
+  refreshing,
 }: {
   message?: string;
   details?: ApiErrorDetails;
+  onRetry?: () => void;
+  refreshing?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const showInline = details?.origin === "http";
@@ -60,21 +64,35 @@ export function UnavailableNote({
         </p>
       )}
 
-      {details && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mt-3 text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
-        >
-          Ver detalhes →
-        </button>
-      )}
+      <div className="mt-3 flex items-center gap-3 flex-wrap">
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={refreshing}
+            className="text-[11px] uppercase tracking-[0.22em] px-3 py-1.5 rounded border border-[color:var(--kaline-copper)] text-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper)]/10 disabled:opacity-50 disabled:cursor-wait transition"
+            aria-label="Tentar novamente"
+          >
+            {refreshing ? "tentando…" : "↻ Tentar novamente"}
+          </button>
+        )}
+        {details && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+          >
+            Ver detalhes →
+          </button>
+        )}
+      </div>
       {open && details && (
         <ErrorModal message={message} details={details} onClose={() => setOpen(false)} />
       )}
     </div>
   );
 }
+
 
 function InlineField({ label, value }: { label: string; value?: string }) {
   return (

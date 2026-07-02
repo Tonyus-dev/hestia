@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { hestiaApi, formatBytes, formatUptime, type ApiState } from "@/lib/hestia/api";
+import { hestiaApi, formatBytes, formatUptime } from "@/lib/hestia/api";
+import { useApi } from "@/lib/hestia/useApi";
 import { HESTIA } from "@/content/kaline";
 import { DataCard, Row, UnavailableNote } from "@/components/hestia/UnavailableNote";
 
@@ -23,24 +23,12 @@ export const Route = createFileRoute("/_station/")({
   component: Painel,
 });
 
-function useApi<T>(fn: () => Promise<ApiState<T>>): ApiState<T> {
-  const [state, setState] = useState<ApiState<T>>({ status: "loading" });
-  useEffect(() => {
-    let alive = true;
-    fn().then((s) => alive && setState(s));
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return state;
-}
-
 function Painel() {
   const health = useApi(hestiaApi.health);
   const server = useApi(hestiaApi.server);
   const storage = useApi(hestiaApi.storage);
   const services = useApi(hestiaApi.services);
+
 
   return (
     <div className="space-y-10">
@@ -59,44 +47,44 @@ function Painel() {
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <DataCard eyebrow="1 · Saúde" title="Saúde da Héstia">
-          {health.status === "loading" && <p>consultando…</p>}
-          {health.status === "unavailable" && <UnavailableNote message={health.message} details={health.details} />}
-          {health.status === "ok" && (
+          {health.state.status === "loading" && <p>consultando…</p>}
+          {health.state.status === "unavailable" && <UnavailableNote message={health.state.message} details={health.state.details} onRetry={health.retry} refreshing={health.refreshing} />}
+          {health.state.status === "ok" && (
             <>
-              <Row k="status" v={health.data.ok ? "ok" : "degradado"} />
-              <Row k="app" v={health.data.appName} />
-              <Row k="versão" v={health.data.version} />
-              <Row k="hostname" v={health.data.hostname} />
-              <Row k="uptime" v={formatUptime(health.data.processUptime)} />
-              <Row k="chama" v={health.data.agentName} />
-              <Row k="readonly" v={String(health.data.readonly)} />
-              <Row k="timestamp" v={new Date(health.data.timestamp).toLocaleString()} />
+              <Row k="status" v={health.state.data.ok ? "ok" : "degradado"} />
+              <Row k="app" v={health.state.data.appName} />
+              <Row k="versão" v={health.state.data.version} />
+              <Row k="hostname" v={health.state.data.hostname} />
+              <Row k="uptime" v={formatUptime(health.state.data.processUptime)} />
+              <Row k="chama" v={health.state.data.agentName} />
+              <Row k="readonly" v={String(health.state.data.readonly)} />
+              <Row k="timestamp" v={new Date(health.state.data.timestamp).toLocaleString()} />
             </>
           )}
         </DataCard>
 
         <DataCard eyebrow="2 · Servidor" title="Sistema operacional">
-          {server.status === "loading" && <p>consultando…</p>}
-          {server.status === "unavailable" && <UnavailableNote message={server.message} details={server.details} />}
-          {server.status === "ok" && (
+          {server.state.status === "loading" && <p>consultando…</p>}
+          {server.state.status === "unavailable" && <UnavailableNote message={server.state.message} details={server.state.details} onRetry={server.retry} refreshing={server.refreshing} />}
+          {server.state.status === "ok" && (
             <>
-              <Row k="hostname" v={server.data.hostname} />
-              <Row k="platform" v={server.data.platform} />
-              <Row k="release" v={server.data.release} />
-              <Row k="arch" v={server.data.arch} />
-              <Row k="uptime" v={formatUptime(server.data.uptime)} />
-              <Row k="memória total" v={formatBytes(server.data.totalMemory)} />
-              <Row k="memória livre" v={formatBytes(server.data.freeMemory)} />
-              <Row k="load avg" v={server.data.loadAverage.map((n) => n.toFixed(2)).join(" · ")} />
+              <Row k="hostname" v={server.state.data.hostname} />
+              <Row k="platform" v={server.state.data.platform} />
+              <Row k="release" v={server.state.data.release} />
+              <Row k="arch" v={server.state.data.arch} />
+              <Row k="uptime" v={formatUptime(server.state.data.uptime)} />
+              <Row k="memória total" v={formatBytes(server.state.data.totalMemory)} />
+              <Row k="memória livre" v={formatBytes(server.state.data.freeMemory)} />
+              <Row k="load avg" v={server.state.data.loadAverage.map((n) => n.toFixed(2)).join(" · ")} />
             </>
           )}
         </DataCard>
 
         <DataCard eyebrow="3 · Armazenamento" title="Discos observados">
-          {storage.status === "loading" && <p>consultando…</p>}
-          {storage.status === "unavailable" && <UnavailableNote message={storage.message} details={storage.details} />}
-          {storage.status === "ok" &&
-            storage.data.items.map((it) => (
+          {storage.state.status === "loading" && <p>consultando…</p>}
+          {storage.state.status === "unavailable" && <UnavailableNote message={storage.state.message} details={storage.state.details} onRetry={storage.retry} refreshing={storage.refreshing} />}
+          {storage.state.status === "ok" &&
+            storage.state.data.items.map((it) => (
               <div key={it.path} className="border-b border-[color:var(--kaline-border-copper)]/40 pb-2 last:border-0">
                 <div className="flex justify-between items-baseline gap-2">
                   <span className="font-mono text-[13px] text-[color:var(--kaline-text)]">{it.path}</span>
@@ -119,10 +107,10 @@ function Painel() {
         </DataCard>
 
         <DataCard eyebrow="4 · Serviços" title="Systemd">
-          {services.status === "loading" && <p>consultando…</p>}
-          {services.status === "unavailable" && <UnavailableNote message={services.message} details={services.details} />}
-          {services.status === "ok" &&
-            services.data.items.map((s) => (
+          {services.state.status === "loading" && <p>consultando…</p>}
+          {services.state.status === "unavailable" && <UnavailableNote message={services.state.message} details={services.state.details} onRetry={services.retry} refreshing={services.refreshing} />}
+          {services.state.status === "ok" &&
+            services.state.data.items.map((s) => (
               <Row
                 key={s.name}
                 k={s.name}
