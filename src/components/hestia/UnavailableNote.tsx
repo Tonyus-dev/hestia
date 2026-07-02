@@ -209,6 +209,25 @@ function ErrorModal({
           <p className="text-[13.5px] text-[color:var(--kaline-muted)] leading-relaxed">
             {humanSummary(details)}
           </p>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Highlight
+              label="código"
+              value={details.code ?? (details.httpStatus ? `HTTP_${details.httpStatus}` : undefined)}
+              tone="code"
+            />
+            <Highlight label="rota" value={details.route} tone="route" />
+            <Highlight
+              label="timeout"
+              value={
+                details.origin === "timeout"
+                  ? `${details.timeoutMs ?? "?"}ms · esgotado`
+                  : details.timeoutMs != null
+                    ? `${details.timeoutMs}ms`
+                    : undefined
+              }
+              tone={details.origin === "timeout" ? "alert" : "muted"}
+            />
+          </div>
         </section>
 
         <section className="mt-5 space-y-2">
@@ -238,10 +257,13 @@ function ErrorModal({
 
         {details.rawBody && (
           <section className="mt-5">
-            <p className="kaline-eyebrow mb-2">Corpo bruto</p>
-            <pre className="max-h-40 overflow-auto rounded border border-[color:var(--kaline-border-copper)]/60 bg-[color:var(--kaline-obsidian)]/70 p-3 text-[11.5px] text-[color:var(--kaline-muted)] whitespace-pre-wrap break-all">
-              {details.rawBody}
-            </pre>
+            <div className="flex items-center justify-between mb-2">
+              <p className="kaline-eyebrow">Corpo bruto</p>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--kaline-faint)]">
+                {details.rawBody.split("\n").length} linhas · {details.rawBody.length} chars
+              </span>
+            </div>
+            <RawBody text={details.rawBody} />
           </section>
         )}
 
