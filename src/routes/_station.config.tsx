@@ -43,7 +43,7 @@ function ConfigPage() {
 
       {state.status === "unavailable" && (
         <>
-          <UnavailableNote message={state.message} details={state.details} />
+          <UnavailableNote message={state.message} details={state.details} onRetry={retry} refreshing={refreshing} />
           <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-5">
             <p className="kaline-eyebrow">Configuração esperada (não confirmada)</p>
             <div className="mt-3 flex flex-col gap-2">

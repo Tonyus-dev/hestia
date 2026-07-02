@@ -61,7 +61,7 @@ function LogsPage() {
       {state.status === "loading" && (
         <p className="text-[color:var(--kaline-muted)]">consultando…</p>
       )}
-      {state.status === "unavailable" && <UnavailableNote message={state.message} details={state.details} />}
+      {state.status === "unavailable" && <UnavailableNote message={state.message} details={state.details} onRetry={retry} refreshing={refreshing} />}
       {state.status === "ok" && (
         <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-obsidian)]/60 overflow-hidden">
           {state.data.items.length === 0 ? (
