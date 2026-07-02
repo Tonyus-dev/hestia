@@ -249,7 +249,13 @@ export function UnavailableNote({
         )}
       </div>
       {open && details && (
-        <ErrorModal message={message} details={details} onClose={() => setOpen(false)} />
+        <ErrorModal
+          message={message}
+          details={details}
+          onClose={() => setOpen(false)}
+          compact={compact}
+          onToggleCompact={toggleCompact}
+        />
       )}
     </div>
   );
