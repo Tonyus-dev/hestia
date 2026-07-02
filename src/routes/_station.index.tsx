@@ -60,7 +60,7 @@ function Painel() {
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <DataCard eyebrow="1 · Saúde" title="Saúde da Héstia">
           {health.status === "loading" && <p>consultando…</p>}
-          {health.status === "unavailable" && <UnavailableNote message={health.message} />}
+          {health.status === "unavailable" && <UnavailableNote message={health.message} details={health.details} />}
           {health.status === "ok" && (
             <>
               <Row k="status" v={health.data.ok ? "ok" : "degradado"} />
@@ -77,7 +77,7 @@ function Painel() {
 
         <DataCard eyebrow="2 · Servidor" title="Sistema operacional">
           {server.status === "loading" && <p>consultando…</p>}
-          {server.status === "unavailable" && <UnavailableNote message={server.message} />}
+          {server.status === "unavailable" && <UnavailableNote message={server.message} details={server.details} />}
           {server.status === "ok" && (
             <>
               <Row k="hostname" v={server.data.hostname} />
@@ -94,7 +94,7 @@ function Painel() {
 
         <DataCard eyebrow="3 · Armazenamento" title="Discos observados">
           {storage.status === "loading" && <p>consultando…</p>}
-          {storage.status === "unavailable" && <UnavailableNote message={storage.message} />}
+          {storage.status === "unavailable" && <UnavailableNote message={storage.message} details={storage.details} />}
           {storage.status === "ok" &&
             storage.data.items.map((it) => (
               <div key={it.path} className="border-b border-[color:var(--kaline-border-copper)]/40 pb-2 last:border-0">
@@ -120,7 +120,7 @@ function Painel() {
 
         <DataCard eyebrow="4 · Serviços" title="Systemd">
           {services.status === "loading" && <p>consultando…</p>}
-          {services.status === "unavailable" && <UnavailableNote message={services.message} />}
+          {services.status === "unavailable" && <UnavailableNote message={services.message} details={services.details} />}
           {services.status === "ok" &&
             services.data.items.map((s) => (
               <Row
