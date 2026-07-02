@@ -150,26 +150,60 @@ async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promi
         at?: string;
       } = {};
       let rawBody = "";
+      let parsedOk = false;
       try {
         rawBody = await res.text();
-        parsed = JSON.parse(rawBody);
       } catch {
-        /* corpo não-JSON, mantém rawBody */
+        /* corpo ilegível */
       }
-      const extra = [parsed.error, parsed.code, parsed.detail, parsed.hint]
+      if (rawBody) {
+        try {
+          const maybe = JSON.parse(rawBody);
+          if (maybe && typeof maybe === "object") {
+            parsed = maybe;
+            parsedOk = true;
+          }
+        } catch {
+          /* corpo não-JSON, mantém rawBody */
+        }
+      }
+
+      // ---- Fallback para respostas sem corpo estruturado ----
+      // Ex.: 500 em texto puro, HTML de erro do proxy, corpo vazio.
+      // Ainda assim garantimos HTTP status e rota claramente visíveis.
+      const statusText = res.statusText || `HTTP ${res.status}`;
+      const preview = rawBody.trim().slice(0, 180).replace(/\s+/g, " ");
+      const fallbackDetail = !parsedOk
+        ? rawBody
+          ? `Corpo não-estruturado (${rawBody.length} bytes): ${preview}${rawBody.length > 180 ? "…" : ""}`
+          : "Resposta vazia — backend não enviou corpo."
+        : undefined;
+      const fallbackHint = !parsedOk
+        ? "Backend não retornou JSON no formato esperado. Veja 'corpo bruto' abaixo."
+        : undefined;
+      const fallbackError = !parsedOk ? statusText : undefined;
+
+      const finalError = parsed.error ?? fallbackError;
+      const finalDetail = parsed.detail ?? parsed.error ?? fallbackDetail;
+      const finalHint = parsed.hint ?? fallbackHint;
+      const finalCode = parsed.code ?? (!parsedOk ? `HTTP_${res.status}` : undefined);
+      const finalAt = parsed.at ?? new Date().toISOString();
+
+      const extra = [finalError, finalCode, parsed.detail ?? fallbackDetail, finalHint]
         .filter(Boolean)
         .join(" · ");
+
       return unavailable<T>(
-        `GET ${path} respondeu ${res.status}${extra ? ` — ${extra}` : ""}`,
+        `GET ${path} respondeu ${res.status} ${statusText}${extra ? ` — ${extra}` : ""}`,
         {
           origin: "http",
           route: parsed.route ?? `GET ${path}`,
           httpStatus: res.status,
-          code: parsed.code,
-          detail: parsed.detail ?? parsed.error,
-          error: parsed.error,
-          hint: parsed.hint,
-          at: parsed.at,
+          code: finalCode,
+          detail: finalDetail,
+          error: finalError,
+          hint: finalHint,
+          at: finalAt,
           rawBody: rawBody.slice(0, 2000),
         },
       );
