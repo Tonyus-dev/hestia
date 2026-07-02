@@ -13,6 +13,30 @@ import { getStorageStatus } from "./chama/storage.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getLogs, log } from "./chama/logs.js";
 
+// --- CLI flags: --port <n> / --host <h> / --help ----------------------------
+function parseCliArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--help" || a === "-h") out.help = true;
+    else if (a === "--port" || a === "-p") out.port = Number(argv[++i]);
+    else if (a === "--host") out.host = String(argv[++i]);
+    else if (a.startsWith("--port=")) out.port = Number(a.slice(7));
+    else if (a.startsWith("--host=")) out.host = a.slice(7);
+  }
+  return out;
+}
+const cli = parseCliArgs(process.argv.slice(2));
+if (cli.help) {
+  console.log(
+    `Héstia Console\n\nUso: node hestia.js [--port <n>] [--host <h>]\n` +
+      `Também aceita HESTIA_PORT / HESTIA_HOST via env.\nPadrão: 127.0.0.1:4517`,
+  );
+  process.exit(0);
+}
+if (cli.port && Number.isFinite(cli.port)) config.port = cli.port;
+if (cli.host) config.host = cli.host;
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = Fastify({ logger: false });
 
@@ -26,7 +50,11 @@ app.get("/api/health", async () => getHealth());
 app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/storage/status", async () => await getStorageStatus());
 app.get("/api/services/status", async () => await getServicesStatus());
-app.get("/api/logs", async () => getLogs());
+app.get("/api/logs", async (req) => {
+  const raw = Number(req.query?.tail);
+  const tail = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 200) : 100;
+  return getLogs(tail);
+});
 app.get("/api/config", async () => ({
   appName: config.appName,
   serverName: config.serverName,
