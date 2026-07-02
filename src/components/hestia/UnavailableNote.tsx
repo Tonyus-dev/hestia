@@ -44,13 +44,13 @@ async function copyErrorJson(payload: unknown) {
   );
 }
 
-function downloadErrorJson(payload: unknown, route?: string) {
+function downloadErrorJson(payload: unknown, route?: string, at?: string) {
   const text = stableStringify(payload);
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = buildDownloadFilename(route);
+  a.download = buildDownloadFilename(route, at);
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
@@ -61,10 +61,26 @@ function downloadErrorJson(payload: unknown, route?: string) {
   });
 }
 
-export function buildDownloadFilename(route?: string): string {
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const slug = route ? route.replace(/^\//, "").replace(/[^a-zA-Z0-9_-]/g, "_") : "error";
-  return `hestia-${slug || "error"}-${stamp}.json`;
+export function buildDownloadFilename(route?: string, at?: string): string {
+  const stamp = formatStamp(at);
+  const slug = sanitizeRouteSlug(route);
+  return `hestia-${slug}-${stamp}.json`;
+}
+
+function formatStamp(raw?: string): string {
+  if (raw) {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    }
+  }
+  return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+}
+
+function sanitizeRouteSlug(route?: string): string {
+  const base = route ? route.replace(/^\//, "").replace(/[^a-zA-Z0-9_-]/g, "_") : "error";
+  const slug = base.replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 100);
+  return slug || "error";
 }
 
 function buildPayload(message: string | undefined, details: ApiErrorDetails) {
