@@ -81,6 +81,55 @@ function buildPayload(message: string | undefined, details: ApiErrorDetails) {
   return { message: message ?? null, ...details };
 }
 
+function buildReadableDetails(message: string | undefined, details: ApiErrorDetails): string {
+  const lines = [
+    `Héstia Console — detalhes do erro`,
+    ``,
+    `status: ${details.origin}`,
+    `rota: ${details.route ?? "—"}`,
+    `http: ${details.httpStatus?.toString() ?? "—"}`,
+    `code: ${details.code ?? "—"}`,
+    `error: ${details.error ?? "—"}`,
+    `hint: ${details.hint ?? "—"}`,
+    `at: ${details.at ?? "—"}`,
+    `timeout: ${details.timeoutMs != null ? `${details.timeoutMs}ms` : "—"}`,
+    ``,
+    `mensagem: ${message ?? "—"}`,
+  ];
+  return lines.join("\n");
+}
+
+async function copyToClipboard(text: string, successTitle: string, successDescription: string) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    toast.success(successTitle, { description: successDescription });
+  } catch (err) {
+    toast.error("Não foi possível copiar", {
+      description: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function copyReadableDetails(message: string | undefined, details: ApiErrorDetails) {
+  const text = buildReadableDetails(message, details);
+  await copyToClipboard(
+    text,
+    "Detalhes copiados",
+    `${text.length} caracteres · status, rota, code, error, hint, at`,
+  );
+}
+
 
 const ORIGIN_LABEL: Record<ApiErrorDetails["origin"], string> = {
   "no-base": "Sem host local",
