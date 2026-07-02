@@ -131,9 +131,27 @@ export const hestiaApi = {
   server: () => safeFetch<ServerStatus>("/api/server/status"),
   storage: () => safeFetch<StorageStatus>("/api/storage/status"),
   services: () => safeFetch<ServicesStatus>("/api/services/status"),
-  logs: () => safeFetch<Logs>("/api/logs"),
+  logs: (tail?: number) =>
+    safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
+  /** URL absoluta para exibir/copiar (ex.: comando curl). Sempre localhost:4517. */
+  absoluteUrl: (path: string) => `http://localhost:${CHAMA_PORT}${path}`,
+  /** Ping simples usado pela página /endpoints. Só bate quando estamos em host local. */
+  ping: async (path: string): Promise<{ status: number | "erro"; ok: boolean }> => {
+    const base = resolveBase();
+    if (!base) return { status: "erro", ok: false };
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${base}${path}`, { signal: controller.signal });
+      clearTimeout(t);
+      return { status: res.status, ok: res.ok };
+    } catch {
+      return { status: "erro", ok: false };
+    }
+  },
 };
+
 
 
 export function formatBytes(bytes: number | null | undefined): string {
