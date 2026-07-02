@@ -116,10 +116,22 @@ function unavailable<T>(message: string): ApiState<T> {
   return { status: "unavailable", message, fetchedAt: new Date().toISOString() };
 }
 
+function unavailable<T>(message: string, details: ApiErrorDetails): ApiState<T> {
+  return { status: "unavailable", message, details, fetchedAt: new Date().toISOString() };
+}
+
 async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<ApiState<T>> {
   const base = resolveBase();
   if (!base) {
-    return unavailable<T>("Aguardando Chama Local (rode `npm run hestia` em http://localhost:4517)");
+    return unavailable<T>(
+      "Aguardando Chama Local (rode `npm run hestia` em http://localhost:4517)",
+      {
+        origin: "no-base",
+        route: `GET ${path}`,
+        detail: "Frontend não está em host local; nenhuma requisição foi disparada.",
+        hint: "Abra o Héstia em http://localhost:4517 após rodar `npm run hestia`.",
+      },
+    );
   }
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -130,35 +142,57 @@ async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promi
       headers: { accept: "application/json" },
     });
     if (!res.ok) {
-      // Tentar extrair mensagem estruturada da Chama Local ({error, code, detail, hint}).
-      let extra = "";
+      let parsed: {
+        error?: string;
+        code?: string;
+        detail?: string;
+        hint?: string;
+      } = {};
+      let rawBody = "";
       try {
-        const body = (await res.json()) as {
-          error?: string;
-          code?: string;
-          detail?: string;
-          hint?: string;
-        };
-        const parts = [body.error, body.code, body.detail, body.hint].filter(Boolean);
-        if (parts.length) extra = ` — ${parts.join(" · ")}`;
+        rawBody = await res.text();
+        parsed = JSON.parse(rawBody);
       } catch {
-        try {
-          const text = (await res.text()).trim();
-          if (text) extra = ` — ${text.slice(0, 200)}`;
-        } catch {
-          /* ignora */
-        }
+        /* corpo não-JSON, mantém rawBody */
       }
-      return unavailable<T>(`GET ${path} respondeu ${res.status}${extra}`);
+      const extra = [parsed.error, parsed.code, parsed.detail, parsed.hint]
+        .filter(Boolean)
+        .join(" · ");
+      return unavailable<T>(
+        `GET ${path} respondeu ${res.status}${extra ? ` — ${extra}` : ""}`,
+        {
+          origin: "http",
+          route: `GET ${path}`,
+          httpStatus: res.status,
+          code: parsed.code,
+          detail: parsed.detail ?? parsed.error,
+          hint: parsed.hint,
+          rawBody: rawBody.slice(0, 2000),
+        },
+      );
     }
     const data = (await res.json()) as T;
     return { status: "ok", data, fetchedAt: new Date().toISOString() };
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
-      return unavailable<T>(`Sem resposta de ${path} em ${timeoutMs}ms (timeout)`);
+      return unavailable<T>(`Sem resposta de ${path} em ${timeoutMs}ms (timeout)`, {
+        origin: "timeout",
+        route: `GET ${path}`,
+        timeoutMs,
+        detail: "A Chama Local não respondeu dentro do prazo configurado.",
+        hint: "Verifique se o processo `hestia.js` está ativo e se o host não está sobrecarregado.",
+      });
     }
     const msg = err instanceof Error ? err.message : String(err);
-    return unavailable<T>(`Falha de rede em ${path}: ${msg} (Chama Local caiu ou porta 4517 bloqueada?)`);
+    return unavailable<T>(
+      `Falha de rede em ${path}: ${msg} (Chama Local caiu ou porta 4517 bloqueada?)`,
+      {
+        origin: "network",
+        route: `GET ${path}`,
+        detail: msg,
+        hint: "Confirme se `npm run hestia` está rodando e se a porta 4517 está acessível.",
+      },
+    );
   } finally {
     clearTimeout(t);
   }
