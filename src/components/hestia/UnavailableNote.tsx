@@ -31,27 +31,11 @@ function sortedReplacer() {
 
 async function copyErrorJson(payload: unknown) {
   const text = stableStringify(payload);
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
-    toast.success("JSON copiado", {
-      description: `${text.length} caracteres · chaves ordenadas`,
-    });
-  } catch (err) {
-    toast.error("Não foi possível copiar", {
-      description: err instanceof Error ? err.message : String(err),
-    });
-  }
+  await copyToClipboard(
+    text,
+    "JSON copiado",
+    `${text.length} caracteres · chaves ordenadas`,
+  );
 }
 
 function downloadErrorJson(payload: unknown, route?: string) {
