@@ -7,6 +7,8 @@ export type ApiErrorDetails = {
   code?: string;
   detail?: string;
   hint?: string;
+  error?: string;
+  at?: string;
   timeoutMs?: number;
   rawBody?: string;
   origin: "network" | "timeout" | "http" | "no-base";
@@ -144,6 +146,8 @@ async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promi
         code?: string;
         detail?: string;
         hint?: string;
+        route?: string;
+        at?: string;
       } = {};
       let rawBody = "";
       try {
@@ -159,11 +163,13 @@ async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promi
         `GET ${path} respondeu ${res.status}${extra ? ` — ${extra}` : ""}`,
         {
           origin: "http",
-          route: `GET ${path}`,
+          route: parsed.route ?? `GET ${path}`,
           httpStatus: res.status,
           code: parsed.code,
           detail: parsed.detail ?? parsed.error,
+          error: parsed.error,
           hint: parsed.hint,
+          at: parsed.at,
           rawBody: rawBody.slice(0, 2000),
         },
       );
