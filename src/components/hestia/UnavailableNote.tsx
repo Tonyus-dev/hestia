@@ -27,6 +27,8 @@ function sortedReplacer() {
     }
     return val;
   };
+}
+
 export function formatJson(value: unknown, compact: boolean): string {
   return compact ? stableStringify(value).replace(/\n\s*/g, "") : stableStringify(value);
 }
