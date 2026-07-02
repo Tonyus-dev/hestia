@@ -436,6 +436,21 @@ function ErrorModal({
           </dl>
         </section>
 
+        <section className="mt-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="kaline-eyebrow">Payload JSON</p>
+            <button
+              type="button"
+              onClick={onToggleCompact}
+              className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+              aria-label={compact ? "Expandir JSON" : "Compactar JSON"}
+            >
+              {compact ? "pretty print" : "compacto"}
+            </button>
+          </div>
+          <JsonPreview payload={buildPayload(message, details)} compact={compact} />
+        </section>
+
         {details.rawBody && (
           <section className="mt-5">
             <div className="flex items-center justify-between mb-2">
