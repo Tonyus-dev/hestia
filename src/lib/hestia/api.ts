@@ -107,20 +107,42 @@ async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promi
   }
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
+  const url = `${base}${path}`;
   try {
-    const res = await fetch(`${base}${path}`, {
+    const res = await fetch(url, {
       signal: controller.signal,
       headers: { accept: "application/json" },
     });
-    if (!res.ok) return unavailable<T>(`Chama Local respondeu ${res.status}`);
+    if (!res.ok) {
+      // Tentar extrair mensagem estruturada da Chama Local ({error, code, detail, hint}).
+      let extra = "";
+      try {
+        const body = (await res.json()) as {
+          error?: string;
+          code?: string;
+          detail?: string;
+          hint?: string;
+        };
+        const parts = [body.error, body.code, body.detail, body.hint].filter(Boolean);
+        if (parts.length) extra = ` — ${parts.join(" · ")}`;
+      } catch {
+        try {
+          const text = (await res.text()).trim();
+          if (text) extra = ` — ${text.slice(0, 200)}`;
+        } catch {
+          /* ignora */
+        }
+      }
+      return unavailable<T>(`GET ${path} respondeu ${res.status}${extra}`);
+    }
     const data = (await res.json()) as T;
     return { status: "ok", data, fetchedAt: new Date().toISOString() };
   } catch (err) {
-    return unavailable<T>(
-      err instanceof DOMException && err.name === "AbortError"
-        ? "Sem resposta da Chama Local (timeout)"
-        : "API local indisponível",
-    );
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return unavailable<T>(`Sem resposta de ${path} em ${timeoutMs}ms (timeout)`);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    return unavailable<T>(`Falha de rede em ${path}: ${msg} (Chama Local caiu ou porta 4517 bloqueada?)`);
   } finally {
     clearTimeout(t);
   }

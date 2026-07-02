@@ -40,10 +40,28 @@ if (cli.host) config.host = cli.host;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = Fastify({ logger: false });
 
-// Nunca vazar stack traces para o usuário.
-app.setErrorHandler((err, _req, reply) => {
-  log("error", `handler: ${err.message}`);
-  reply.code(500).send({ ok: false, error: "Erro interno da Chama Local" });
+// Nunca vazar stack traces, mas devolver contexto útil para diagnóstico rápido.
+app.setErrorHandler((err, req, reply) => {
+  const code = err.code || err.name || "InternalError";
+  const status = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+  const detail = err.message || "erro sem mensagem";
+  log("error", `${req.method} ${req.url} → ${code}: ${detail}`);
+  reply.code(status).send({
+    ok: false,
+    error: "Erro na Chama Local",
+    code,
+    detail,
+    route: `${req.method} ${req.url}`,
+    hint:
+      code === "ENOENT"
+        ? "Caminho/binário ausente no host (ex.: df, systemctl, storagePath)."
+        : code === "EACCES" || code === "EPERM"
+          ? "Permissão negada — verifique se o usuário tem acesso ao recurso."
+          : code === "ETIMEDOUT"
+            ? "Tempo esgotado ao consultar o SO."
+            : "Consulte o /logs do Héstia para o traço completo.",
+    at: new Date().toISOString(),
+  });
 });
 
 app.get("/api/health", async () => getHealth());
