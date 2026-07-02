@@ -59,10 +59,8 @@ function downloadErrorJson(payload: unknown, route?: string) {
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const slug = route ? route.replace(/^\//, "").replace(/[^a-zA-Z0-9_-]/g, "_") : "error";
   a.href = url;
-  a.download = `hestia-${slug}-${stamp}.json`;
+  a.download = buildDownloadFilename(route);
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
@@ -71,6 +69,12 @@ function downloadErrorJson(payload: unknown, route?: string) {
   toast.success("JSON baixado", {
     description: `${text.length} caracteres · chaves ordenadas · ${a.download}`,
   });
+}
+
+export function buildDownloadFilename(route?: string): string {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const slug = route ? route.replace(/^\//, "").replace(/[^a-zA-Z0-9_-]/g, "_") : "error";
+  return `hestia-${slug || "error"}-${stamp}.json`;
 }
 
 function buildPayload(message: string | undefined, details: ApiErrorDetails) {
