@@ -2,14 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiState } from "./api";
 
 /**
- * Runs `fn` on mount and whenever deps change; also exposes a `retry`
- * that re-executes the call and updates state with the fresh result.
- * `refreshing` fica true durante um retry manual (mantendo o estado anterior visível).
+ * Executa `fn` no mount e sempre que `deps` mudarem.
+ * Expõe `retry()` para reexecutar manualmente a chamada e atualizar `state`
+ * com o novo resultado. Durante um retry manual, `refreshing` fica true e
+ * o `state` anterior é preservado (não volta para "loading"), evitando piscar.
  */
 export function useApi<T>(
   fn: () => Promise<ApiState<T>>,
   deps: React.DependencyList = [],
-): ApiState<T> & { retry: () => void; refreshing: boolean } {
+): { state: ApiState<T>; retry: () => void; refreshing: boolean } {
   const [state, setState] = useState<ApiState<T>>({ status: "loading" });
   const [refreshing, setRefreshing] = useState(false);
   const aliveRef = useRef(true);
@@ -36,9 +37,5 @@ export function useApi<T>(
   }, deps);
 
   const retry = useCallback(() => run(true), [run]);
-
-  return { ...state, retry, refreshing } as ApiState<T> & {
-    retry: () => void;
-    refreshing: boolean;
-  };
+  return { state, retry, refreshing };
 }
