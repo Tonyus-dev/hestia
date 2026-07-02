@@ -9,27 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TvRouteImport } from './routes/tv'
 import { Route as StationRouteImport } from './routes/_station'
 import { Route as StationIndexRouteImport } from './routes/_station.index'
-import { Route as StationVerdadeRouteImport } from './routes/_station.verdade'
-import { Route as StationRoadmapRouteImport } from './routes/_station.roadmap'
-import { Route as StationOnboardingRouteImport } from './routes/_station.onboarding'
-import { Route as StationMidiaRouteImport } from './routes/_station.midia'
-import { Route as StationMapaRouteImport } from './routes/_station.mapa'
-import { Route as StationImplementacaoRouteImport } from './routes/_station.implementacao'
-import { Route as StationDispositivosRouteImport } from './routes/_station.dispositivos'
-import { Route as StationConfiguracaoRouteImport } from './routes/_station.configuracao'
-import { Route as StationCodiceRouteImport } from './routes/_station.codice'
-import { Route as StationCentralRouteImport } from './routes/_station.central'
-import { Route as StationBackupsRouteImport } from './routes/_station.backups'
-import { Route as StationArquivosRouteImport } from './routes/_station.arquivos'
+import { Route as StationLogsRouteImport } from './routes/_station.logs'
+import { Route as StationEndpointsRouteImport } from './routes/_station.endpoints'
+import { Route as StationConfigRouteImport } from './routes/_station.config'
 
-const TvRoute = TvRouteImport.update({
-  id: '/tv',
-  path: '/tv',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const StationRoute = StationRouteImport.update({
   id: '/_station',
   getParentRoute: () => rootRouteImport,
@@ -39,183 +24,62 @@ const StationIndexRoute = StationIndexRouteImport.update({
   path: '/',
   getParentRoute: () => StationRoute,
 } as any)
-const StationVerdadeRoute = StationVerdadeRouteImport.update({
-  id: '/verdade',
-  path: '/verdade',
+const StationLogsRoute = StationLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
   getParentRoute: () => StationRoute,
 } as any)
-const StationRoadmapRoute = StationRoadmapRouteImport.update({
-  id: '/roadmap',
-  path: '/roadmap',
+const StationEndpointsRoute = StationEndpointsRouteImport.update({
+  id: '/endpoints',
+  path: '/endpoints',
   getParentRoute: () => StationRoute,
 } as any)
-const StationOnboardingRoute = StationOnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationMidiaRoute = StationMidiaRouteImport.update({
-  id: '/midia',
-  path: '/midia',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationMapaRoute = StationMapaRouteImport.update({
-  id: '/mapa',
-  path: '/mapa',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationImplementacaoRoute = StationImplementacaoRouteImport.update({
-  id: '/implementacao',
-  path: '/implementacao',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationDispositivosRoute = StationDispositivosRouteImport.update({
-  id: '/dispositivos',
-  path: '/dispositivos',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationConfiguracaoRoute = StationConfiguracaoRouteImport.update({
-  id: '/configuracao',
-  path: '/configuracao',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationCodiceRoute = StationCodiceRouteImport.update({
-  id: '/codice',
-  path: '/codice',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationCentralRoute = StationCentralRouteImport.update({
-  id: '/central',
-  path: '/central',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationBackupsRoute = StationBackupsRouteImport.update({
-  id: '/backups',
-  path: '/backups',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationArquivosRoute = StationArquivosRouteImport.update({
-  id: '/arquivos',
-  path: '/arquivos',
+const StationConfigRoute = StationConfigRouteImport.update({
+  id: '/config',
+  path: '/config',
   getParentRoute: () => StationRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof StationIndexRoute
-  '/tv': typeof TvRoute
-  '/arquivos': typeof StationArquivosRoute
-  '/backups': typeof StationBackupsRoute
-  '/central': typeof StationCentralRoute
-  '/codice': typeof StationCodiceRoute
-  '/configuracao': typeof StationConfiguracaoRoute
-  '/dispositivos': typeof StationDispositivosRoute
-  '/implementacao': typeof StationImplementacaoRoute
-  '/mapa': typeof StationMapaRoute
-  '/midia': typeof StationMidiaRoute
-  '/onboarding': typeof StationOnboardingRoute
-  '/roadmap': typeof StationRoadmapRoute
-  '/verdade': typeof StationVerdadeRoute
+  '/config': typeof StationConfigRoute
+  '/endpoints': typeof StationEndpointsRoute
+  '/logs': typeof StationLogsRoute
 }
 export interface FileRoutesByTo {
-  '/tv': typeof TvRoute
-  '/arquivos': typeof StationArquivosRoute
-  '/backups': typeof StationBackupsRoute
-  '/central': typeof StationCentralRoute
-  '/codice': typeof StationCodiceRoute
-  '/configuracao': typeof StationConfiguracaoRoute
-  '/dispositivos': typeof StationDispositivosRoute
-  '/implementacao': typeof StationImplementacaoRoute
-  '/mapa': typeof StationMapaRoute
-  '/midia': typeof StationMidiaRoute
-  '/onboarding': typeof StationOnboardingRoute
-  '/roadmap': typeof StationRoadmapRoute
-  '/verdade': typeof StationVerdadeRoute
+  '/config': typeof StationConfigRoute
+  '/endpoints': typeof StationEndpointsRoute
+  '/logs': typeof StationLogsRoute
   '/': typeof StationIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_station': typeof StationRouteWithChildren
-  '/tv': typeof TvRoute
-  '/_station/arquivos': typeof StationArquivosRoute
-  '/_station/backups': typeof StationBackupsRoute
-  '/_station/central': typeof StationCentralRoute
-  '/_station/codice': typeof StationCodiceRoute
-  '/_station/configuracao': typeof StationConfiguracaoRoute
-  '/_station/dispositivos': typeof StationDispositivosRoute
-  '/_station/implementacao': typeof StationImplementacaoRoute
-  '/_station/mapa': typeof StationMapaRoute
-  '/_station/midia': typeof StationMidiaRoute
-  '/_station/onboarding': typeof StationOnboardingRoute
-  '/_station/roadmap': typeof StationRoadmapRoute
-  '/_station/verdade': typeof StationVerdadeRoute
+  '/_station/config': typeof StationConfigRoute
+  '/_station/endpoints': typeof StationEndpointsRoute
+  '/_station/logs': typeof StationLogsRoute
   '/_station/': typeof StationIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/tv'
-    | '/arquivos'
-    | '/backups'
-    | '/central'
-    | '/codice'
-    | '/configuracao'
-    | '/dispositivos'
-    | '/implementacao'
-    | '/mapa'
-    | '/midia'
-    | '/onboarding'
-    | '/roadmap'
-    | '/verdade'
+  fullPaths: '/' | '/config' | '/endpoints' | '/logs'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/tv'
-    | '/arquivos'
-    | '/backups'
-    | '/central'
-    | '/codice'
-    | '/configuracao'
-    | '/dispositivos'
-    | '/implementacao'
-    | '/mapa'
-    | '/midia'
-    | '/onboarding'
-    | '/roadmap'
-    | '/verdade'
-    | '/'
+  to: '/config' | '/endpoints' | '/logs' | '/'
   id:
     | '__root__'
     | '/_station'
-    | '/tv'
-    | '/_station/arquivos'
-    | '/_station/backups'
-    | '/_station/central'
-    | '/_station/codice'
-    | '/_station/configuracao'
-    | '/_station/dispositivos'
-    | '/_station/implementacao'
-    | '/_station/mapa'
-    | '/_station/midia'
-    | '/_station/onboarding'
-    | '/_station/roadmap'
-    | '/_station/verdade'
+    | '/_station/config'
+    | '/_station/endpoints'
+    | '/_station/logs'
     | '/_station/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   StationRoute: typeof StationRouteWithChildren
-  TvRoute: typeof TvRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/tv': {
-      id: '/tv'
-      path: '/tv'
-      fullPath: '/tv'
-      preLoaderRoute: typeof TvRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_station': {
       id: '/_station'
       path: ''
@@ -230,122 +94,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationIndexRouteImport
       parentRoute: typeof StationRoute
     }
-    '/_station/verdade': {
-      id: '/_station/verdade'
-      path: '/verdade'
-      fullPath: '/verdade'
-      preLoaderRoute: typeof StationVerdadeRouteImport
+    '/_station/logs': {
+      id: '/_station/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof StationLogsRouteImport
       parentRoute: typeof StationRoute
     }
-    '/_station/roadmap': {
-      id: '/_station/roadmap'
-      path: '/roadmap'
-      fullPath: '/roadmap'
-      preLoaderRoute: typeof StationRoadmapRouteImport
+    '/_station/endpoints': {
+      id: '/_station/endpoints'
+      path: '/endpoints'
+      fullPath: '/endpoints'
+      preLoaderRoute: typeof StationEndpointsRouteImport
       parentRoute: typeof StationRoute
     }
-    '/_station/onboarding': {
-      id: '/_station/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof StationOnboardingRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/midia': {
-      id: '/_station/midia'
-      path: '/midia'
-      fullPath: '/midia'
-      preLoaderRoute: typeof StationMidiaRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/mapa': {
-      id: '/_station/mapa'
-      path: '/mapa'
-      fullPath: '/mapa'
-      preLoaderRoute: typeof StationMapaRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/implementacao': {
-      id: '/_station/implementacao'
-      path: '/implementacao'
-      fullPath: '/implementacao'
-      preLoaderRoute: typeof StationImplementacaoRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/dispositivos': {
-      id: '/_station/dispositivos'
-      path: '/dispositivos'
-      fullPath: '/dispositivos'
-      preLoaderRoute: typeof StationDispositivosRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/configuracao': {
-      id: '/_station/configuracao'
-      path: '/configuracao'
-      fullPath: '/configuracao'
-      preLoaderRoute: typeof StationConfiguracaoRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/codice': {
-      id: '/_station/codice'
-      path: '/codice'
-      fullPath: '/codice'
-      preLoaderRoute: typeof StationCodiceRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/central': {
-      id: '/_station/central'
-      path: '/central'
-      fullPath: '/central'
-      preLoaderRoute: typeof StationCentralRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/backups': {
-      id: '/_station/backups'
-      path: '/backups'
-      fullPath: '/backups'
-      preLoaderRoute: typeof StationBackupsRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/arquivos': {
-      id: '/_station/arquivos'
-      path: '/arquivos'
-      fullPath: '/arquivos'
-      preLoaderRoute: typeof StationArquivosRouteImport
+    '/_station/config': {
+      id: '/_station/config'
+      path: '/config'
+      fullPath: '/config'
+      preLoaderRoute: typeof StationConfigRouteImport
       parentRoute: typeof StationRoute
     }
   }
 }
 
 interface StationRouteChildren {
-  StationArquivosRoute: typeof StationArquivosRoute
-  StationBackupsRoute: typeof StationBackupsRoute
-  StationCentralRoute: typeof StationCentralRoute
-  StationCodiceRoute: typeof StationCodiceRoute
-  StationConfiguracaoRoute: typeof StationConfiguracaoRoute
-  StationDispositivosRoute: typeof StationDispositivosRoute
-  StationImplementacaoRoute: typeof StationImplementacaoRoute
-  StationMapaRoute: typeof StationMapaRoute
-  StationMidiaRoute: typeof StationMidiaRoute
-  StationOnboardingRoute: typeof StationOnboardingRoute
-  StationRoadmapRoute: typeof StationRoadmapRoute
-  StationVerdadeRoute: typeof StationVerdadeRoute
+  StationConfigRoute: typeof StationConfigRoute
+  StationEndpointsRoute: typeof StationEndpointsRoute
+  StationLogsRoute: typeof StationLogsRoute
   StationIndexRoute: typeof StationIndexRoute
 }
 
 const StationRouteChildren: StationRouteChildren = {
-  StationArquivosRoute: StationArquivosRoute,
-  StationBackupsRoute: StationBackupsRoute,
-  StationCentralRoute: StationCentralRoute,
-  StationCodiceRoute: StationCodiceRoute,
-  StationConfiguracaoRoute: StationConfiguracaoRoute,
-  StationDispositivosRoute: StationDispositivosRoute,
-  StationImplementacaoRoute: StationImplementacaoRoute,
-  StationMapaRoute: StationMapaRoute,
-  StationMidiaRoute: StationMidiaRoute,
-  StationOnboardingRoute: StationOnboardingRoute,
-  StationRoadmapRoute: StationRoadmapRoute,
-  StationVerdadeRoute: StationVerdadeRoute,
+  StationConfigRoute: StationConfigRoute,
+  StationEndpointsRoute: StationEndpointsRoute,
+  StationLogsRoute: StationLogsRoute,
   StationIndexRoute: StationIndexRoute,
 }
 
@@ -354,18 +137,7 @@ const StationRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   StationRoute: StationRouteWithChildren,
-  TvRoute: TvRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
