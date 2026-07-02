@@ -65,7 +65,7 @@ function buildPayload(message: string | undefined, details: ApiErrorDetails) {
   return { message: message ?? null, ...details };
 }
 
-function buildReadableDetails(message: string | undefined, details: ApiErrorDetails): string {
+export function buildReadableDetails(message: string | undefined, details: ApiErrorDetails): string {
   const lines = [
     `Héstia Console — detalhes do erro`,
     ``,
@@ -82,6 +82,7 @@ function buildReadableDetails(message: string | undefined, details: ApiErrorDeta
   ];
   return lines.join("\n");
 }
+
 
 async function copyToClipboard(text: string, successTitle: string, successDescription: string) {
   try {
