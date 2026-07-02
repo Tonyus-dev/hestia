@@ -239,7 +239,10 @@ function ErrorModal({
             <p className="kaline-eyebrow text-[color:var(--kaline-amber)]">
               {ORIGIN_LABEL[details.origin]}
             </p>
-            <h3 className="kaline-serif text-2xl text-[color:var(--kaline-text)] mt-1">
+            <h3
+              id="hestia-error-modal-title"
+              className="kaline-serif text-2xl text-[color:var(--kaline-text)] mt-1"
+            >
               Detalhes do erro
             </h3>
           </div>
