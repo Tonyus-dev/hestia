@@ -95,7 +95,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: kaApple.url, type: "image/png" },
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        href:
+          "data:image/svg+xml;utf8," +
+          encodeURIComponent(
+            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#0e0a08"/><path d="M32 12c4 6 10 9 10 18a10 10 0 0 1-20 0c0-4 2-6 4-8-1 4 1 6 3 6 0-6-3-10 3-16z" fill="#c8873d"/><path d="M32 22c2 3 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 3-5 0 3 2 3 2 0z" fill="#f4c27a"/></svg>`,
+          ),
+      },
+      { rel: "apple-touch-icon", href: kaApple.url },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -103,6 +112,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap",
       },
     ],
+
   }),
   shellComponent: RootShell,
   component: RootComponent,
