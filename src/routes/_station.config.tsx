@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { hestiaApi, type ApiState, type Config } from "@/lib/hestia/api";
+import { hestiaApi } from "@/lib/hestia/api";
+import { useApi } from "@/lib/hestia/useApi";
 import { HESTIA } from "@/content/kaline";
 import { UnavailableNote, Row } from "@/components/hestia/UnavailableNote";
 
@@ -25,10 +25,8 @@ const expected = {
 };
 
 function ConfigPage() {
-  const [state, setState] = useState<ApiState<Config>>({ status: "loading" });
-  useEffect(() => {
-    hestiaApi.config().then(setState);
-  }, []);
+  const { state, retry, refreshing } = useApi(hestiaApi.config);
+
 
   return (
     <div className="space-y-6">
