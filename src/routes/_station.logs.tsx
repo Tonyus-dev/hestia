@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { hestiaApi, type ApiState, type Logs } from "@/lib/hestia/api";
 import { UnavailableNote } from "@/components/hestia/UnavailableNote";
 
+const TAIL_OPTIONS = [50, 100, 200] as const;
+
 export const Route = createFileRoute("/_station/logs")({
   head: () => ({
     meta: [
@@ -17,24 +19,55 @@ export const Route = createFileRoute("/_station/logs")({
 
 function LogsPage() {
   const [state, setState] = useState<ApiState<Logs>>({ status: "loading" });
+  const [tail, setTail] = useState<number>(100);
+
   useEffect(() => {
-    hestiaApi.logs().then(setState);
-  }, []);
+    let alive = true;
+    setState({ status: "loading" });
+    hestiaApi.logs(tail).then((s) => alive && setState(s));
+    return () => {
+      alive = false;
+    };
+  }, [tail]);
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="kaline-eyebrow">/logs</p>
-        <h1 className="kaline-serif text-3xl md:text-4xl text-[color:var(--kaline-text)]">
-          Logs da Chama Local
-        </h1>
-        <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
-          Apenas eventos da própria Chama. Não lê journalctl, syslog nem logs de serviços do
-          sistema. Sem limpar, sem baixar.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="kaline-eyebrow">/logs</p>
+          <h1 className="kaline-serif text-3xl md:text-4xl text-[color:var(--kaline-text)]">
+            Logs da Chama Local
+          </h1>
+          <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
+            Apenas eventos da própria Chama. Não lê journalctl, syslog nem logs de serviços do
+            sistema. Sem limpar, sem baixar.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--kaline-faint)]">
+            tail
+          </span>
+          {TAIL_OPTIONS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setTail(n)}
+              className={
+                "text-[11px] px-2.5 py-1 rounded border transition " +
+                (tail === n
+                  ? "border-[color:var(--kaline-copper)] text-[color:var(--kaline-copper)] bg-[color:var(--kaline-copper)]/10"
+                  : "border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)]")
+              }
+            >
+              {n}
+            </button>
+          ))}
+        </div>
       </header>
 
-      {state.status === "loading" && <p className="text-[color:var(--kaline-muted)]">consultando…</p>}
+      {state.status === "loading" && (
+        <p className="text-[color:var(--kaline-muted)]">consultando…</p>
+      )}
       {state.status === "unavailable" && <UnavailableNote message={state.message} />}
       {state.status === "ok" && (
         <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-obsidian)]/60 overflow-hidden">

@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HESTIA } from "@/content/kaline";
+import { hestiaApi } from "@/lib/hestia/api";
 
-type Ping = { path: string; status: number | "erro"; ok: boolean };
+type Ping = { status: number | "erro"; ok: boolean };
 
 export const Route = createFileRoute("/_station/endpoints")({
   head: () => ({
@@ -18,26 +19,30 @@ export const Route = createFileRoute("/_station/endpoints")({
 
 function EndpointsPage() {
   const [pings, setPings] = useState<Record<string, Ping | undefined>>({});
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     HESTIA.endpoints.forEach(async (e) => {
-      try {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 3500);
-        const res = await fetch(e.path, { signal: controller.signal });
-        clearTimeout(t);
-        if (!alive) return;
-        setPings((p) => ({ ...p, [e.path]: { path: e.path, status: res.status, ok: res.ok } }));
-      } catch {
-        if (!alive) return;
-        setPings((p) => ({ ...p, [e.path]: { path: e.path, status: "erro", ok: false } }));
-      }
+      const p = await hestiaApi.ping(e.path);
+      if (!alive) return;
+      setPings((prev) => ({ ...prev, [e.path]: p }));
     });
     return () => {
       alive = false;
     };
   }, []);
+
+  const copyCurl = async (path: string) => {
+    const cmd = `curl -s ${hestiaApi.absoluteUrl(path)} | jq`;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setCopied(path);
+      setTimeout(() => setCopied((c) => (c === path ? null : c)), 1500);
+    } catch {
+      /* clipboard bloqueado — ignora */
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -62,7 +67,7 @@ function EndpointsPage() {
             >
               <div className="flex items-baseline justify-between gap-3">
                 <a
-                  href={e.path}
+                  href={hestiaApi.absoluteUrl(e.path)}
                   target="_blank"
                   rel="noreferrer"
                   className="font-mono text-[13.5px] text-[color:var(--kaline-text)] hover:text-[color:var(--kaline-copper)] break-all"
@@ -79,7 +84,7 @@ function EndpointsPage() {
                         : "text-[color:var(--kaline-ember)]")
                   }
                 >
-                  {p == null ? "consultando" : p.ok ? `ok ${p.status}` : `${p.status}`}
+                  {p == null ? "consultando" : p.ok ? `ok ${p.status}` : "offline"}
                 </span>
               </div>
               <p className="text-[12.5px] text-[color:var(--kaline-muted)]">{e.purpose}</p>
@@ -97,6 +102,18 @@ function EndpointsPage() {
                     </span>
                   ))}
                 </div>
+              </div>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <code className="text-[11px] text-[color:var(--kaline-faint)] truncate">
+                  curl {hestiaApi.absoluteUrl(e.path)}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => copyCurl(e.path)}
+                  className="text-[10px] uppercase tracking-[0.22em] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper)]/10 transition"
+                >
+                  {copied === e.path ? "copiado" : "copiar curl"}
+                </button>
               </div>
             </div>
           );
