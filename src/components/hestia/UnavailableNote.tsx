@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { HESTIA } from "@/content/kaline";
 import type { ApiErrorDetails } from "@/lib/hestia/api";
@@ -157,6 +157,15 @@ function InlineField({ label, value }: { label: string; value?: string }) {
     </>
   );
 }
+const FOCUSABLE_SELECTOR =
+  'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function getFocusable(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => !el.hasAttribute("disabled") && el.offsetParent !== null,
+  );
+}
+
 
 function ErrorModal({
   message,
@@ -167,30 +176,82 @@ function ErrorModal({
   details: ApiErrorDetails;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+
+    // Autofocus: first focusable inside the dialog, or the dialog itself.
+    const dialog = dialogRef.current;
+    if (dialog) {
+      const first = getFocusable(dialog)[0];
+      (first ?? dialog).focus();
+    }
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key === "Tab" && dialog) {
+        const focusable = getFocusable(dialog);
+        if (focusable.length === 0) {
+          e.preventDefault();
+          dialog.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (e.shiftKey && (active === first || !dialog.contains(active))) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (active === last || !dialog.contains(active))) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+
+    // Prevent body scroll while modal is open.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus?.();
+    };
   }, [onClose]);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       role="dialog"
       aria-modal="true"
-      aria-label="Detalhes do erro"
+      aria-labelledby="hestia-error-modal-title"
     >
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="max-w-xl w-full max-h-[85vh] overflow-auto rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-6 shadow-2xl"
+        ref={dialogRef}
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="max-w-xl w-full max-h-[85vh] overflow-auto rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-6 shadow-2xl outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--kaline-copper)]"
       >
         <header className="flex items-start justify-between gap-4">
           <div>
             <p className="kaline-eyebrow text-[color:var(--kaline-amber)]">
               {ORIGIN_LABEL[details.origin]}
             </p>
-            <h3 className="kaline-serif text-2xl text-[color:var(--kaline-text)] mt-1">
+            <h3
+              id="hestia-error-modal-title"
+              className="kaline-serif text-2xl text-[color:var(--kaline-text)] mt-1"
+            >
               Detalhes do erro
             </h3>
           </div>
