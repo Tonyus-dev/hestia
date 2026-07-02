@@ -210,13 +210,13 @@ function ErrorModal({
             {humanSummary(details)}
           </p>
           <div className="flex flex-wrap gap-2 pt-2">
-            <Highlight
+            <Chip
               label="código"
               value={details.code ?? (details.httpStatus ? `HTTP_${details.httpStatus}` : undefined)}
               tone="code"
             />
-            <Highlight label="rota" value={details.route} tone="route" />
-            <Highlight
+            <Chip label="rota" value={details.route} tone="route" />
+            <Chip
               label="timeout"
               value={
                 details.origin === "timeout"
