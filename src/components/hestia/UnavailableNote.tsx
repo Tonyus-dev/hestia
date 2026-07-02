@@ -193,6 +193,13 @@ export function UnavailableNote({
           <>
             <button
               type="button"
+              onClick={() => copyReadableDetails(message, details)}
+              className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+            >
+              copiar detalhes
+            </button>
+            <button
+              type="button"
               onClick={() => copyErrorJson(buildPayload(message, details))}
               className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
             >
