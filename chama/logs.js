@@ -7,6 +7,7 @@ export function log(level, message) {
   if (buffer.length > MAX) buffer.splice(0, buffer.length - MAX);
 }
 
-export function getLogs() {
-  return { items: buffer.slice(-100) };
+export function getLogs(tail = 100) {
+  const n = Math.min(Math.max(Number(tail) || 100, 1), MAX);
+  return { items: buffer.slice(-n), tail: n, capacity: MAX };
 }
