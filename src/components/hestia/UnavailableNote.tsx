@@ -209,6 +209,25 @@ function ErrorModal({
           <p className="text-[13.5px] text-[color:var(--kaline-muted)] leading-relaxed">
             {humanSummary(details)}
           </p>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Chip
+              label="código"
+              value={details.code ?? (details.httpStatus ? `HTTP_${details.httpStatus}` : undefined)}
+              tone="code"
+            />
+            <Chip label="rota" value={details.route} tone="route" />
+            <Chip
+              label="timeout"
+              value={
+                details.origin === "timeout"
+                  ? `${details.timeoutMs ?? "?"}ms · esgotado`
+                  : details.timeoutMs != null
+                    ? `${details.timeoutMs}ms`
+                    : undefined
+              }
+              tone={details.origin === "timeout" ? "alert" : "muted"}
+            />
+          </div>
         </section>
 
         <section className="mt-5 space-y-2">
@@ -238,10 +257,13 @@ function ErrorModal({
 
         {details.rawBody && (
           <section className="mt-5">
-            <p className="kaline-eyebrow mb-2">Corpo bruto</p>
-            <pre className="max-h-40 overflow-auto rounded border border-[color:var(--kaline-border-copper)]/60 bg-[color:var(--kaline-obsidian)]/70 p-3 text-[11.5px] text-[color:var(--kaline-muted)] whitespace-pre-wrap break-all">
-              {details.rawBody}
-            </pre>
+            <div className="flex items-center justify-between mb-2">
+              <p className="kaline-eyebrow">Corpo bruto</p>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--kaline-faint)]">
+                {details.rawBody.split("\n").length} linhas · {details.rawBody.length} chars
+              </span>
+            </div>
+            <RawBody text={details.rawBody} />
           </section>
         )}
 
@@ -277,6 +299,60 @@ function Field({ label, value }: { label: string; value?: string }) {
     </>
   );
 }
+
+function Chip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value?: string;
+  tone: "code" | "route" | "alert" | "muted";
+}) {
+  if (!value) return null;
+  const toneClass =
+    tone === "alert"
+      ? "border-[color:var(--kaline-amber)] text-[color:var(--kaline-amber)] bg-[color:var(--kaline-amber)]/10"
+      : tone === "code"
+        ? "border-[color:var(--kaline-copper)] text-[color:var(--kaline-copper)] bg-[color:var(--kaline-copper)]/10"
+        : tone === "route"
+          ? "border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-text)] bg-[color:var(--kaline-obsidian)]/60"
+          : "border-[color:var(--kaline-border-copper)]/60 text-[color:var(--kaline-muted)]";
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 font-mono text-[11px] ${toneClass}`}
+    >
+      <span className="uppercase tracking-[0.18em] text-[9.5px] opacity-70">{label}</span>
+      <span className="break-all">{value}</span>
+    </span>
+  );
+}
+
+function RawBody({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const width = String(lines.length).length;
+  return (
+    <pre className="max-h-56 overflow-auto rounded border border-[color:var(--kaline-border-copper)]/60 bg-[color:var(--kaline-obsidian)]/70 p-0 text-[11.5px] leading-[1.55] text-[color:var(--kaline-muted)] font-mono">
+      <code className="block">
+        {lines.map((line, i) => (
+          <div key={i} className="flex gap-3 px-3 hover:bg-[color:var(--kaline-copper)]/5">
+            <span
+              className="select-none text-right text-[color:var(--kaline-faint)]/70 tabular-nums shrink-0"
+              style={{ width: `${width}ch` }}
+              aria-hidden="true"
+            >
+              {i + 1}
+            </span>
+            <span className="whitespace-pre-wrap break-all text-[color:var(--kaline-text)]/90">
+              {line || "\u00A0"}
+            </span>
+          </div>
+        ))}
+      </code>
+    </pre>
+  );
+}
+
 
 export function DataCard({
   title,
