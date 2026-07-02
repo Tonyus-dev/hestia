@@ -280,13 +280,18 @@ function ErrorModal({
   message,
   details,
   onClose,
+  compact,
+  onToggleCompact,
 }: {
   message?: string;
   details: ApiErrorDetails;
   onClose: () => void;
+  compact: boolean;
+  onToggleCompact: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
