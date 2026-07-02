@@ -34,48 +34,66 @@ describe("stableStringify", () => {
 });
 
 describe("buildDownloadFilename", () => {
-  it("uses route slug and current timestamp when at is absent", () => {
-    const name = buildDownloadFilename("/api/server/status");
-    expect(name).toMatch(/^hestia-api_server_status-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
+  const baseDetails: ApiErrorDetails = {
+    origin: "http",
+    route: "/api/server/status",
+    httpStatus: 500,
+    code: "ENOENT",
+    at: "2026-07-02T17:00:00Z",
+  };
+
+  it("uses route slug, error type and timestamp", () => {
+    const name = buildDownloadFilename(baseDetails);
+    expect(name).toBe("hestia-api_server_status-http_ENOENT-2026-07-02T17-00-00.json");
   });
 
-  it("falls back to error when route is absent", () => {
-    const name = buildDownloadFilename();
-    expect(name).toMatch(/^hestia-error-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
+  it("falls back to error slug when route is absent", () => {
+    const name = buildDownloadFilename({ origin: "http", httpStatus: 503 });
+    expect(name).toMatch(/^hestia-error-http_503-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
   });
 
   it("sanitizes special characters in route", () => {
-    const name = buildDownloadFilename("/api/logs?tail=100");
-    expect(name).toMatch(/^hestia-api_logs_tail_100-/);
+    const name = buildDownloadFilename({ ...baseDetails, route: "/api/logs?tail=100" });
+    expect(name).toMatch(/^hestia-api_logs_tail_100-http_ENOENT-/);
   });
 
   it("falls back to error for empty slug after stripping slash", () => {
-    const name = buildDownloadFilename("/");
-    expect(name).toMatch(/^hestia-error-/);
+    const name = buildDownloadFilename({ ...baseDetails, route: "/" });
+    expect(name).toMatch(/^hestia-error-http_ENOENT-/);
   });
 
-  it("uses the stable at timestamp when provided", () => {
-    const name1 = buildDownloadFilename("/api/server/status", "2026-07-02T17:00:00Z");
-    const name2 = buildDownloadFilename("/api/server/status", "2026-07-02T17:00:00Z");
-    expect(name1).toBe("hestia-api_server_status-2026-07-02T17-00-00.json");
-    expect(name2).toBe(name1);
+  it("produces a stable filename for identical errors", () => {
+    const name1 = buildDownloadFilename(baseDetails);
+    const name2 = buildDownloadFilename(baseDetails);
+    expect(name1).toBe(name2);
   });
 
   it("falls back to current timestamp when at is invalid", () => {
-    const name = buildDownloadFilename("/api/server/status", "not-a-date");
-    expect(name).toMatch(/^hestia-api_server_status-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
+    const name = buildDownloadFilename({ ...baseDetails, at: "not-a-date" });
+    expect(name).toMatch(/^hestia-api_server_status-http_ENOENT-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/);
   });
 
   it("truncates very long routes to stay within filesystem limits", () => {
     const longRoute = "/api/" + "x".repeat(300);
-    const name = buildDownloadFilename(longRoute, "2026-07-02T17:00:00Z");
+    const name = buildDownloadFilename({ ...baseDetails, route: longRoute });
     expect(name.length).toBeLessThan(160);
-    expect(name).toMatch(/^hestia-api_xxxx+-2026-07-02T17-00-00\.json$/);
+    expect(name).toMatch(/^hestia-api_xxxx+-http_ENOENT-2026-07-02T17-00-00\.json$/);
   });
 
   it("collapses consecutive underscores and trims leading/trailing underscores", () => {
-    const name = buildDownloadFilename("/api///logs??tail=100", "2026-07-02T17:00:00Z");
-    expect(name).toBe("hestia-api_logs_tail_100-2026-07-02T17-00-00.json");
+    const name = buildDownloadFilename({ ...baseDetails, route: "/api///logs??tail=100" });
+    expect(name).toBe("hestia-api_logs_tail_100-http_ENOENT-2026-07-02T17-00-00.json");
+  });
+
+  it("uses http_status when code is absent", () => {
+    const name = buildDownloadFilename({ origin: "http", route: "/api/health", httpStatus: 502 });
+    expect(name).toMatch(/^hestia-api_health-http_502-/);
+  });
+
+  it("uses origin label for network, timeout and no-base", () => {
+    expect(buildDownloadFilename({ origin: "network", route: "/api/health" })).toMatch(/^hestia-api_health-network-/);
+    expect(buildDownloadFilename({ origin: "timeout", route: "/api/health", timeoutMs: 3000 })).toMatch(/^hestia-api_health-timeout-/);
+    expect(buildDownloadFilename({ origin: "no-base", route: "/api/health" })).toMatch(/^hestia-api_health-no_base-/);
   });
 });
 
