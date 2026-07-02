@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildDownloadFilename,
   buildReadableDetails,
+  formatJson,
   stableStringify,
 } from "@/components/hestia/UnavailableNote";
 import type { ApiErrorDetails } from "@/lib/hestia/api";
