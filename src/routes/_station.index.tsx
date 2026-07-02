@@ -52,7 +52,22 @@ function Painel() {
       </header>
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <DataCard eyebrow="1 · Saúde" title="Saúde da Héstia">
+        <DataCard
+          eyebrow="1 · Saúde"
+          title="Saúde da Héstia"
+          status={
+            health.state.status === "ok"
+              ? health.state.data.ok ? "ok" : "warn"
+              : statusOf(health.state)
+          }
+          summary={
+            health.state.status === "ok"
+              ? `v${health.state.data.version} · uptime ${formatUptime(health.state.data.processUptime)}`
+              : health.state.status === "unavailable"
+                ? "Chama Local não respondeu"
+                : undefined
+          }
+        >
           {health.state.status === "loading" && <p>consultando…</p>}
           {health.state.status === "unavailable" && <UnavailableNote message={health.state.message} details={health.state.details} onRetry={health.retry} refreshing={health.refreshing} />}
           {health.state.status === "ok" && (
@@ -69,7 +84,16 @@ function Painel() {
           )}
         </DataCard>
 
-        <DataCard eyebrow="2 · Servidor" title="Sistema operacional">
+        <DataCard
+          eyebrow="2 · Servidor"
+          title="Sistema operacional"
+          status={statusOf(server.state)}
+          summary={
+            server.state.status === "ok"
+              ? `${server.state.data.platform} · ${formatBytes(server.state.data.freeMemory)} livres`
+              : undefined
+          }
+        >
           {server.state.status === "loading" && <p>consultando…</p>}
           {server.state.status === "unavailable" && <UnavailableNote message={server.state.message} details={server.state.details} onRetry={server.retry} refreshing={server.refreshing} />}
           {server.state.status === "ok" && (
@@ -86,7 +110,20 @@ function Painel() {
           )}
         </DataCard>
 
-        <DataCard eyebrow="3 · Armazenamento" title="Discos observados">
+        <DataCard
+          eyebrow="3 · Armazenamento"
+          title="Discos observados"
+          status={
+            storage.state.status === "ok"
+              ? storage.state.data.items.some((it) => !it.exists) ? "warn" : "ok"
+              : statusOf(storage.state)
+          }
+          summary={
+            storage.state.status === "ok"
+              ? `${storage.state.data.items.filter((it) => it.exists).length}/${storage.state.data.items.length} discos ativos`
+              : undefined
+          }
+        >
           {storage.state.status === "loading" && <p>consultando…</p>}
           {storage.state.status === "unavailable" && <UnavailableNote message={storage.state.message} details={storage.state.details} onRetry={storage.retry} refreshing={storage.refreshing} />}
           {storage.state.status === "ok" &&
@@ -112,7 +149,20 @@ function Painel() {
             ))}
         </DataCard>
 
-        <DataCard eyebrow="4 · Serviços" title="Systemd">
+        <DataCard
+          eyebrow="4 · Serviços"
+          title="Systemd"
+          status={
+            services.state.status === "ok"
+              ? services.state.data.items.every((s) => s.status === "active") ? "ok" : "warn"
+              : statusOf(services.state)
+          }
+          summary={
+            services.state.status === "ok"
+              ? `${services.state.data.items.filter((s) => s.status === "active").length}/${services.state.data.items.length} ativos`
+              : undefined
+          }
+        >
           {services.state.status === "loading" && <p>consultando…</p>}
           {services.state.status === "unavailable" && <UnavailableNote message={services.state.message} details={services.state.details} onRetry={services.retry} refreshing={services.refreshing} />}
           {services.state.status === "ok" &&
@@ -135,7 +185,12 @@ function Painel() {
             ))}
         </DataCard>
 
-        <DataCard eyebrow="5 · Rede local" title="Acesso">
+        <DataCard
+          eyebrow="5 · Rede local"
+          title="Acesso"
+          status="idle"
+          summary={`${HESTIA.defaultHost}:${HESTIA.defaultPort} · local-readonly`}
+        >
           <Row k="host padrão" v={HESTIA.defaultHost} />
           <Row k="porta padrão" v={HESTIA.defaultPort} />
           <Row k="modo" v="local-readonly" />
@@ -144,7 +199,12 @@ function Painel() {
           </p>
         </DataCard>
 
-        <DataCard eyebrow="6 · Segurança" title="Garantias da v0">
+        <DataCard
+          eyebrow="6 · Segurança"
+          title="Garantias da v0"
+          status="idle"
+          summary="6 garantias somente-leitura"
+        >
           <ul className="text-[12.5px] font-mono text-[color:var(--kaline-muted)] space-y-1">
             <li>· somente leitura</li>
             <li>· sem upload</li>
