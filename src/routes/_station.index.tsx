@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { hestiaApi, formatBytes, formatUptime, type ApiState } from "@/lib/hestia/api";
+import { hestiaApi, formatBytes, formatUptime } from "@/lib/hestia/api";
+import { useApi } from "@/lib/hestia/useApi";
 import { HESTIA } from "@/content/kaline";
 import { DataCard, Row, UnavailableNote } from "@/components/hestia/UnavailableNote";
 
@@ -23,24 +23,12 @@ export const Route = createFileRoute("/_station/")({
   component: Painel,
 });
 
-function useApi<T>(fn: () => Promise<ApiState<T>>): ApiState<T> {
-  const [state, setState] = useState<ApiState<T>>({ status: "loading" });
-  useEffect(() => {
-    let alive = true;
-    fn().then((s) => alive && setState(s));
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return state;
-}
-
 function Painel() {
   const health = useApi(hestiaApi.health);
   const server = useApi(hestiaApi.server);
   const storage = useApi(hestiaApi.storage);
   const services = useApi(hestiaApi.services);
+
 
   return (
     <div className="space-y-10">
