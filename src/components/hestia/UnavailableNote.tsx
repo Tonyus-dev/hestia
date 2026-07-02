@@ -153,13 +153,29 @@ export function UnavailableNote({
           </button>
         )}
         {details && (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
-          >
-            Ver detalhes →
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => copyErrorJson(buildPayload(message, details))}
+              className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+            >
+              copiar json
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadErrorJson(buildPayload(message, details), details.route)}
+              className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+            >
+              baixar json
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
+            >
+              Ver detalhes →
+            </button>
+          </>
         )}
       </div>
       {open && details && (
