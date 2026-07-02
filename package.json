@@ -12,6 +12,8 @@
     "start": "node hestia.js",
     "dev:local": "node --watch hestia.js",
     "hestia": "npm run build && node hestia.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
