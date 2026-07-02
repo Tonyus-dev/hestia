@@ -54,6 +54,29 @@ async function copyErrorJson(payload: unknown) {
   }
 }
 
+function downloadErrorJson(payload: unknown, route?: string) {
+  const text = stableStringify(payload);
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const slug = route ? route.replace(/^\//, "").replace(/[^a-zA-Z0-9_-]/g, "_") : "error";
+  a.href = url;
+  a.download = `hestia-${slug}-${stamp}.json`;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast.success("JSON baixado", {
+    description: `${text.length} caracteres · chaves ordenadas · ${a.download}`,
+  });
+}
+
+function buildPayload(message: string | undefined, details: ApiErrorDetails) {
+  return { message: message ?? null, ...details };
+}
+
 
 const ORIGIN_LABEL: Record<ApiErrorDetails["origin"], string> = {
   "no-base": "Sem host local",
