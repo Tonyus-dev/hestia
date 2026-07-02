@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   buildDownloadFilename,
+  buildReadableDetails,
   stableStringify,
 } from "@/components/hestia/UnavailableNote";
+import type { ApiErrorDetails } from "@/lib/hestia/api";
+
 
 describe("stableStringify", () => {
   it("orders keys alphabetically at any depth", () => {
