@@ -300,6 +300,60 @@ function Field({ label, value }: { label: string; value?: string }) {
   );
 }
 
+function Chip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value?: string;
+  tone: "code" | "route" | "alert" | "muted";
+}) {
+  if (!value) return null;
+  const toneClass =
+    tone === "alert"
+      ? "border-[color:var(--kaline-amber)] text-[color:var(--kaline-amber)] bg-[color:var(--kaline-amber)]/10"
+      : tone === "code"
+        ? "border-[color:var(--kaline-copper)] text-[color:var(--kaline-copper)] bg-[color:var(--kaline-copper)]/10"
+        : tone === "route"
+          ? "border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-text)] bg-[color:var(--kaline-obsidian)]/60"
+          : "border-[color:var(--kaline-border-copper)]/60 text-[color:var(--kaline-muted)]";
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 font-mono text-[11px] ${toneClass}`}
+    >
+      <span className="uppercase tracking-[0.18em] text-[9.5px] opacity-70">{label}</span>
+      <span className="break-all">{value}</span>
+    </span>
+  );
+}
+
+function RawBody({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const width = String(lines.length).length;
+  return (
+    <pre className="max-h-56 overflow-auto rounded border border-[color:var(--kaline-border-copper)]/60 bg-[color:var(--kaline-obsidian)]/70 p-0 text-[11.5px] leading-[1.55] text-[color:var(--kaline-muted)] font-mono">
+      <code className="block">
+        {lines.map((line, i) => (
+          <div key={i} className="flex gap-3 px-3 hover:bg-[color:var(--kaline-copper)]/5">
+            <span
+              className="select-none text-right text-[color:var(--kaline-faint)]/70 tabular-nums shrink-0"
+              style={{ width: `${width}ch` }}
+              aria-hidden="true"
+            >
+              {i + 1}
+            </span>
+            <span className="whitespace-pre-wrap break-all text-[color:var(--kaline-text)]/90">
+              {line || "\u00A0"}
+            </span>
+          </div>
+        ))}
+      </code>
+    </pre>
+  );
+}
+
+
 export function DataCard({
   title,
   eyebrow,
