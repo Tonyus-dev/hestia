@@ -269,7 +269,7 @@ export function UnavailableNote({
             </button>
             <button
               type="button"
-              onClick={() => downloadErrorJson(payload, details.route, details.at)}
+              onClick={() => downloadErrorJson(payload, details)}
               className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)] hover:text-[color:var(--kaline-amber)] transition"
             >
               baixar json
@@ -518,7 +518,7 @@ function ErrorModal({
 
           <button
             type="button"
-            onClick={() => downloadErrorJson(buildPayload(message, details), details.route, details.at)}
+            onClick={() => downloadErrorJson(buildPayload(message, details), details)}
             className="text-[11px] uppercase tracking-[0.22em] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)]"
           >
             baixar json
