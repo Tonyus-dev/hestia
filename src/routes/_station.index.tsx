@@ -2,7 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { hestiaApi, formatBytes, formatUptime } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { HESTIA } from "@/content/kaline";
-import { DataCard, Row, UnavailableNote } from "@/components/hestia/UnavailableNote";
+import { DataCard, Row, UnavailableNote, type CardStatus } from "@/components/hestia/UnavailableNote";
+
+function statusOf(s: { status: string }): CardStatus {
+  if (s.status === "loading") return "loading";
+  if (s.status === "unavailable") return "error";
+  return "ok";
+}
 
 export const Route = createFileRoute("/_station/")({
   head: () => ({
