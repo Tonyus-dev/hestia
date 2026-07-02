@@ -112,9 +112,6 @@ function resolveBase(): string | null {
   return `${protocol}//${hostname}:${CHAMA_PORT}`;
 }
 
-function unavailable<T>(message: string): ApiState<T> {
-  return { status: "unavailable", message, fetchedAt: new Date().toISOString() };
-}
 
 function unavailable<T>(message: string, details: ApiErrorDetails): ApiState<T> {
   return { status: "unavailable", message, details, fetchedAt: new Date().toISOString() };
