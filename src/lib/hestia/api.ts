@@ -71,29 +71,55 @@ export type Config = {
 };
 
 const DEFAULT_TIMEOUT_MS = 3500;
+const CHAMA_PORT = 4517;
 
-async function safeFetch<T>(url: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<ApiState<T>> {
+/**
+ * Resolve base URL da Chama Local.
+ * - No browser em localhost/LAN: usa host atual na porta 4517.
+ * - Em qualquer outro ambiente (preview Lovable, produção hospedada):
+ *   retorna null → NÃO dispara fetch (evita 500 do SSR que não conhece /api/*).
+ * - No servidor (SSR): também retorna null.
+ */
+function resolveBase(): string | null {
+  if (typeof window === "undefined") return null;
+  const { hostname, protocol } = window.location;
+  const isLocal =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0" ||
+    hostname.endsWith(".local") ||
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+  if (!isLocal) return null;
+  return `${protocol}//${hostname}:${CHAMA_PORT}`;
+}
+
+function unavailable<T>(message: string): ApiState<T> {
+  return { status: "unavailable", message, fetchedAt: new Date().toISOString() };
+}
+
+async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<ApiState<T>> {
+  const base = resolveBase();
+  if (!base) {
+    return unavailable<T>("Aguardando Chama Local (rode `npm run hestia` em http://localhost:4517)");
+  }
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: controller.signal, headers: { accept: "application/json" } });
-    if (!res.ok) {
-      return {
-        status: "unavailable",
-        message: `Chama Local respondeu ${res.status}`,
-        fetchedAt: new Date().toISOString(),
-      };
-    }
+    const res = await fetch(`${base}${path}`, {
+      signal: controller.signal,
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return unavailable<T>(`Chama Local respondeu ${res.status}`);
     const data = (await res.json()) as T;
     return { status: "ok", data, fetchedAt: new Date().toISOString() };
   } catch (err) {
-    return {
-      status: "unavailable",
-      message: err instanceof DOMException && err.name === "AbortError"
+    return unavailable<T>(
+      err instanceof DOMException && err.name === "AbortError"
         ? "Sem resposta da Chama Local (timeout)"
         : "API local indisponível",
-      fetchedAt: new Date().toISOString(),
-    };
+    );
   } finally {
     clearTimeout(t);
   }
@@ -107,6 +133,7 @@ export const hestiaApi = {
   logs: () => safeFetch<Logs>("/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
 };
+
 
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || !isFinite(bytes)) return "—";
