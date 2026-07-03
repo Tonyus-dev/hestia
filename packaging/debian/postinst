@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -e
+
+# Aviso não-fatal: a versão mínima de Node.js não é imposta pelo apt
+# (para não brigar com o pacote `nodejs` de cada distro/PPA), então checamos
+# manualmente e só avisamos — não abortamos a instalação por causa disso.
+NODE_BIN="$(command -v node || true)"
+if [ -n "$NODE_BIN" ]; then
+  NODE_MAJOR="$("$NODE_BIN" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  if [ "${NODE_MAJOR:-0}" -lt 20 ] 2>/dev/null; then
+    echo "Aviso: Héstia Console requer Node.js 20+; detectado $("$NODE_BIN" -v)." >&2
+  fi
+else
+  echo "Aviso: binário 'node' não encontrado no PATH; o serviço não vai conseguir iniciar." >&2
+fi
+
+systemctl daemon-reload
+systemctl enable hestia-console.service
+systemctl restart hestia-console.service
+
+gtk-update-icon-cache -q /usr/share/icons/hicolor || true
+update-desktop-database /usr/share/applications || true
+
+echo "Héstia Console instalada."
+echo "Abra pelo menu ou acesse http://localhost:4517"

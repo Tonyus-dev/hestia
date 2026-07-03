@@ -20,6 +20,10 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Empacotamento .deb (gerado por scripts/build-deb.sh)
+dist-deb/
+.deb-staging/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -30,3 +34,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+package-lock.json
