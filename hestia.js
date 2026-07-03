@@ -15,6 +15,7 @@ import { getLogs, log } from "./chama/logs.js";
 import { isLoopbackHost, buildAllowedHosts, isAllowedHostHeader, RateLimiter } from "./chama/security.js";
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
 import { ensureDataDir } from "./chama/dataDir.js";
+import { runSnapshotCycle, SNAPSHOT_INTERVAL_MS } from "./chama/snapshots.js";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
 function parseCliArgs(argv) {
@@ -59,6 +60,8 @@ if (!isLoopbackHost(config.host) && process.env.HESTIA_ALLOW_LAN !== "1") {
 // degradam graciosamente (ver chama/presence.js).
 try {
   ensureDataDir(config.dataDir);
+  // Snapshot cíclico: gravado a cada SNAPSHOT_INTERVAL_MS; evento só se houver transição de serviço
+  setInterval(() => runSnapshotCycle(config.dataDir), SNAPSHOT_INTERVAL_MS).unref();
 } catch (err) {
   log("warn", `Não foi possível preparar dataDir "${config.dataDir}": ${err.message}`);
 }
