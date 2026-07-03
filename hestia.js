@@ -10,6 +10,7 @@ import { config } from "./chama/config.js";
 import { getHealth } from "./chama/health.js";
 import { getServerStatus } from "./chama/system.js";
 import { getStorageStatus } from "./chama/storage.js";
+import { discoverVolumes } from "./chama/storageDiscovery.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getLogs, log } from "./chama/logs.js";
 import { isLoopbackHost, buildAllowedHosts, isAllowedHostHeader, RateLimiter } from "./chama/security.js";
@@ -154,6 +155,7 @@ app.addHook("onSend", async (_req, reply, payload) => {
 app.get("/api/health", async () => getHealth());
 app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/storage/status", async () => await getStorageStatus());
+app.get("/api/storage/discover", async () => await discoverVolumes());
 app.get("/api/services/status", async () => await getServicesStatus());
 app.get("/api/logs", async (req) => {
   const raw = Number(req.query?.tail);

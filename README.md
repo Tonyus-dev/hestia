@@ -110,6 +110,7 @@ Todos são `GET` e somente leitura.
 GET /api/health
 GET /api/server/status
 GET /api/storage/status
+GET /api/storage/discover  # descobre volumes montados de verdade (ver abaixo)
 GET /api/services/status
 GET /api/logs?tail=100      # 1..200
 GET /api/config
@@ -119,6 +120,23 @@ Verificação rápida:
 
 ```bash
 curl -s http://localhost:4517/api/health | jq
+```
+
+#### `GET /api/storage/discover`
+
+Lista os volumes realmente montados no host (via `df -PTk`), filtrando pseudo-filesystems
+(`tmpfs`, `overlay`, `squashfs`, etc.) e ruído (`/snap`, `/var/lib/docker`, `/boot`). Cada item
+tem `device`, `fstype`, `mountpoint`, `totalBytes`/`usedBytes`/`freeBytes`/`percentUsed`, e um
+campo `kind` (`"ssd"` | `"hdd"` | `"unknown"`) — heurística best-effort lendo
+`/sys/block/<disco>/queue/rotational`; se o kernel não expõe isso (comum em VMs, containers,
+LVM/`device-mapper`), fica `"unknown"` — nunca inventa.
+
+Use isto para descobrir os mountpoints certos do seu SSD/HD e depois configurá-los
+explicitamente em `storagePaths` (veja `~/.chama/config.json` abaixo) — a descoberta é só
+leitura, não altera a configuração sozinha.
+
+```bash
+curl -s http://localhost:4517/api/storage/discover | jq
 ```
 
 ### Presence (leitura same-origin/local)
