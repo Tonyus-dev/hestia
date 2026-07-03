@@ -104,6 +104,8 @@ Precedência: **CLI > env > `~/.chama/config.json` > padrões**. A v0 é local-f
 
 Todos são `GET` e somente leitura.
 
+### Chama Local (base)
+
 ```
 GET /api/health
 GET /api/server/status
@@ -119,6 +121,35 @@ Verificação rápida:
 curl -s http://localhost:4517/api/health | jq
 ```
 
+### Presence (leitura same-origin/local)
+
+Endpoints para integração com a Presence (atlas público em outra origem,
+chamando Héstia opcionalmente). Cada resposta carrega `schemaVersion` e
+`generatedAt`.
+
+⚠️ **Importante**: Estes endpoints estão disponíveis **apenas para consulta
+same-origin ou local** — sem CORS, sem `Private-Network-Access`, sem suporte
+a leitura de uma Presence pública em outra origem (fica para quando isso
+"doer").
+
+```
+GET /api/presence/manifest       # componentes e tagline da estação
+GET /api/presence/summary        # identidade + contadores de services/storage
+GET /api/presence/health         # saúde geral (mesmo que /api/health)
+GET /api/presence/events/recent?limit=100  # eventos recentes (1..200, default 100)
+GET /api/presence/snapshots/latest         # último snapshot com staleness
+GET /api/presence/services       # status de serviços (mesmo que /api/services/status)
+GET /api/presence/storage        # status de disco (mesmo que /api/storage/status)
+GET /api/presence/backups        # plano de backup (stub: "planned" até implementação)
+GET /api/presence/capabilities   # capacidades read-only da Chama
+```
+
+Exemplo:
+
+```bash
+curl -s http://localhost:4517/api/presence/summary | jq
+```
+
 ## Configuração
 
 ### Via env
@@ -127,8 +158,14 @@ curl -s http://localhost:4517/api/health | jq
 HESTIA_HOST=127.0.0.1
 HESTIA_PORT=4517
 HESTIA_STORAGE_PATH=/KALINE
-HESTIA_ALLOW_LAN=1   # obrigatório se HESTIA_HOST não for loopback
+HESTIA_DATA_DIR=/var/lib/hestia-console   # persistência: identidade, eventos, snapshots
+HESTIA_ALLOW_LAN=1                         # obrigatório se HESTIA_HOST não for loopback
 ```
+
+`HESTIA_DATA_DIR` especifica onde gravar `identity.json`, logs de eventos (JSONL), e snapshots.
+Precedência: `HESTIA_DATA_DIR` > `STATE_DIRECTORY` (systemd) > `~/.chama/data` (padrão local).
+Se o diretório não for gravável, rotas de `/api/presence/*` que dependem de disco retornam
+`{status: "unavailable"}`; saúde/storage/services continuam funcionando normalmente.
 
 Por padrão a Chama Local recusa iniciar (`process.exit(1)`) se `HESTIA_HOST`
 não for loopback (`127.0.0.1`/`localhost`/`::1`) — a API não tem autenticação,
