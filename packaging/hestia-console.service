@@ -8,6 +8,8 @@ WorkingDirectory=/opt/hestia-console
 ExecStart=/usr/bin/env node /opt/hestia-console/hestia.js
 Restart=on-failure
 RestartSec=3
+StateDirectory=hestia-console
+LogsDirectory=hestia-console
 Environment=HESTIA_HOST=127.0.0.1
 Environment=HESTIA_PORT=4517
 Environment=NODE_ENV=production
