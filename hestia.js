@@ -15,7 +15,14 @@ import { getLogs, log } from "./chama/logs.js";
 import { isLoopbackHost, buildAllowedHosts, isAllowedHostHeader, RateLimiter } from "./chama/security.js";
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
 import { ensureDataDir } from "./chama/dataDir.js";
-import { runSnapshotCycle, SNAPSHOT_INTERVAL_MS } from "./chama/snapshots.js";
+import { runSnapshotCycle, SNAPSHOT_INTERVAL_MS, getLatestSnapshot } from "./chama/snapshots.js";
+import { getManifest } from "./chama/manifest.js";
+import { getRecentEvents } from "./chama/events.js";
+import { getIdentity } from "./chama/identity.js";
+import { getPresenceSummary } from "./chama/presenceSummary.js";
+import { getBackupsPlan } from "./chama/backups.js";
+import { getCapabilities } from "./chama/capabilities.js";
+import { presenceRoute } from "./chama/presence.js";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
 function parseCliArgs(argv) {
@@ -166,6 +173,22 @@ app.get("/api/config", async () => ({
   storagePaths: config.storagePaths,
   services: config.services,
 }));
+
+// --- Rotas de Presence (read-only): consulta same-origin/local --------
+app.get("/api/presence/manifest", presenceRoute(() => getManifest()));
+app.get("/api/presence/summary", presenceRoute(async () => await getPresenceSummary(config.dataDir)));
+app.get("/api/presence/health", presenceRoute(() => getHealth()));
+app.get("/api/presence/events/recent", presenceRoute(async (req) => {
+  const raw = Number(req.query?.limit);
+  const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 200) : 100;
+  const events = await getRecentEvents({ limit }, config.dataDir);
+  return { events, limit };
+}));
+app.get("/api/presence/snapshots/latest", presenceRoute(async () => await getLatestSnapshot(config.dataDir)));
+app.get("/api/presence/services", presenceRoute(async () => await getServicesStatus()));
+app.get("/api/presence/storage", presenceRoute(async () => await getStorageStatus()));
+app.get("/api/presence/backups", presenceRoute(() => getBackupsPlan()));
+app.get("/api/presence/capabilities", presenceRoute(() => getCapabilities()));
 
 // Servir o frontend buildado quando existir (build output do TanStack Start).
 // O build é SSR (bundle Nitro no formato Cloudflare Workers module, não uma
