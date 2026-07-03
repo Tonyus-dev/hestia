@@ -14,6 +14,7 @@ import { getServicesStatus } from "./chama/services.js";
 import { getLogs, log } from "./chama/logs.js";
 import { isLoopbackHost, buildAllowedHosts, isAllowedHostHeader, RateLimiter } from "./chama/security.js";
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
+import { ensureDataDir } from "./chama/dataDir.js";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
 function parseCliArgs(argv) {
@@ -50,6 +51,16 @@ if (!isLoopbackHost(config.host) && process.env.HESTIA_ALLOW_LAN !== "1") {
       `Se isso é intencional (ex.: rede já protegida por Tailscale/firewall), rode novamente com HESTIA_ALLOW_LAN=1.`,
   );
   process.exit(1);
+}
+
+// Diretório de dados persistentes (identidade, eventos, snapshots) — se não
+// conseguir criar (ex.: permissão), segue no ar: saúde/storage/services
+// continuam funcionando, só as rotas de presence que dependem de disco
+// degradam graciosamente (ver chama/presence.js).
+try {
+  ensureDataDir(config.dataDir);
+} catch (err) {
+  log("warn", `Não foi possível preparar dataDir "${config.dataDir}": ${err.message}`);
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

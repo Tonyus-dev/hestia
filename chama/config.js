@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { isLoopbackHost } from "./security.js";
+import { resolveDataDir } from "./dataDir.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -45,6 +46,9 @@ export const config = {
   mode: "local-readonly",
   readonly: true,
   lanEnabled: !isLoopbackHost(host),
+  // Diretório de dados persistentes (identidade, eventos, snapshots). Só
+  // vem de env/systemd — nunca do whitelist de ~/.chama/config.json.
+  dataDir: resolveDataDir(),
   storagePaths:
     userCfg.storagePaths && userCfg.storagePaths.length > 0
       ? userCfg.storagePaths
