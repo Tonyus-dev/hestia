@@ -38,6 +38,59 @@ npm run build
 npm run dev:local       # reinicia a Chama a cada mudança em hestia.js/chama/*
 ```
 
+## Instalar como app no Linux Mint Xfce
+
+Empacota a Héstia como `.deb` com serviço systemd (autostart em
+`127.0.0.1:4517`), atalho no menu e ícone próprio.
+
+Gerar pacote:
+
+```bash
+chmod +x scripts/build-deb.sh
+./scripts/build-deb.sh
+```
+
+Instalar:
+
+```bash
+sudo apt install ./dist-deb/hestia-console_0.1.0_amd64.deb
+```
+
+Abrir pelo menu:
+
+```
+Menu → Héstia Console
+```
+
+Ou pelo terminal:
+
+```bash
+hestia-console
+```
+
+Ver serviço:
+
+```bash
+systemctl status hestia-console
+```
+
+Logs do serviço:
+
+```bash
+journalctl -u hestia-console -f
+```
+
+Remover:
+
+```bash
+sudo apt remove hestia-console
+```
+
+Requer Node.js 20+ instalado no sistema (o pacote depende de `nodejs` e
+`xdg-utils`, mas não fixa versão mínima via apt para não conflitar com o
+pacote `nodejs` de cada distro/PPA — o `postinst` avisa se a versão
+detectada for antiga).
+
 ## CLI
 
 ```
@@ -74,7 +127,15 @@ curl -s http://localhost:4517/api/health | jq
 HESTIA_HOST=127.0.0.1
 HESTIA_PORT=4517
 HESTIA_STORAGE_PATH=/KALINE
+HESTIA_ALLOW_LAN=1   # obrigatório se HESTIA_HOST não for loopback
 ```
+
+Por padrão a Chama Local recusa iniciar (`process.exit(1)`) se `HESTIA_HOST`
+não for loopback (`127.0.0.1`/`localhost`/`::1`) — a API não tem autenticação,
+então expor em LAN sem querer vazaria hostname, paths de disco, serviços
+ativos e logs para qualquer host da rede. Só inicia fora do loopback com
+`HESTIA_ALLOW_LAN=1` explícito (e mesmo assim, sem autenticação própria —
+proteja com Tailscale/firewall na frente).
 
 ### Via `~/.chama/config.json` (opcional, whitelist)
 
@@ -165,3 +226,18 @@ A v0 é somente leitura.
 `execFile` com argumentos fixos é a única forma de I/O de processo. Nomes
 de serviço e paths de disco vêm de listas fixas no código (ou da whitelist
 `~/.chama/config.json`), nunca da URL.
+
+Camadas adicionais em `hestia.js`/`chama/security.js`:
+
+- **Bind guard** — recusa iniciar fora de loopback sem `HESTIA_ALLOW_LAN=1`
+  (veja "Via env" acima).
+- **Validação de `Host`** — todo request só é aceito se o header `Host`
+  corresponder exatamente a `host:port` configurado (e aos aliases de
+  loopback, quando aplicável). Mitiga DNS rebinding contra a API local
+  (uma página maliciosa não consegue ler `/api/*` mesmo se rebindar o DNS
+  dela para `127.0.0.1`).
+- **Rate limit** — `/api/*` aceita no máximo 60 requisições a cada 10s por
+  IP; excedentes recebem `429`.
+- **Headers de resposta** — `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy` e `Content-Security-Policy` em
+  toda resposta (evita clickjacking e reduz a superfície de XSS).

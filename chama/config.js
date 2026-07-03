@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { isLoopbackHost } from "./security.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -31,16 +32,19 @@ function loadUserConfig() {
 const ALLOWED_SERVICES = ["jellyfin", "syncthing", "smbd", "tailscaled"];
 const userCfg = loadUserConfig();
 
+const host = process.env.HESTIA_HOST || userCfg.host || "127.0.0.1";
+const port = Number(process.env.HESTIA_PORT) || userCfg.port || 4517;
+
 export const config = {
   appName: "Héstia Console",
   serverName: "Héstia",
   agentName: "Chama Local",
   version: pkg.version || "0.1.0",
-  host: process.env.HESTIA_HOST || userCfg.host || "127.0.0.1",
-  port: Number(process.env.HESTIA_PORT) || userCfg.port || 4517,
+  host,
+  port,
   mode: "local-readonly",
   readonly: true,
-  lanEnabled: false,
+  lanEnabled: !isLoopbackHost(host),
   storagePaths:
     userCfg.storagePaths && userCfg.storagePaths.length > 0
       ? userCfg.storagePaths
