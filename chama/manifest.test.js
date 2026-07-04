@@ -12,15 +12,15 @@ describe("getManifest", () => {
 
   it("inclui os três componentes (Héstia, Console, Chama Local)", () => {
     const manifest = getManifest();
-    const names = manifest.station.components.map(c => c.name);
+    const names = manifest.station.components.map((c) => c.name);
     expect(names).toContain("Héstia");
     expect(names).toContain("Héstia Console");
     expect(names).toContain("Chama Local");
   });
 
-  it("define capabilities como readonly", () => {
+  it("define capabilities.readonly como false (organizer tem escrita local aprovada)", () => {
     const manifest = getManifest();
-    expect(manifest.capabilities.readonly).toBe(true);
+    expect(manifest.capabilities.readonly).toBe(false);
   });
 
   it("sempre retorna o mesmo objeto (sem mutação)", () => {

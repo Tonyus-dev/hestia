@@ -16,5 +16,7 @@ export function ensureDataDir(dataDir) {
   mkdirSync(dataDir, { recursive: true });
   mkdirSync(join(dataDir, "events"), { recursive: true });
   mkdirSync(join(dataDir, "snapshots"), { recursive: true });
+  mkdirSync(join(dataDir, "organizer", "plans"), { recursive: true });
+  mkdirSync(join(dataDir, "organizer", "runs"), { recursive: true });
   return dataDir;
 }

@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { getCapabilities } from "./capabilities.js";
 
 describe("getCapabilities", () => {
-  it("retorna capabilities com mode 'read-only'", () => {
+  it("retorna capabilities com mode 'local-write-with-approval'", () => {
     const caps = getCapabilities();
-    expect(caps.mode).toBe("read-only");
+    expect(caps.mode).toBe("local-write-with-approval");
   });
 
   it("habilita leitura de health/metrics/events/snapshots/logs/config", () => {
@@ -17,12 +17,12 @@ describe("getCapabilities", () => {
     expect(caps.reading.config).toBe(true);
   });
 
-  it("desabilita todos os campos de escrita/comando", () => {
+  it("habilita só modifyStorage; todo o resto continua desabilitado", () => {
     const caps = getCapabilities();
     expect(caps.writing.executeCommands).toBe(false);
     expect(caps.writing.configureServices).toBe(false);
     expect(caps.writing.manageBackups).toBe(false);
-    expect(caps.writing.modifyStorage).toBe(false);
+    expect(caps.writing.modifyStorage).toBe(true);
     expect(caps.writing.manageUsers).toBe(false);
   });
 });

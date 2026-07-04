@@ -22,7 +22,7 @@ export const HESTIA = {
   motto: "Héstia organiza, registra e sustenta. Chama Local mede e serve.",
   waiting: "Aguardando Chama Local",
   readonly:
-    "Modo somente leitura. O Console da Héstia observa o servidor, mas não executa comandos destrutivos.",
+    "Escrita local restrita: a Héstia só move/copia arquivos dentro de um plano aprovado explicitamente, e nunca executa comandos destrutivos.",
   footer: "Héstia sustenta. Chama serve. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
@@ -91,6 +91,29 @@ export const HESTIA = {
         "kaline.folders[].extensions",
         "sources.items[]",
       ],
+    },
+    {
+      path: "/api/storage/organizer/plan",
+      purpose: "gera e persiste um plano dry-run de organização (só cálculo)",
+      fields: [
+        "planId",
+        "items[].sourcePath",
+        "items[].targetPath",
+        "items[].action",
+        "items[].status",
+        "summary",
+      ],
+    },
+    {
+      path: "/api/local/organizer/apply",
+      purpose:
+        "POST — aplica um plano já gerado (exige header X-Hestia-Local-Confirm: organize); única rota de escrita",
+      fields: ["runId", "planId", "status", "operations[]", "summary"],
+    },
+    {
+      path: "/api/local/organizer/runs",
+      purpose: "lista execuções anteriores do organizer",
+      fields: ["items[]"],
     },
     {
       path: "/api/services/status",

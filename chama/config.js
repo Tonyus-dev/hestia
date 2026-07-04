@@ -40,7 +40,7 @@ function loadUserConfig() {
             typeof s.label === "string" &&
             typeof s.path === "string" &&
             typeof s.category === "string" &&
-            typeof s.mode === "string",
+            ALLOWED_SOURCE_MODES.includes(s.mode),
         );
     return out;
   } catch {
@@ -49,6 +49,9 @@ function loadUserConfig() {
 }
 
 const ALLOWED_SERVICES = ["jellyfin", "syncthing", "smbd", "tailscaled"];
+// "external-readonly" é o único modo aceito: a Héstia nunca apaga o arquivo original de uma
+// fonte externa, só copia (ver chama/organizerPlan.js). Qualquer outro valor é descartado.
+const ALLOWED_SOURCE_MODES = ["external-readonly"];
 const userCfg = loadUserConfig();
 
 const host = process.env.HESTIA_HOST || userCfg.host || "127.0.0.1";
@@ -61,6 +64,8 @@ export const config = {
   version: pkg.version || "0.1.0",
   host,
   port,
+  // Sobre exposição de rede (bind local vs LAN), não sobre capacidade de escrita — essa
+  // vive em chama/capabilities.js (fonte única de verdade: writing.modifyStorage).
   mode: "local-readonly",
   readonly: true,
   lanEnabled: !isLoopbackHost(host),

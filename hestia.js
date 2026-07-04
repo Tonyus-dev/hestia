@@ -1,5 +1,7 @@
 // Héstia Console — servidor local Fastify que embute a Chama Local
-// e serve o frontend buildado. Somente leitura.
+// e serve o frontend buildado. Majoritariamente somente leitura — a única exceção é
+// POST /api/local/organizer/apply, que move/copia arquivos dentro de um plano gerado pela
+// própria Héstia e só roda com confirmação explícita (ver chama/organizerApply.js).
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { fileURLToPath } from "node:url";
@@ -13,10 +15,17 @@ import { getStorageStatus } from "./chama/storage.js";
 import { discoverVolumes } from "./chama/storageDiscovery.js";
 import { getStorageModel } from "./chama/storageModel.js";
 import { scanStorageModel, scanConfiguredSources } from "./chama/storageScanner.js";
+import { generateOrganizerPlan, writePlan, getPlan } from "./chama/organizerPlan.js";
+import { applyOrganizerPlan, getOrganizerRuns, getOrganizerRun } from "./chama/organizerApply.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getServiceBindings } from "./chama/serviceBindings.js";
 import { getLogs, log } from "./chama/logs.js";
-import { isLoopbackHost, buildAllowedHosts, isAllowedHostHeader, RateLimiter } from "./chama/security.js";
+import {
+  isLoopbackHost,
+  buildAllowedHosts,
+  isAllowedHostHeader,
+  RateLimiter,
+} from "./chama/security.js";
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
 import { ensureDataDir } from "./chama/dataDir.js";
 import { runSnapshotCycle, SNAPSHOT_INTERVAL_MS, getLatestSnapshot } from "./chama/snapshots.js";
@@ -136,6 +145,21 @@ app.addHook("onRequest", async (req, reply) => {
   });
 });
 
+// --- Confirmação explícita para a única rota de escrita local. --------------
+// Sem CORS habilitado, um POST cross-origin com header customizado dispara preflight e falha
+// sem esse header (não existe forma de "esquecer" e disparar por acidente via <form>/<img>).
+app.addHook("onRequest", async (req, reply) => {
+  if (req.method !== "POST" || !req.url.startsWith("/api/local/")) return;
+  if (req.headers["x-hestia-local-confirm"] === "organize") return;
+  reply.code(403).send({
+    ok: false,
+    error: "Confirmação ausente",
+    code: "EMISSINGCONFIRM",
+    detail: 'Rotas de escrita local exigem o header "X-Hestia-Local-Confirm: organize".',
+    at: new Date().toISOString(),
+  });
+});
+
 // --- Headers de segurança em toda resposta. --------------------------------
 // script-src precisa de 'unsafe-inline': o bundle SSR do TanStack Start
 // injeta um script inline de hidratação (sem isso o React nunca hidrata e a
@@ -165,6 +189,11 @@ app.get("/api/storage/scan", async () => ({
   kaline: await scanStorageModel(),
   sources: await scanConfiguredSources(),
 }));
+app.get("/api/storage/organizer/plan", async () => {
+  const plan = await generateOrganizerPlan();
+  await writePlan(plan, config.dataDir);
+  return plan;
+});
 app.get("/api/services/status", async () => await getServicesStatus());
 app.get("/api/services/bindings", async () => getServiceBindings());
 app.get("/api/logs", async (req) => {
@@ -186,21 +215,102 @@ app.get("/api/config", async () => ({
   services: config.services,
 }));
 
-// --- Rotas de Presence (read-only): consulta same-origin/local --------
-app.get("/api/presence/manifest", presenceRoute(() => getManifest()));
-app.get("/api/presence/summary", presenceRoute(async () => await getPresenceSummary(config.dataDir)));
-app.get("/api/presence/health", presenceRoute(() => getHealth()));
-app.get("/api/presence/events/recent", presenceRoute(async (req) => {
-  const raw = Number(req.query?.limit);
-  const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 200) : 100;
-  const events = await getRecentEvents({ limit }, config.dataDir);
-  return { events, limit };
+// --- Rotas locais de escrita controlada (organizer) -------------------------
+// Só aplica plano já gerado por GET /api/storage/organizer/plan (planId). Nunca aceita path,
+// lista de arquivos ou targetPath do corpo da requisição — ver chama/organizerApply.js.
+app.post("/api/local/organizer/apply", async (req, reply) => {
+  const body = req.body || {};
+  if (typeof body.planId !== "string" || !body.planId) {
+    reply.code(400).send({
+      ok: false,
+      error: "planId obrigatório",
+      code: "EBADREQUEST",
+      detail: 'Body deve conter { planId, mode: "apply" }, com planId de um plano já gerado.',
+      at: new Date().toISOString(),
+    });
+    return;
+  }
+  if (body.mode !== "apply") {
+    reply.code(400).send({
+      ok: false,
+      error: 'mode deve ser "apply"',
+      code: "EBADREQUEST",
+      at: new Date().toISOString(),
+    });
+    return;
+  }
+  const plan = await getPlan(body.planId, config.dataDir);
+  if (!plan) {
+    reply.code(404).send({
+      ok: false,
+      error: "Plano não encontrado",
+      code: "EPLANNOTFOUND",
+      detail: "planId inválido, expirado ou nunca gerado por GET /api/storage/organizer/plan.",
+      at: new Date().toISOString(),
+    });
+    return;
+  }
+  return applyOrganizerPlan(plan, config.dataDir);
+});
+app.get("/api/local/organizer/runs", async () => ({
+  items: await getOrganizerRuns(config.dataDir),
 }));
-app.get("/api/presence/snapshots/latest", presenceRoute(async () => await getLatestSnapshot(config.dataDir)));
-app.get("/api/presence/services", presenceRoute(async () => await getServicesStatus()));
-app.get("/api/presence/storage", presenceRoute(async () => await getStorageStatus()));
-app.get("/api/presence/backups", presenceRoute(() => getBackupsPlan()));
-app.get("/api/presence/capabilities", presenceRoute(() => getCapabilities()));
+app.get("/api/local/organizer/runs/:runId", async (req, reply) => {
+  const run = await getOrganizerRun(req.params.runId, config.dataDir);
+  if (!run) {
+    reply.code(404).send({
+      ok: false,
+      error: "Execução não encontrada",
+      code: "ERUNNOTFOUND",
+      at: new Date().toISOString(),
+    });
+    return;
+  }
+  return run;
+});
+
+// --- Rotas de Presence (read-only): consulta same-origin/local --------
+app.get(
+  "/api/presence/manifest",
+  presenceRoute(() => getManifest()),
+);
+app.get(
+  "/api/presence/summary",
+  presenceRoute(async () => await getPresenceSummary(config.dataDir)),
+);
+app.get(
+  "/api/presence/health",
+  presenceRoute(() => getHealth()),
+);
+app.get(
+  "/api/presence/events/recent",
+  presenceRoute(async (req) => {
+    const raw = Number(req.query?.limit);
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 200) : 100;
+    const events = await getRecentEvents({ limit }, config.dataDir);
+    return { events, limit };
+  }),
+);
+app.get(
+  "/api/presence/snapshots/latest",
+  presenceRoute(async () => await getLatestSnapshot(config.dataDir)),
+);
+app.get(
+  "/api/presence/services",
+  presenceRoute(async () => await getServicesStatus()),
+);
+app.get(
+  "/api/presence/storage",
+  presenceRoute(async () => await getStorageStatus()),
+);
+app.get(
+  "/api/presence/backups",
+  presenceRoute(() => getBackupsPlan()),
+);
+app.get(
+  "/api/presence/capabilities",
+  presenceRoute(() => getCapabilities()),
+);
 
 // Servir o frontend buildado quando existir (build output do TanStack Start).
 // O build é SSR (bundle Nitro no formato Cloudflare Workers module, não uma
@@ -208,8 +318,14 @@ app.get("/api/presence/capabilities", presenceRoute(() => getCapabilities()));
 // @fastify/static, e o que não bater em nenhum arquivo cai no bundle SSR
 // (`serverEntry`), que roda sob Node puro (veja chama/ssr.js).
 const buildTargets = [
-  { publicDir: join(__dirname, "dist", "client"), serverEntry: join(__dirname, "dist", "server", "index.mjs") },
-  { publicDir: join(__dirname, ".output", "public"), serverEntry: join(__dirname, ".output", "server", "index.mjs") },
+  {
+    publicDir: join(__dirname, "dist", "client"),
+    serverEntry: join(__dirname, "dist", "server", "index.mjs"),
+  },
+  {
+    publicDir: join(__dirname, ".output", "public"),
+    serverEntry: join(__dirname, ".output", "server", "index.mjs"),
+  },
 ];
 const build = buildTargets.find((b) => existsSync(b.publicDir));
 if (build) {
@@ -234,7 +350,9 @@ if (build) {
     });
   } else {
     log("warn", "bundle SSR não encontrado — só estáticos serão servidos (rotas da SPA podem 404)");
-    app.setNotFoundHandler((_req, reply) => reply.code(404).send({ ok: false, error: "não encontrado" }));
+    app.setNotFoundHandler((_req, reply) =>
+      reply.code(404).send({ ok: false, error: "não encontrado" }),
+    );
   }
 } else {
   log("warn", "frontend buildado não encontrado — rode `npm run build` antes de `npm run start`");

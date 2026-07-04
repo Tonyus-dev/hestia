@@ -2,7 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { hestiaApi, formatBytes, formatUptime } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { HESTIA } from "@/content/kaline";
-import { DataCard, Row, UnavailableNote, type CardStatus } from "@/components/hestia/UnavailableNote";
+import {
+  DataCard,
+  Row,
+  UnavailableNote,
+  type CardStatus,
+} from "@/components/hestia/UnavailableNote";
 
 function statusOf(s: { status: string }): CardStatus {
   if (s.status === "loading") return "loading";
@@ -35,7 +40,6 @@ function Painel() {
   const storage = useApi(hestiaApi.storage);
   const services = useApi(hestiaApi.services);
 
-
   return (
     <div className="space-y-10">
       <header className="space-y-4">
@@ -57,7 +61,9 @@ function Painel() {
           title="Saúde da Héstia"
           status={
             health.state.status === "ok"
-              ? health.state.data.ok ? "ok" : "warn"
+              ? health.state.data.ok
+                ? "ok"
+                : "warn"
               : statusOf(health.state)
           }
           summary={
@@ -69,7 +75,14 @@ function Painel() {
           }
         >
           {health.state.status === "loading" && <p>consultando…</p>}
-          {health.state.status === "unavailable" && <UnavailableNote message={health.state.message} details={health.state.details} onRetry={health.retry} refreshing={health.refreshing} />}
+          {health.state.status === "unavailable" && (
+            <UnavailableNote
+              message={health.state.message}
+              details={health.state.details}
+              onRetry={health.retry}
+              refreshing={health.refreshing}
+            />
+          )}
           {health.state.status === "ok" && (
             <>
               <Row k="status" v={health.state.data.ok ? "ok" : "degradado"} />
@@ -95,7 +108,14 @@ function Painel() {
           }
         >
           {server.state.status === "loading" && <p>consultando…</p>}
-          {server.state.status === "unavailable" && <UnavailableNote message={server.state.message} details={server.state.details} onRetry={server.retry} refreshing={server.refreshing} />}
+          {server.state.status === "unavailable" && (
+            <UnavailableNote
+              message={server.state.message}
+              details={server.state.details}
+              onRetry={server.retry}
+              refreshing={server.refreshing}
+            />
+          )}
           {server.state.status === "ok" && (
             <>
               <Row k="hostname" v={server.state.data.hostname} />
@@ -105,7 +125,10 @@ function Painel() {
               <Row k="uptime" v={formatUptime(server.state.data.uptime)} />
               <Row k="memória total" v={formatBytes(server.state.data.totalMemory)} />
               <Row k="memória livre" v={formatBytes(server.state.data.freeMemory)} />
-              <Row k="load avg" v={server.state.data.loadAverage.map((n) => n.toFixed(2)).join(" · ")} />
+              <Row
+                k="load avg"
+                v={server.state.data.loadAverage.map((n) => n.toFixed(2)).join(" · ")}
+              />
             </>
           )}
         </DataCard>
@@ -115,7 +138,9 @@ function Painel() {
           title="Discos observados"
           status={
             storage.state.status === "ok"
-              ? storage.state.data.items.some((it) => !it.exists) ? "warn" : "ok"
+              ? storage.state.data.items.some((it) => !it.exists)
+                ? "warn"
+                : "ok"
               : statusOf(storage.state)
           }
           summary={
@@ -125,12 +150,24 @@ function Painel() {
           }
         >
           {storage.state.status === "loading" && <p>consultando…</p>}
-          {storage.state.status === "unavailable" && <UnavailableNote message={storage.state.message} details={storage.state.details} onRetry={storage.retry} refreshing={storage.refreshing} />}
+          {storage.state.status === "unavailable" && (
+            <UnavailableNote
+              message={storage.state.message}
+              details={storage.state.details}
+              onRetry={storage.retry}
+              refreshing={storage.refreshing}
+            />
+          )}
           {storage.state.status === "ok" &&
             storage.state.data.items.map((it) => (
-              <div key={it.path} className="border-b border-[color:var(--kaline-border-copper)]/40 pb-2 last:border-0">
+              <div
+                key={it.path}
+                className="border-b border-[color:var(--kaline-border-copper)]/40 pb-2 last:border-0"
+              >
                 <div className="flex justify-between items-baseline gap-2">
-                  <span className="font-mono text-[13px] text-[color:var(--kaline-text)]">{it.path}</span>
+                  <span className="font-mono text-[13px] text-[color:var(--kaline-text)]">
+                    {it.path}
+                  </span>
                   <span className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--kaline-copper)]">
                     {it.status}
                   </span>
@@ -154,7 +191,9 @@ function Painel() {
           title="Systemd"
           status={
             services.state.status === "ok"
-              ? services.state.data.items.every((s) => s.status === "active") ? "ok" : "warn"
+              ? services.state.data.items.every((s) => s.status === "active")
+                ? "ok"
+                : "warn"
               : statusOf(services.state)
           }
           summary={
@@ -164,7 +203,14 @@ function Painel() {
           }
         >
           {services.state.status === "loading" && <p>consultando…</p>}
-          {services.state.status === "unavailable" && <UnavailableNote message={services.state.message} details={services.state.details} onRetry={services.retry} refreshing={services.refreshing} />}
+          {services.state.status === "unavailable" && (
+            <UnavailableNote
+              message={services.state.message}
+              details={services.state.details}
+              onRetry={services.retry}
+              refreshing={services.refreshing}
+            />
+          )}
           {services.state.status === "ok" &&
             services.state.data.items.map((s) => (
               <Row
@@ -201,14 +247,14 @@ function Painel() {
 
         <DataCard
           eyebrow="6 · Segurança"
-          title="Garantias da v0"
+          title="Garantias de segurança"
           status="idle"
-          summary="6 garantias somente-leitura"
+          summary="6 garantias"
         >
           <ul className="text-[12.5px] font-mono text-[color:var(--kaline-muted)] space-y-1">
-            <li>· somente leitura</li>
+            <li>· escrita só com aprovação explícita</li>
             <li>· sem upload</li>
-            <li>· sem delete</li>
+            <li>· nunca sobrescreve</li>
             <li>· sem shell</li>
             <li>· sem reiniciar serviço</li>
             <li>· sem comandos arbitrários</li>
