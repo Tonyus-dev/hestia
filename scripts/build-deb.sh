@@ -14,6 +14,25 @@ DEB_FILE="$OUT_DIR/${PKG_NAME}_${VERSION}_${ARCH}.deb"
 
 log() { echo "[build-deb] $*"; }
 
+# --- Pré-requisitos: falha rápido com mensagem clara em vez de erro cru de shell. ------
+command -v node >/dev/null 2>&1 || {
+  echo "[build-deb] ERRO: node não encontrado. Instale Node.js 20+ antes de continuar." >&2
+  exit 1
+}
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "[build-deb] ERRO: Node.js 20+ é necessário para buildar (detectado $(node -v))." >&2
+  exit 1
+fi
+command -v npm >/dev/null 2>&1 || {
+  echo "[build-deb] ERRO: npm não encontrado." >&2
+  exit 1
+}
+command -v dpkg-deb >/dev/null 2>&1 || {
+  echo "[build-deb] ERRO: dpkg-deb não encontrado. No Debian/Mint: sudo apt install dpkg-dev." >&2
+  exit 1
+}
+
 log "limpando staging e dist-deb/ anteriores"
 rm -rf "$STAGING" "$OUT_DIR"
 mkdir -p "$OUT_DIR" "$STAGING/DEBIAN"

@@ -8,7 +8,9 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { appendEvent } from "./events.js";
 
-async function targetExists(targetPath) {
+// Exportadas para reaproveitar em chama/organizerUndo.js — mesmo fallback de EXDEV, mesma
+// checagem de "não sobrescrever", sem duplicar a lógica em dois lugares.
+export async function targetExists(targetPath) {
   try {
     await fs.stat(targetPath);
     return true;
@@ -17,7 +19,7 @@ async function targetExists(targetPath) {
   }
 }
 
-async function moveWithExdevFallback(sourcePath, targetPath) {
+export async function moveWithExdevFallback(sourcePath, targetPath) {
   try {
     await fs.rename(sourcePath, targetPath);
     return;
@@ -55,11 +57,11 @@ async function applyItem(item) {
   }
 }
 
-function runPath(runId, dataDir) {
+export function runPath(runId, dataDir) {
   return join(dataDir, "organizer", "runs", `${runId}.json`);
 }
 
-async function writeManifest(manifest, dataDir) {
+export async function writeManifest(manifest, dataDir) {
   const dir = join(dataDir, "organizer", "runs");
   await fs.mkdir(dir, { recursive: true });
   const finalPath = runPath(manifest.runId, dataDir);
@@ -121,15 +123,28 @@ export async function applyOrganizerPlan(plan, dataDir) {
   return manifest;
 }
 
+// Devolve metadados mínimos (não o manifesto inteiro) — o suficiente pra UI decidir se mostra
+// o botão "Desfazer" (nunca pra uma execução de undo em si, nunca pra uma já desfeita).
 export async function getOrganizerRuns(dataDir) {
   try {
     const dir = join(dataDir, "organizer", "runs");
     const files = await fs.readdir(dir);
-    return files
+    const runIds = files
       .filter((f) => f.endsWith(".json"))
       .map((f) => f.replace(/\.json$/, ""))
       .sort()
       .reverse();
+    return await Promise.all(
+      runIds.map(async (runId) => {
+        const manifest = await getOrganizerRun(runId, dataDir);
+        return {
+          runId,
+          status: manifest?.status ?? null,
+          undoOf: manifest?.undoOf ?? null,
+          undoneBy: manifest?.undoneBy ?? null,
+        };
+      }),
+    );
   } catch {
     return [];
   }

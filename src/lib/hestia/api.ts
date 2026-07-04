@@ -74,7 +74,6 @@ export type ServicesStatus = { items: ServiceStatus[] };
 export type LogItem = { timestamp: string; level: string; message: string };
 export type Logs = { items: LogItem[]; tail?: number; capacity?: number };
 
-
 export type Config = {
   appName: string;
   serverName: string;
@@ -88,6 +87,87 @@ export type Config = {
   storagePaths: string[];
   services: string[];
 };
+
+export type StorageModelFolder = {
+  id: string;
+  label: string;
+  relativePath: string;
+  absolutePath: string;
+  category: string;
+  purpose: string;
+  required: boolean;
+  serviceHints: string[];
+};
+export type StorageModel = { root: string; folders: StorageModelFolder[] };
+
+export type ScanSafeError = { path: string; code: string };
+export type ScanResult = {
+  path: string;
+  exists: boolean;
+  files: number;
+  bytes: number;
+  extensions: Record<string, number>;
+  truncated: boolean;
+  reason?: string;
+  safeErrors: ScanSafeError[];
+  generatedAt: string;
+};
+export type StorageScan = {
+  kaline: {
+    root: string;
+    folders: (ScanResult & { id: string; label: string; category: string })[];
+    generatedAt: string;
+  };
+  sources: {
+    items: (ScanResult & { id: string; label: string; category: string; mode: string })[];
+    generatedAt: string;
+  };
+};
+
+export type OrganizerPlanItem = {
+  id: string;
+  sourcePath: string;
+  targetPath: string;
+  action: "move" | "copy";
+  reason: string;
+  risk: "low" | "medium" | "high";
+  status: "planned" | "conflict";
+};
+export type OrganizerPlan = {
+  planId: string;
+  generatedAt: string;
+  items: OrganizerPlanItem[];
+  summary: { total: number; planned: number; conflicts: number };
+};
+
+export type OrganizerOperation = {
+  from: string;
+  to: string;
+  action: string;
+  status: "ok" | "failed" | "skipped";
+  reason?: string;
+  error?: string;
+};
+export type OrganizerRunManifest = {
+  runId: string;
+  planId?: string;
+  undoOf?: string;
+  createdAt: string;
+  status: "applied" | "partially_applied" | "failed";
+  mode: string;
+  operations: OrganizerOperation[];
+  summary: { total: number; ok: number; failed: number; skipped: number };
+  undoneBy?: string;
+  undoneAt?: string;
+};
+
+export type OrganizerRunListing = {
+  runId: string;
+  status: string | null;
+  undoOf: string | null;
+  undoneBy: string | null;
+};
+export type OrganizerRuns = { items: OrganizerRunListing[] };
 
 const DEFAULT_TIMEOUT_MS = 3500;
 const CHAMA_PORT = 4517;
@@ -115,24 +195,122 @@ function resolveBase(): string | null {
   return `${protocol}//${hostname}:${CHAMA_PORT}`;
 }
 
-
 function unavailable<T>(message: string, details: ApiErrorDetails): ApiState<T> {
   return { status: "unavailable", message, details, fetchedAt: new Date().toISOString() };
 }
 
+function noBaseUnavailable<T>(method: string, path: string): ApiState<T> {
+  return unavailable<T>("Aguardando Chama Local (rode `npm run hestia` em http://localhost:4517)", {
+    origin: "no-base",
+    route: `${method} ${path}`,
+    detail: "Frontend não está em host local; nenhuma requisição foi disparada.",
+    hint: "Abra o Héstia em http://localhost:4517 após rodar `npm run hestia`.",
+  });
+}
+
+async function handleErrorResponse<T>(
+  res: Response,
+  method: string,
+  path: string,
+): Promise<ApiState<T>> {
+  let parsed: {
+    error?: string;
+    code?: string;
+    detail?: string;
+    hint?: string;
+    route?: string;
+    at?: string;
+  } = {};
+  let rawBody = "";
+  let parsedOk = false;
+  try {
+    rawBody = await res.text();
+  } catch {
+    /* corpo ilegível */
+  }
+  if (rawBody) {
+    try {
+      const maybe = JSON.parse(rawBody);
+      if (maybe && typeof maybe === "object") {
+        parsed = maybe;
+        parsedOk = true;
+      }
+    } catch {
+      /* corpo não-JSON, mantém rawBody */
+    }
+  }
+
+  // ---- Fallback para respostas sem corpo estruturado ----
+  // Ex.: 500 em texto puro, HTML de erro do proxy, corpo vazio.
+  // Ainda assim garantimos HTTP status e rota claramente visíveis.
+  const statusText = res.statusText || `HTTP ${res.status}`;
+  const preview = rawBody.trim().slice(0, 180).replace(/\s+/g, " ");
+  const fallbackDetail = !parsedOk
+    ? rawBody
+      ? `Corpo não-estruturado (${rawBody.length} bytes): ${preview}${rawBody.length > 180 ? "…" : ""}`
+      : "Resposta vazia — backend não enviou corpo."
+    : undefined;
+  const fallbackHint = !parsedOk
+    ? "Backend não retornou JSON no formato esperado. Veja 'corpo bruto' abaixo."
+    : undefined;
+  const fallbackError = !parsedOk ? statusText : undefined;
+
+  const finalError = parsed.error ?? fallbackError;
+  const finalDetail = parsed.detail ?? parsed.error ?? fallbackDetail;
+  const finalHint = parsed.hint ?? fallbackHint;
+  const finalCode = parsed.code ?? (!parsedOk ? `HTTP_${res.status}` : undefined);
+  const finalAt = parsed.at ?? new Date().toISOString();
+
+  const extra = [finalError, finalCode, parsed.detail ?? fallbackDetail, finalHint]
+    .filter(Boolean)
+    .join(" · ");
+
+  return unavailable<T>(
+    `${method} ${path} respondeu ${res.status} ${statusText}${extra ? ` — ${extra}` : ""}`,
+    {
+      origin: "http",
+      route: parsed.route ?? `${method} ${path}`,
+      httpStatus: res.status,
+      code: finalCode,
+      detail: finalDetail,
+      error: finalError,
+      hint: finalHint,
+      at: finalAt,
+      rawBody: rawBody.slice(0, 2000),
+    },
+  );
+}
+
+function handleFetchException<T>(
+  err: unknown,
+  method: string,
+  path: string,
+  timeoutMs: number,
+): ApiState<T> {
+  if (err instanceof DOMException && err.name === "AbortError") {
+    return unavailable<T>(`Sem resposta de ${path} em ${timeoutMs}ms (timeout)`, {
+      origin: "timeout",
+      route: `${method} ${path}`,
+      timeoutMs,
+      detail: "A Chama Local não respondeu dentro do prazo configurado.",
+      hint: "Verifique se o processo `hestia.js` está ativo e se o host não está sobrecarregado.",
+    });
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return unavailable<T>(
+    `Falha de rede em ${path}: ${msg} (Chama Local caiu ou porta 4517 bloqueada?)`,
+    {
+      origin: "network",
+      route: `${method} ${path}`,
+      detail: msg,
+      hint: "Confirme se `npm run hestia` está rodando e se a porta 4517 está acessível.",
+    },
+  );
+}
+
 async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<ApiState<T>> {
   const base = resolveBase();
-  if (!base) {
-    return unavailable<T>(
-      "Aguardando Chama Local (rode `npm run hestia` em http://localhost:4517)",
-      {
-        origin: "no-base",
-        route: `GET ${path}`,
-        detail: "Frontend não está em host local; nenhuma requisição foi disparada.",
-        hint: "Abra o Héstia em http://localhost:4517 após rodar `npm run hestia`.",
-      },
-    );
-  }
+  if (!base) return noBaseUnavailable<T>("GET", path);
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   const url = `${base}${path}`;
@@ -141,96 +319,44 @@ async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promi
       signal: controller.signal,
       headers: { accept: "application/json" },
     });
-    if (!res.ok) {
-      let parsed: {
-        error?: string;
-        code?: string;
-        detail?: string;
-        hint?: string;
-        route?: string;
-        at?: string;
-      } = {};
-      let rawBody = "";
-      let parsedOk = false;
-      try {
-        rawBody = await res.text();
-      } catch {
-        /* corpo ilegível */
-      }
-      if (rawBody) {
-        try {
-          const maybe = JSON.parse(rawBody);
-          if (maybe && typeof maybe === "object") {
-            parsed = maybe;
-            parsedOk = true;
-          }
-        } catch {
-          /* corpo não-JSON, mantém rawBody */
-        }
-      }
-
-      // ---- Fallback para respostas sem corpo estruturado ----
-      // Ex.: 500 em texto puro, HTML de erro do proxy, corpo vazio.
-      // Ainda assim garantimos HTTP status e rota claramente visíveis.
-      const statusText = res.statusText || `HTTP ${res.status}`;
-      const preview = rawBody.trim().slice(0, 180).replace(/\s+/g, " ");
-      const fallbackDetail = !parsedOk
-        ? rawBody
-          ? `Corpo não-estruturado (${rawBody.length} bytes): ${preview}${rawBody.length > 180 ? "…" : ""}`
-          : "Resposta vazia — backend não enviou corpo."
-        : undefined;
-      const fallbackHint = !parsedOk
-        ? "Backend não retornou JSON no formato esperado. Veja 'corpo bruto' abaixo."
-        : undefined;
-      const fallbackError = !parsedOk ? statusText : undefined;
-
-      const finalError = parsed.error ?? fallbackError;
-      const finalDetail = parsed.detail ?? parsed.error ?? fallbackDetail;
-      const finalHint = parsed.hint ?? fallbackHint;
-      const finalCode = parsed.code ?? (!parsedOk ? `HTTP_${res.status}` : undefined);
-      const finalAt = parsed.at ?? new Date().toISOString();
-
-      const extra = [finalError, finalCode, parsed.detail ?? fallbackDetail, finalHint]
-        .filter(Boolean)
-        .join(" · ");
-
-      return unavailable<T>(
-        `GET ${path} respondeu ${res.status} ${statusText}${extra ? ` — ${extra}` : ""}`,
-        {
-          origin: "http",
-          route: parsed.route ?? `GET ${path}`,
-          httpStatus: res.status,
-          code: finalCode,
-          detail: finalDetail,
-          error: finalError,
-          hint: finalHint,
-          at: finalAt,
-          rawBody: rawBody.slice(0, 2000),
-        },
-      );
-    }
+    if (!res.ok) return handleErrorResponse<T>(res, "GET", path);
     const data = (await res.json()) as T;
     return { status: "ok", data, fetchedAt: new Date().toISOString() };
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      return unavailable<T>(`Sem resposta de ${path} em ${timeoutMs}ms (timeout)`, {
-        origin: "timeout",
-        route: `GET ${path}`,
-        timeoutMs,
-        detail: "A Chama Local não respondeu dentro do prazo configurado.",
-        hint: "Verifique se o processo `hestia.js` está ativo e se o host não está sobrecarregado.",
-      });
-    }
-    const msg = err instanceof Error ? err.message : String(err);
-    return unavailable<T>(
-      `Falha de rede em ${path}: ${msg} (Chama Local caiu ou porta 4517 bloqueada?)`,
-      {
-        origin: "network",
-        route: `GET ${path}`,
-        detail: msg,
-        hint: "Confirme se `npm run hestia` está rodando e se a porta 4517 está acessível.",
-      },
-    );
+    return handleFetchException<T>(err, "GET", path, timeoutMs);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * POST com header customizado — só usado pelo organizer (a única mutação da Héstia).
+ * Nunca usado sem `X-Hestia-Local-Confirm`; a confirmação é sempre passada explicitamente
+ * pelo chamador (ver hestiaApi.organizerApply/organizerUndo), nunca implícita aqui.
+ */
+async function safePost<T>(
+  path: string,
+  body: unknown,
+  extraHeaders: Record<string, string> = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<ApiState<T>> {
+  const base = resolveBase();
+  if (!base) return noBaseUnavailable<T>("POST", path);
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  const url = `${base}${path}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { accept: "application/json", "content-type": "application/json", ...extraHeaders },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return handleErrorResponse<T>(res, "POST", path);
+    const data = (await res.json()) as T;
+    return { status: "ok", data, fetchedAt: new Date().toISOString() };
+  } catch (err) {
+    return handleFetchException<T>(err, "POST", path, timeoutMs);
   } finally {
     clearTimeout(t);
   }
@@ -244,6 +370,26 @@ export const hestiaApi = {
   logs: (tail?: number) =>
     safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
+  storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
+  storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
+  /** Gera um plano novo a cada chamada (persiste arquivo) — só sob ação explícita do usuário. */
+  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan"),
+  /** Aplica um plano já gerado. Único POST da Héstia — exige o header de confirmação. */
+  organizerApply: (planId: string) =>
+    safePost<OrganizerRunManifest>(
+      "/api/local/organizer/apply",
+      { planId, mode: "apply" },
+      { "x-hestia-local-confirm": "organize" },
+    ),
+  organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
+  organizerRun: (runId: string) =>
+    safeFetch<OrganizerRunManifest>(`/api/local/organizer/runs/${runId}`),
+  organizerUndo: (runId: string) =>
+    safePost<OrganizerRunManifest>(
+      `/api/local/organizer/runs/${runId}/undo`,
+      {},
+      { "x-hestia-local-confirm": "organize" },
+    ),
   /** URL absoluta para exibir/copiar (ex.: comando curl). Sempre localhost:4517. */
   absoluteUrl: (path: string) => `http://localhost:${CHAMA_PORT}${path}`,
   /** Ping simples usado pela página /endpoints. Só bate quando estamos em host local. */
@@ -261,8 +407,6 @@ export const hestiaApi = {
     }
   },
 };
-
-
 
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || !isFinite(bytes)) return "—";

@@ -57,7 +57,9 @@ describe("applyOrganizerPlan", () => {
     expect(content).toBe("conteudo-pdf");
 
     const runs = await getOrganizerRuns(dataDir);
-    expect(runs).toContain(manifest.runId);
+    expect(runs.map((r) => r.runId)).toContain(manifest.runId);
+    const listed = runs.find((r) => r.runId === manifest.runId);
+    expect(listed).toMatchObject({ status: "applied", undoOf: null, undoneBy: null });
     const read = await getOrganizerRun(manifest.runId, dataDir);
     expect(read).toEqual(manifest);
   });

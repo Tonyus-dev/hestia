@@ -38,16 +38,41 @@ npm run build
 npm run dev:local       # reinicia a Chama a cada mudança em hestia.js/chama/*
 ```
 
+## Rodar como serviço systemd direto do repo (recomendado pra quem acompanha atualizações)
+
+`scripts/install.sh` builda e — se rodado como root num host com systemd de verdade — instala
+um serviço systemd que aponta **direto pra este checkout do git**, sem copiar nada pra `/opt`.
+Atualizar depois é só isso, sem gerar nem reinstalar pacote nenhum:
+
+```bash
+git pull
+npm run install:local   # idempotente: builda de novo e reinicia o serviço
+```
+
+Primeira instalação:
+
+```bash
+git clone <este-repo> hestia-console
+cd hestia-console
+sudo npm run install:local
+```
+
+Sem `sudo`/sem systemd, o script só builda e sugere `npm run hestia` manual — não trava, não
+tenta se auto-elevar. Requer Node.js 20+ (`engines.node` no `package.json` documenta isso; o
+script verifica e falha com mensagem clara se a versão for menor).
+
 ## Instalar como app no Linux Mint Xfce
 
-Empacota a Héstia como `.deb` com serviço systemd (autostart em
-`127.0.0.1:4517`), atalho no menu e ícone próprio.
+Alternativa ao `install.sh`: empacota a Héstia como `.deb` com serviço systemd (autostart em
+`127.0.0.1:4517`), atalho no menu e ícone próprio — bom pra quem quer o app "de verdade"
+instalado via `apt`, mas **qualquer mudança de código exige gerar e reinstalar um `.deb` novo**
+(o pacote copia o código pra `/opt/hestia-console` no momento do build, não acompanha `git
+pull`). Quem for atualizar com frequência, prefira a seção acima.
 
 Gerar pacote:
 
 ```bash
-chmod +x scripts/build-deb.sh
-./scripts/build-deb.sh
+npm run build-deb
 ```
 
 Instalar:
@@ -181,6 +206,7 @@ GET  /api/storage/organizer/plan          # gera e persiste um novo plano dry-ru
 POST /api/local/organizer/apply           # aplica um plano já gerado (exige confirmação)
 GET  /api/local/organizer/runs            # lista execuções anteriores
 GET  /api/local/organizer/runs/:runId     # manifesto de uma execução
+POST /api/local/organizer/runs/:runId/undo  # desfaz uma execução aplicada (exige confirmação)
 ```
 
 **1. Gerar o plano** (só cálculo, nenhuma escrita — pode chamar quantas vezes quiser):
@@ -217,7 +243,31 @@ Cada execução grava um manifesto em `<dataDir>/organizer/runs/<runId>.json` e 
 JSONL (`organizer.plan.applied` / `.partially_applied` / `.failed`) — consulte via
 `GET /api/local/organizer/runs/:runId` ou `GET /api/presence/events/recent`.
 
-Fora desta PR: undo, rotação/expurgo de planos e execuções antigas, e a UI `/storage`.
+**3. Desfazer uma execução** — mesmo header de confirmação, sem corpo:
+
+```bash
+curl -s -X POST http://localhost:4517/api/local/organizer/runs/org_.../undo \
+  -H "X-Hestia-Local-Confirm: organize" | jq
+```
+
+Só reverte operações que realmente aconteceram (`status:"ok"`). `move` volta o arquivo pro lugar
+original; `copy` só apaga a cópia, nunca a origem externa. Recusa (`skipped`, nunca sobrescreve)
+se o destino já sumiu ou se a origem já foi recriada por outra coisa desde o apply — não há
+checksum gravado, só checagem de existência. Não é repetível (`409` se a execução já foi
+desfeita) e não tem "refazer" (redo). `GET /api/local/organizer/runs` devolve, por execução,
+`undoOf`/`undoneBy` para a UI saber quando esconder o botão de desfazer.
+
+**Retenção**: planos (7 dias), execuções (90 dias) e eventos (30 dias) são expurgados
+automaticamente por idade, uma vez por dia (`chama/retention.js`) — dry-run não aplicado depois
+de uma semana é considerado obsoleto; execuções ficam mais tempo por valor de auditoria. Uma vez
+aplicada, uma execução não depende mais do plano original (o manifesto já tem tudo que o undo
+precisa), então expurgar planos velhos nunca quebra undo de execuções já aplicadas.
+
+**UI**: a página `/storage` reúne o modelo `/KALINE`, os vínculos de serviço, o resumo do scan, e
+os botões "Gerar plano"/"Aplicar plano localmente"/"Desfazer" — sempre com aprovação explícita,
+nunca automático. Sem botão de start/stop/reiniciar serviço, upload, download ou shell.
+
+Fora desta fatia: refazer o undo (redo), rotação configurável via env var.
 
 ### Service bindings
 
