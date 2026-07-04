@@ -2,13 +2,14 @@
 // No mocked metrics. All live data comes from /api/* via src/lib/hestia/api.ts.
 
 export type NavItem = {
-  to: "/" | "/logs" | "/config" | "/endpoints";
+  to: "/" | "/logs" | "/config" | "/endpoints" | "/storage";
   label: string;
   hint?: string;
 };
 
 export const nav: NavItem[] = [
   { to: "/", label: "Painel", hint: "saúde da Héstia" },
+  { to: "/storage", label: "Storage", hint: "organizer do /KALINE" },
   { to: "/logs", label: "Logs", hint: "somente da Chama" },
   { to: "/config", label: "Configuração", hint: "somente leitura" },
   { to: "/endpoints", label: "Endpoints", hint: "contratos /api" },
@@ -114,6 +115,12 @@ export const HESTIA = {
       path: "/api/local/organizer/runs",
       purpose: "lista execuções anteriores do organizer",
       fields: ["items[]"],
+    },
+    {
+      path: "/api/local/organizer/runs/:runId/undo",
+      purpose:
+        "POST — desfaz uma execução aplicada (exige header X-Hestia-Local-Confirm: organize); não repetível",
+      fields: ["runId", "undoOf", "status", "operations[]", "summary"],
     },
     {
       path: "/api/services/status",

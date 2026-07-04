@@ -4,6 +4,9 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
@@ -12,6 +15,8 @@
     "start": "node hestia.js",
     "dev:local": "node --watch hestia.js",
     "hestia": "npm run build && node hestia.js",
+    "install:local": "bash scripts/install.sh",
+    "build-deb": "bash scripts/build-deb.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

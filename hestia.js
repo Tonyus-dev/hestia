@@ -17,6 +17,7 @@ import { getStorageModel } from "./chama/storageModel.js";
 import { scanStorageModel, scanConfiguredSources } from "./chama/storageScanner.js";
 import { generateOrganizerPlan, writePlan, getPlan } from "./chama/organizerPlan.js";
 import { applyOrganizerPlan, getOrganizerRuns, getOrganizerRun } from "./chama/organizerApply.js";
+import { undoOrganizerRun } from "./chama/organizerUndo.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getServiceBindings } from "./chama/serviceBindings.js";
 import { getLogs, log } from "./chama/logs.js";
@@ -29,6 +30,7 @@ import {
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
 import { ensureDataDir } from "./chama/dataDir.js";
 import { runSnapshotCycle, SNAPSHOT_INTERVAL_MS, getLatestSnapshot } from "./chama/snapshots.js";
+import { sweepOldData } from "./chama/retention.js";
 import { getManifest } from "./chama/manifest.js";
 import { getRecentEvents } from "./chama/events.js";
 import { getIdentity } from "./chama/identity.js";
@@ -82,6 +84,9 @@ try {
   ensureDataDir(config.dataDir);
   // Snapshot cíclico: gravado a cada SNAPSHOT_INTERVAL_MS; evento só se houver transição de serviço
   setInterval(() => runSnapshotCycle(config.dataDir), SNAPSHOT_INTERVAL_MS).unref();
+  // Expurgo diário de planos/execuções/eventos antigos (ver chama/retention.js).
+  const RETENTION_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  setInterval(() => sweepOldData(config.dataDir), RETENTION_SWEEP_INTERVAL_MS).unref();
 } catch (err) {
   log("warn", `Não foi possível preparar dataDir "${config.dataDir}": ${err.message}`);
 }
@@ -267,6 +272,32 @@ app.get("/api/local/organizer/runs/:runId", async (req, reply) => {
     return;
   }
   return run;
+});
+app.post("/api/local/organizer/runs/:runId/undo", async (req, reply) => {
+  try {
+    const undoManifest = await undoOrganizerRun(req.params.runId, config.dataDir);
+    if (!undoManifest) {
+      reply.code(404).send({
+        ok: false,
+        error: "Execução não encontrada",
+        code: "ERUNNOTFOUND",
+        at: new Date().toISOString(),
+      });
+      return;
+    }
+    return undoManifest;
+  } catch (err) {
+    if (err.code === "EALREADYUNDONE") {
+      reply.code(409).send({
+        ok: false,
+        error: "Execução já foi desfeita",
+        code: "EALREADYUNDONE",
+        at: new Date().toISOString(),
+      });
+      return;
+    }
+    throw err;
+  }
 });
 
 // --- Rotas de Presence (read-only): consulta same-origin/local --------
