@@ -294,10 +294,11 @@ Endpoints para integração com a Presence (atlas público em outra origem,
 chamando Héstia opcionalmente). Cada resposta carrega `schemaVersion` e
 `generatedAt`.
 
-⚠️ **Importante**: Estes endpoints estão disponíveis **apenas para consulta
-same-origin ou local** — sem CORS, sem `Private-Network-Access`, sem suporte
-a leitura de uma Presence pública em outra origem (fica para quando isso
-"doer").
+⚠️ **Importante**: Por padrão, estes endpoints estão disponíveis **apenas para consulta
+same-origin ou local** — sem CORS. Uma Presence pública em outra origem só consegue ler essas
+respostas se `HESTIA_PRESENCE_CORS_ORIGIN` for configurado explicitamente (ver "Via env" abaixo)
+— opt-in deliberado, nunca ligado por padrão, e nunca cobre `/api/local/*` (a única rota de
+escrita continua protegida do jeito de sempre).
 
 ```
 GET /api/presence/manifest       # componentes e tagline da estação
@@ -327,12 +328,21 @@ HESTIA_PORT=4517
 HESTIA_STORAGE_PATH=/KALINE
 HESTIA_DATA_DIR=/var/lib/hestia-console   # persistência: identidade, eventos, snapshots
 HESTIA_ALLOW_LAN=1                         # obrigatório se HESTIA_HOST não for loopback
+HESTIA_RETENTION_PLANS_DAYS=7               # opcional — default 7
+HESTIA_RETENTION_RUNS_DAYS=90               # opcional — default 90
+HESTIA_RETENTION_EVENTS_DAYS=30             # opcional — default 30
+HESTIA_PRESENCE_CORS_ORIGIN=https://presence.example   # opcional, "*" ou lista separada por vírgula
 ```
 
 `HESTIA_DATA_DIR` especifica onde gravar `identity.json`, logs de eventos (JSONL), e snapshots.
 Precedência: `HESTIA_DATA_DIR` > `STATE_DIRECTORY` (systemd) > `~/.chama/data` (padrão local).
 Se o diretório não for gravável, rotas de `/api/presence/*` que dependem de disco retornam
 `{status: "unavailable"}`; saúde/storage/services continuam funcionando normalmente.
+
+`HESTIA_RETENTION_*_DAYS` sobrescreve os defaults de `chama/retention.js` (7/90/30 dias);
+valor inválido ou ausente cai no default. `HESTIA_PRESENCE_CORS_ORIGIN` liga CORS (+
+`Access-Control-Allow-Private-Network` no preflight) só para `/api/presence/*` — desligado por
+padrão, nunca cobre `/api/local/*`.
 
 Por padrão a Chama Local recusa iniciar (`process.exit(1)`) se `HESTIA_HOST`
 não for loopback (`127.0.0.1`/`localhost`/`::1`) — a API não tem autenticação,
@@ -444,7 +454,7 @@ Fora isso, continua valendo:
 - Sem shell
 - Sem reiniciar serviço
 - Sem comando arbitrário
-- Sem endpoint de undo (nesta fatia)
+- Undo/redo do organizer é de um nível só (sem histórico encadeado)
 
 `execFile` com argumentos fixos é a única forma de I/O de processo (fora do organizer). Nomes
 de serviço e paths de disco vêm de listas fixas no código (ou da whitelist
@@ -468,3 +478,70 @@ Camadas adicionais em `hestia.js`/`chama/security.js`:
 - **Headers de resposta** — `X-Content-Type-Options`, `X-Frame-Options`,
   `Referrer-Policy`, `Permissions-Policy` e `Content-Security-Policy` em
   toda resposta (evita clickjacking e reduz a superfície de XSS).
+- **CORS opt-in só pra `/api/presence/*`** — desligado por padrão; liga só com
+  `HESTIA_PRESENCE_CORS_ORIGIN` explícito, nunca cobre `/api/local/*` (ver "Via env" acima).
+
+### systemd: roda sem privilégio de root
+
+Tanto o `.deb` (`packaging/hestia-console.service`) quanto o `scripts/install.sh`
+(`packaging/hestia-console.service.in`) usam `DynamicUser=yes` — o serviço roda com um UID/GID
+efêmero, sem privilégio de root, com `NoNewPrivileges=yes` e `ProtectSystem=strict` (todo o
+filesystem fica somente leitura, exceto o que é liberado explicitamente).
+
+O organizer precisa escrever de verdade em `/KALINE`, então isso é liberado via
+`ReadWritePaths=/KALINE`. Depois de instalar, libere o grupo do serviço (mesmo nome do serviço,
+`hestia-console`) nesse caminho:
+
+```bash
+sudo chgrp hestia-console /KALINE
+sudo chmod g+rwx /KALINE
+```
+
+O `.deb` tenta fazer isso automaticamente no `postinst` se `/KALINE` já existir; se não existir
+ainda, ele só avisa — rode o comando acima manualmente depois de criar `/KALINE`.
+
+Se você usa `storageSources` (fontes externas do HD), cada path configurado lá também precisa
+estar acessível ao mesmo grupo (o `ReadWritePaths` do unit não conhece esses paths dinamicamente
+— são definidos em `~/.chama/config.json`, não no unit file).
+
+Pra quem instala via `scripts/install.sh` (checkout de git, não `/opt`): o diretório do checkout
+também precisa ser legível pelo UID efêmero — se estiver dentro de um `$HOME` com permissão
+700/750 (padrão), rode `chmod o+rX` no checkout e nos diretórios pais, ou clone fora do home
+(ex.: `/srv/hestia-console`). O script avisa sobre isso ao instalar o serviço.
+
+⚠️ **Limitação conhecida**: `DynamicUser=yes`/`ProtectSystem=strict` foram validados com
+`systemd-analyze verify` (sintaxe do unit) e via inspeção manual, mas o comportamento real de
+sandbox em runtime não foi testado num host com systemd de verdade rodando como PID 1 — só é
+possível fazer isso numa instalação real (Linux Mint ou outra distro com systemd). Teste antes
+de considerar isso validado em produção.
+
+### Revisão de segurança do pipeline do organizer
+
+Passada dedicada sobre `storageScanner.js` → `organizerPlan.js` → `organizerApply.js` →
+`organizerUndo.js`/`organizerRedo.js`, feita depois que o fluxo completo (plano, apply, undo,
+redo) já estava no ar:
+
+- **Corrigido nesta PR**: `getPlan(planId, ...)` e `getOrganizerRun(runId, ...)` montavam o path
+  do arquivo via `path.join(dataDir, ..., \`${id}.json\`)` — e `path.join` **normaliza `..`**, então
+  um `planId`/`runId` vindo direto do cliente (body do POST / param da URL) com algo como
+  `"../../../../etc/passwd"` escapava de `dataDir/organizer/{plans,runs}/`. Corrigido validando
+  o formato estrito do id (`chama/organizerIds.js`, regex `^(plan|org|undo|redo)_\d+_[0-9a-f]{8}$`)
+  **antes** de montar qualquer path — na função de leitura em si, não só no route handler, pra
+  proteger qualquer chamador futuro também. Confirmado ao vivo com `curl` que a tentativa de
+  traversal agora recebe `404`/plano-não-encontrado, sem tocar o disco fora do esperado.
+- **Symlink**: já mitigado desde a PR do scanner — `storageScanner.js` nunca segue link
+  simbólico (`entry.isSymbolicLink()` pula, não entra).
+- **`targetPath` sempre dentro de `/KALINE`**: `organizerPlan.js` usa uma tabela fixa de
+  extensão→pasta (nunca vinda de config/cliente) e `basename()` no nome do arquivo (corta
+  qualquer `..` do nome); mesmo assim, uma checagem `targetPath.startsWith("/KALINE/")` foi
+  adicionada como cinto e suspensório, caso essa tabela vire configurável no futuro.
+- **TOCTOU (aceito)**: existe uma janela pequena entre checar `targetExists()` e o
+  `rename`/`copyFile` de verdade. Num app local de usuário único (sem outro processo
+  concorrente mexendo em `/KALINE` ao mesmo tempo por design), o risco real é baixo — aceito
+  como limitação conhecida, não uma vulnerabilidade ativa nesse modelo de ameaça.
+- **`storageSources.mode`**: já restrito a `"external-readonly"` (único valor aceito,
+  `chama/config.js`) — não existe modo que apague a origem de uma fonte externa.
+- **Header de confirmação**: `X-Hestia-Local-Confirm` é fricção de intenção, não autenticação —
+  já documentado como tal; não é um segredo, é uma barreira contra disparo acidental/CSRF
+  simples (formulário/`<img>` não conseguem setar header customizado sem preflight CORS, que
+  esta API não concede pra `/api/local/*`).

@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { getStorageModel } from "./storageModel.js";
 import { listFiles, DEFAULT_INDEX_LIMITS } from "./storageScanner.js";
 import { config } from "./config.js";
+import { isValidOrganizerId } from "./organizerIds.js";
 
 const ROOT = "/KALINE";
 
@@ -42,6 +43,12 @@ async function planItemsForFiles(files, action) {
   for (const file of files) {
     const targetRelativePath = targetRelativePathFor(file.ext);
     const targetPath = join(ROOT, targetRelativePath, basename(file.path));
+    // Cinto e suspensório: EXTENSION_RULES é uma tabela fixa e basename() já corta qualquer
+    // ".." do nome do arquivo, então isso nunca deveria disparar — mas se um dia essa tabela
+    // vier a ser configurável, isso barra o plano de escapar de /KALINE.
+    if (!targetPath.startsWith(`${ROOT}/`)) {
+      throw new Error(`targetPath calculado fora de ${ROOT}: ${targetPath}`);
+    }
     const conflict = await targetExists(targetPath);
     items.push({
       id: randomUUID(),
@@ -102,6 +109,8 @@ export async function writePlan(plan, dataDir) {
 }
 
 export async function getPlan(planId, dataDir) {
+  // planId vem do body do POST — mesma defesa contra path traversal que getOrganizerRun.
+  if (!isValidOrganizerId(planId)) return null;
   try {
     const raw = await fs.readFile(planPath(planId, dataDir), "utf8");
     return JSON.parse(raw);

@@ -36,7 +36,7 @@ export const Route = createFileRoute("/_station/storage")({
   component: StoragePage,
 });
 
-function StoragePage() {
+export function StoragePage() {
   const model = useApi(hestiaApi.storageModel);
   const scan = useApi(hestiaApi.storageScan);
   const services = useApi(hestiaApi.services);
@@ -52,6 +52,9 @@ function StoragePage() {
 
   const [undoingRunId, setUndoingRunId] = useState<string | null>(null);
   const [undoError, setUndoError] = useState<string | null>(null);
+
+  const [redoingRunId, setRedoingRunId] = useState<string | null>(null);
+  const [redoError, setRedoError] = useState<string | null>(null);
 
   async function handleGeneratePlan() {
     setPlanLoading(true);
@@ -91,6 +94,18 @@ function StoragePage() {
       runs.retry();
     } else if (result.status === "unavailable") {
       setUndoError(result.message);
+    }
+  }
+
+  async function handleRedo(undoRunId: string) {
+    setRedoingRunId(undoRunId);
+    setRedoError(null);
+    const result = await hestiaApi.organizerRedo(undoRunId);
+    setRedoingRunId(null);
+    if (result.status === "ok") {
+      runs.retry();
+    } else if (result.status === "unavailable") {
+      setRedoError(result.message);
     }
   }
 
@@ -270,40 +285,70 @@ function StoragePage() {
             <p className="text-[color:var(--kaline-faint)] text-[13px]">Nenhuma execução ainda.</p>
           )}
           {runs.state.status === "ok" &&
-            runs.state.data.items.map((run) => (
-              <div
-                key={run.runId}
-                className="flex items-center justify-between gap-2 border-b border-[color:var(--kaline-border-copper)]/40 pb-2 last:border-0"
-              >
-                <div className="min-w-0">
-                  <span className="font-mono text-[12px] text-[color:var(--kaline-text)] break-all">
-                    {run.runId}
-                  </span>
-                  {run.undoOf && (
-                    <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--kaline-faint)]">
-                      desfaz {run.undoOf}
+            runs.state.data.items.map((run) => {
+              const isOriginal = !run.undoOf && !run.redoOf;
+              const isUndo = !!run.undoOf;
+              const isRedo = !!run.redoOf;
+              const canUndo = isOriginal && !run.undoneBy;
+              const canRedo = isUndo && !run.redoneBy;
+              return (
+                <div
+                  key={run.runId}
+                  className="flex items-center justify-between gap-2 border-b border-[color:var(--kaline-border-copper)]/40 pb-2 last:border-0"
+                >
+                  <div className="min-w-0">
+                    <span className="font-mono text-[12px] text-[color:var(--kaline-text)] break-all">
+                      {run.runId}
                     </span>
+                    {isUndo && (
+                      <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--kaline-faint)]">
+                        desfaz {run.undoOf}
+                      </span>
+                    )}
+                    {isRedo && (
+                      <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--kaline-faint)]">
+                        refaz {run.redoOf}
+                      </span>
+                    )}
+                    {isOriginal && run.undoneBy && (
+                      <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--kaline-faint)]">
+                        já desfeita
+                      </span>
+                    )}
+                    {isUndo && run.redoneBy && (
+                      <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--kaline-faint)]">
+                        já refeita
+                      </span>
+                    )}
+                  </div>
+                  {canUndo && (
+                    <button
+                      type="button"
+                      onClick={() => handleUndo(run.runId)}
+                      disabled={undoingRunId === run.runId}
+                      className="text-[11px] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)] transition disabled:opacity-50 shrink-0"
+                    >
+                      {undoingRunId === run.runId ? "desfazendo…" : "Desfazer"}
+                    </button>
                   )}
-                  {run.undoneBy && (
-                    <span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--kaline-faint)]">
-                      já desfeita
-                    </span>
+                  {canRedo && (
+                    <button
+                      type="button"
+                      onClick={() => handleRedo(run.runId)}
+                      disabled={redoingRunId === run.runId}
+                      className="text-[11px] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)] transition disabled:opacity-50 shrink-0"
+                    >
+                      {redoingRunId === run.runId ? "refazendo…" : "Refazer"}
+                    </button>
                   )}
                 </div>
-                {!run.undoOf && !run.undoneBy && (
-                  <button
-                    type="button"
-                    onClick={() => handleUndo(run.runId)}
-                    disabled={undoingRunId === run.runId}
-                    className="text-[11px] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)] transition disabled:opacity-50 shrink-0"
-                  >
-                    {undoingRunId === run.runId ? "desfazendo…" : "Desfazer"}
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           {undoError && (
             <p className="mt-2 text-[12px] text-[color:var(--kaline-ember)]">{undoError}</p>
+          )}
+          {redoError && (
+            <p className="mt-2 text-[12px] text-[color:var(--kaline-ember)]">{redoError}</p>
           )}
         </DataCard>
       </section>
