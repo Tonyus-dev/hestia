@@ -11,6 +11,8 @@ import { getHealth } from "./chama/health.js";
 import { getServerStatus } from "./chama/system.js";
 import { getStorageStatus } from "./chama/storage.js";
 import { discoverVolumes } from "./chama/storageDiscovery.js";
+import { getStorageModel } from "./chama/storageModel.js";
+import { scanStorageModel, scanConfiguredSources } from "./chama/storageScanner.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getServiceBindings } from "./chama/serviceBindings.js";
 import { getLogs, log } from "./chama/logs.js";
@@ -157,6 +159,12 @@ app.get("/api/health", async () => getHealth());
 app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/storage/status", async () => await getStorageStatus());
 app.get("/api/storage/discover", async () => await discoverVolumes());
+app.get("/api/storage/model", async () => getStorageModel());
+app.get("/api/storage/sources", async () => ({ items: config.storageSources }));
+app.get("/api/storage/scan", async () => ({
+  kaline: await scanStorageModel(),
+  sources: await scanConfiguredSources(),
+}));
 app.get("/api/services/status", async () => await getServicesStatus());
 app.get("/api/services/bindings", async () => getServiceBindings());
 app.get("/api/logs", async (req) => {

@@ -111,6 +111,9 @@ GET /api/health
 GET /api/server/status
 GET /api/storage/status
 GET /api/storage/discover  # descobre volumes montados de verdade (ver abaixo)
+GET /api/storage/model     # árvore canônica de /KALINE (ver abaixo)
+GET /api/storage/sources   # fontes externas do HD configuradas (ver abaixo)
+GET /api/storage/scan      # varredura read-only de /KALINE e das fontes (ver abaixo)
 GET /api/services/status
 GET /api/services/bindings  # vínculos read-only com serviços existentes (ver abaixo)
 GET /api/logs?tail=100      # 1..200
@@ -138,6 +141,30 @@ leitura, não altera a configuração sozinha.
 
 ```bash
 curl -s http://localhost:4517/api/storage/discover | jq
+```
+
+#### Modelo `/KALINE` e varredura
+
+A Héstia entende `/KALINE` como uma árvore canônica fixa (`entrada`, `codice/{pdf,epub,fichamentos}`,
+`midia/{videos,audio,imagens}`, `arquivos/{compactados}`, `backups`, `modelos`, `logs`,
+`snapshots`) — dado estático em `chama/storageModel.js`, sem relação com o `dataDir` interno da
+própria Chama Local (identidade/eventos/snapshots internos continuam em `~/.chama/data` ou
+`STATE_DIRECTORY`, nunca dentro de `/KALINE`).
+
+`GET /api/storage/scan` varre `/KALINE` e as fontes externas configuradas (abaixo) e devolve só um
+**resumo** por pasta — contagem de arquivos, bytes totais, extensões — nunca uma lista de nomes de
+arquivo, nem localmente nem na Presence. A varredura tem limites conservadores
+(`maxDepth: 4`, `maxFiles: 5000` por pasta) e nunca segue symlink recursivamente; se um limite for
+atingido, a pasta volta com `truncated: true` e `reason` (`"maxDepth"` ou `"maxFiles"`).
+
+Fontes externas do HD (opcional, via `~/.chama/config.json`, chave `storageSources` — ver seção
+de Configuração abaixo) entram na mesma varredura, mas só leitura: a Héstia nunca move, copia ou
+apaga nada nesta PR.
+
+```bash
+curl -s http://localhost:4517/api/storage/model | jq
+curl -s http://localhost:4517/api/storage/sources | jq
+curl -s http://localhost:4517/api/storage/scan | jq
 ```
 
 ### Service bindings
@@ -219,12 +246,23 @@ proteja com Tailscale/firewall na frente).
   "host": "127.0.0.1",
   "port": 4517,
   "storagePaths": ["/", "/KALINE", "/mnt/backup"],
-  "services": ["jellyfin", "syncthing", "smbd", "tailscaled"]
+  "services": ["jellyfin", "syncthing", "smbd", "tailscaled"],
+  "storageSources": [
+    {
+      "id": "filmes-hd",
+      "label": "Filmes do HD",
+      "path": "/mnt/hd/Filmes",
+      "category": "midia/videos",
+      "mode": "external-readonly"
+    }
+  ]
 }
 ```
 
 Só os campos acima são lidos. Serviços são intersectados com a lista permitida:
-`jellyfin`, `syncthing`, `smbd`, `tailscaled`.
+`jellyfin`, `syncthing`, `smbd`, `tailscaled`. Cada item de `storageSources` só é aceito se tiver
+os cinco campos (`id`/`label`/`path`/`category`/`mode`) como string — qualquer outro campo ou
+item incompleto é ignorado. `path` nunca vem de query/body/header, só deste arquivo.
 
 ## Processo de construção
 

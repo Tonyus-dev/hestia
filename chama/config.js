@@ -24,6 +24,24 @@ function loadUserConfig() {
       out.storagePaths = raw.storagePaths.filter((s) => typeof s === "string");
     if (Array.isArray(raw.services))
       out.services = raw.services.filter((s) => ALLOWED_SERVICES.includes(s));
+    if (Array.isArray(raw.storageSources))
+      out.storageSources = raw.storageSources
+        .filter((s) => s && typeof s === "object")
+        .map((s) => ({
+          id: s.id,
+          label: s.label,
+          path: s.path,
+          category: s.category,
+          mode: s.mode,
+        }))
+        .filter(
+          (s) =>
+            typeof s.id === "string" &&
+            typeof s.label === "string" &&
+            typeof s.path === "string" &&
+            typeof s.category === "string" &&
+            typeof s.mode === "string",
+        );
     return out;
   } catch {
     return {};
@@ -53,8 +71,7 @@ export const config = {
     userCfg.storagePaths && userCfg.storagePaths.length > 0
       ? userCfg.storagePaths
       : ["/", process.env.HESTIA_STORAGE_PATH || "/KALINE"],
-  services:
-    userCfg.services && userCfg.services.length > 0
-      ? userCfg.services
-      : ALLOWED_SERVICES,
+  services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
+  // Fontes externas do HD (ex.: pastas em /mnt/hd), só do whitelist — nunca de fora.
+  storageSources: userCfg.storageSources || [],
 };
