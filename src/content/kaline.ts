@@ -19,11 +19,11 @@ export const HESTIA = {
   serverName: "Héstia",
   agentName: "Chama Local",
   subtitle: "Interface local da Héstia com Chama Local embutida",
-  motto: "Héstia guarda, serve e sustenta. A Chama Local mede e valida.",
+  motto: "Héstia organiza, registra e sustenta. Chama Local mede e serve.",
   waiting: "Aguardando Chama Local",
   readonly:
     "Modo somente leitura. O Console da Héstia observa o servidor, mas não executa comandos destrutivos.",
-  footer: "Héstia sustenta. Chama valida. Presence mostra.",
+  footer: "Héstia sustenta. Chama serve. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
   hardware: [
