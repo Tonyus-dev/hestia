@@ -2,13 +2,13 @@
 
 Interface local da Héstia com **Chama Local** embutida.
 
-> Héstia guarda, serve e sustenta.
-> A Chama Local mede e valida.
-> Presence mostra.
+> Héstia organiza, registra e sustenta.
+> Chama Local mede e serve.
+> Presence mostra e consulta.
 
-- **Héstia** — servidor físico/local da Estação Kaline
-- **Héstia Console** — este web app (a tela)
-- **Chama Local** — API local embutida (o pulso interno)
+- **Héstia** — app local do servidor
+- **Héstia Console** — a tela dentro da Héstia (este web app)
+- **Chama Local** — módulo/API somente leitura embutido (o pulso interno)
 
 ## Rodar o frontend no Lovable / dev
 

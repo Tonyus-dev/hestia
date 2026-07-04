@@ -5,22 +5,23 @@ export function getManifest() {
   return {
     station: {
       name: "Héstia Console",
-      tagline: "Héstia guarda, serve e sustenta. A Chama Local mede e valida. Presence mostra.",
+      tagline:
+        "Héstia organiza, registra e sustenta. Chama Local mede e serve. Presence mostra e consulta.",
       components: [
         {
           name: "Héstia",
           role: "host",
-          description: "Servidor físico/local da Estação Kaline",
+          description: "App local do servidor",
         },
         {
           name: "Héstia Console",
           role: "interface",
-          description: "Web app local (a tela)",
+          description: "A tela dentro da Héstia (web app local)",
         },
         {
           name: "Chama Local",
           role: "sensor",
-          description: "API local embutida (o pulso interno)",
+          description: "Módulo/API somente leitura embutido (o pulso interno)",
         },
       ],
     },
