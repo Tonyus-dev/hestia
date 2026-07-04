@@ -26,14 +26,7 @@ export const HESTIA = {
   footer: "Héstia sustenta. Chama serve. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
-  hardware: [
-    "PC i7",
-    "Linux Mint Xfce",
-    "8 GB RAM",
-    "SSD 128 GB",
-    "HD 1 TB",
-    "GT 710",
-  ],
+  hardware: ["PC i7", "Linux Mint Xfce", "8 GB RAM", "SSD 128 GB", "HD 1 TB", "GT 710"],
   futureFunctions: [
     "arquivos",
     "mídia",
@@ -56,12 +49,48 @@ export const HESTIA = {
     {
       path: "/api/server/status",
       purpose: "dados reais de node:os",
-      fields: ["hostname", "platform", "release", "arch", "uptime", "totalMemory", "freeMemory", "loadAverage"],
+      fields: [
+        "hostname",
+        "platform",
+        "release",
+        "arch",
+        "uptime",
+        "totalMemory",
+        "freeMemory",
+        "loadAverage",
+      ],
     },
     {
       path: "/api/storage/status",
       purpose: "df -kP em paths fixos",
       fields: ["path", "exists", "total", "used", "free", "percentUsed", "status"],
+    },
+    {
+      path: "/api/storage/model",
+      purpose: "árvore canônica de /KALINE (estática)",
+      fields: [
+        "root",
+        "folders[].id",
+        "folders[].relativePath",
+        "folders[].category",
+        "folders[].purpose",
+      ],
+    },
+    {
+      path: "/api/storage/sources",
+      purpose: "fontes externas do HD configuradas em ~/.chama/config.json",
+      fields: ["items[].id", "items[].label", "items[].path", "items[].category", "items[].mode"],
+    },
+    {
+      path: "/api/storage/scan",
+      purpose:
+        "varredura read-only de /KALINE e das fontes externas (resumo, sem lista de arquivos)",
+      fields: [
+        "kaline.folders[].files",
+        "kaline.folders[].bytes",
+        "kaline.folders[].extensions",
+        "sources.items[]",
+      ],
     },
     {
       path: "/api/services/status",
