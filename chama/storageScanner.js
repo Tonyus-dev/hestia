@@ -1,8 +1,10 @@
 // Chama Local — varredura read-only de /KALINE e das fontes externas configuradas.
 // Nunca aceita path vindo de fora (só de storageModel.js ou de config.storageSources, que só
 // vem do whitelist de ~/.chama/config.json — nunca de query/body/header).
-// Nunca segue symlink recursivamente nesta PR. Nunca devolve lista de arquivos, só resumo
-// agregado (contagem/bytes/extensões) — mesmo em endpoints locais, não só na Presence.
+// Nunca segue symlink recursivamente nesta PR. `scanPath`/`scanStorageModel`/`scanConfiguredSources`
+// nunca devolvem lista de arquivos, só resumo agregado (contagem/bytes/extensões) — mesmo em
+// endpoints locais, não só na Presence. `listFiles` é a exceção deliberada: devolve paths reais,
+// mas é só para uso interno de chama/organizerPlan.js (nunca ligado a nenhum endpoint Presence).
 import { readdir, stat, lstat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { getStorageModel } from "./storageModel.js";
@@ -37,17 +39,15 @@ async function walk(rootPath, limits, state) {
         continue;
       }
       if (!entry.isFile()) continue; // ignora sockets/fifos/devices
-      if (state.files >= limits.maxFiles) {
+      if (state.entries.length >= limits.maxFiles) {
         state.truncated = true;
         state.truncatedReason = "maxFiles";
         return;
       }
       try {
         const st = await stat(entryPath);
-        state.files += 1;
-        state.bytes += st.size;
         const ext = extname(entry.name).toLowerCase() || "(sem extensão)";
-        state.extensions.set(ext, (state.extensions.get(ext) || 0) + 1);
+        state.entries.push({ path: entryPath, ext, size: st.size });
       } catch (err) {
         state.safeErrors.push({ path: entryPath, code: err.code || "EUNKNOWN" });
       }
@@ -56,56 +56,56 @@ async function walk(rootPath, limits, state) {
   await walkDir(rootPath, 0);
 }
 
-export async function scanPath(targetPath, limits = DEFAULT_INDEX_LIMITS) {
-  const generatedAt = new Date().toISOString();
+async function walkTarget(targetPath, limits) {
   let rootStat;
   try {
     rootStat = await lstat(targetPath);
   } catch (err) {
-    return {
-      path: targetPath,
-      exists: false,
-      files: 0,
-      bytes: 0,
-      extensions: {},
-      truncated: false,
-      safeErrors: [{ path: targetPath, code: err.code || "ENOENT" }],
-      generatedAt,
-    };
+    return { exists: false, entries: [], truncated: false, truncatedReason: null, safeErrors: [{ path: targetPath, code: err.code || "ENOENT" }] };
   }
   if (!rootStat.isDirectory()) {
-    return {
-      path: targetPath,
-      exists: true,
-      files: 0,
-      bytes: 0,
-      extensions: {},
-      truncated: false,
-      safeErrors: [{ path: targetPath, code: "ENOTDIR" }],
-      generatedAt,
-    };
+    return { exists: true, entries: [], truncated: false, truncatedReason: null, safeErrors: [{ path: targetPath, code: "ENOTDIR" }] };
   }
-
-  const state = {
-    files: 0,
-    bytes: 0,
-    extensions: new Map(),
-    safeErrors: [],
-    truncated: false,
-    truncatedReason: null,
-  };
+  const state = { entries: [], safeErrors: [], truncated: false, truncatedReason: null };
   await walk(targetPath, limits, state);
+  return { exists: true, ...state };
+}
+
+export async function scanPath(targetPath, limits = DEFAULT_INDEX_LIMITS) {
+  const generatedAt = new Date().toISOString();
+  const result = await walkTarget(targetPath, limits);
+
+  const extensions = {};
+  let bytes = 0;
+  for (const entry of result.entries) {
+    bytes += entry.size;
+    extensions[entry.ext] = (extensions[entry.ext] || 0) + 1;
+  }
 
   return {
     path: targetPath,
-    exists: true,
-    files: state.files,
-    bytes: state.bytes,
-    extensions: Object.fromEntries(state.extensions),
-    truncated: state.truncated,
-    ...(state.truncated ? { reason: state.truncatedReason } : {}),
-    safeErrors: state.safeErrors,
+    exists: result.exists,
+    files: result.entries.length,
+    bytes,
+    extensions,
+    truncated: result.truncated,
+    ...(result.truncated ? { reason: result.truncatedReason } : {}),
+    safeErrors: result.safeErrors,
     generatedAt,
+  };
+}
+
+// Lista arquivos reais (path/ext/size) — só para uso interno de organizerPlan.js.
+// Nunca expor diretamente num endpoint (Presence ou local).
+export async function listFiles(targetPath, limits = DEFAULT_INDEX_LIMITS) {
+  const result = await walkTarget(targetPath, limits);
+  return {
+    path: targetPath,
+    exists: result.exists,
+    files: result.entries,
+    truncated: result.truncated,
+    ...(result.truncated ? { reason: result.truncatedReason } : {}),
+    safeErrors: result.safeErrors,
   };
 }
 

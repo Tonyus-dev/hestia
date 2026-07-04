@@ -102,7 +102,9 @@ Precedência: **CLI > env > `~/.chama/config.json` > padrões**. A v0 é local-f
 
 ## Endpoints
 
-Todos são `GET` e somente leitura.
+Quase todos são `GET` e somente leitura. A única exceção é
+`POST /api/local/organizer/apply` (ver seção Organizer abaixo), que move/copia arquivos dentro
+de um plano gerado pela própria Héstia, só com confirmação explícita.
 
 ### Chama Local (base)
 
@@ -114,6 +116,7 @@ GET /api/storage/discover  # descobre volumes montados de verdade (ver abaixo)
 GET /api/storage/model     # árvore canônica de /KALINE (ver abaixo)
 GET /api/storage/sources   # fontes externas do HD configuradas (ver abaixo)
 GET /api/storage/scan      # varredura read-only de /KALINE e das fontes (ver abaixo)
+GET /api/storage/organizer/plan  # gera um plano dry-run (ver seção Organizer abaixo)
 GET /api/services/status
 GET /api/services/bindings  # vínculos read-only com serviços existentes (ver abaixo)
 GET /api/logs?tail=100      # 1..200
@@ -158,14 +161,63 @@ arquivo, nem localmente nem na Presence. A varredura tem limites conservadores
 atingido, a pasta volta com `truncated: true` e `reason` (`"maxDepth"` ou `"maxFiles"`).
 
 Fontes externas do HD (opcional, via `~/.chama/config.json`, chave `storageSources` — ver seção
-de Configuração abaixo) entram na mesma varredura, mas só leitura: a Héstia nunca move, copia ou
-apaga nada nesta PR.
+de Configuração abaixo) entram na mesma varredura, mas o `scan` em si é só leitura: nunca move,
+copia ou apaga nada (isso só acontece via `POST /api/local/organizer/apply`, abaixo).
 
 ```bash
 curl -s http://localhost:4517/api/storage/model | jq
 curl -s http://localhost:4517/api/storage/sources | jq
 curl -s http://localhost:4517/api/storage/scan | jq
 ```
+
+### Organizer (plano dry-run + aplicação local aprovada)
+
+A única capacidade de escrita da Héstia: organizar o que está em `/KALINE/entrada` (alimentada
+pelo Syncthing recebendo arquivos de outros aparelhos) e nas fontes externas configuradas,
+movendo/copiando para a pasta canônica certa por extensão.
+
+```
+GET  /api/storage/organizer/plan          # gera e persiste um novo plano dry-run
+POST /api/local/organizer/apply           # aplica um plano já gerado (exige confirmação)
+GET  /api/local/organizer/runs            # lista execuções anteriores
+GET  /api/local/organizer/runs/:runId     # manifesto de uma execução
+```
+
+**1. Gerar o plano** (só cálculo, nenhuma escrita — pode chamar quantas vezes quiser):
+
+```bash
+curl -s http://localhost:4517/api/storage/organizer/plan | jq
+```
+
+Cada item do plano tem `sourcePath`/`targetPath`/`action` (`"move"` para `entrada`, `"copy"` para
+fontes externas — o arquivo original de uma fonte externa nunca é apagado) e `status`
+(`"planned"` ou `"conflict"` se já existir algo com o mesmo nome no destino — nesse caso a
+Héstia nunca sobrescreve, só marca conflito e pula).
+
+**2. Aplicar o plano** — exige três coisas: `Content-Type: application/json`, o header
+`X-Hestia-Local-Confirm: organize`, e o `planId` de um plano já gerado no passo 1:
+
+```bash
+curl -s -X POST http://localhost:4517/api/local/organizer/apply \
+  -H "Content-Type: application/json" \
+  -H "X-Hestia-Local-Confirm: organize" \
+  -d '{"planId": "plan_...", "mode": "apply"}' | jq
+```
+
+Sem o header, a requisição nunca chega no handler — um hook global em `hestia.js` já barra com
+`403` antes de qualquer outra coisa. O corpo só aceita `planId`/`mode`; nunca um path, lista de
+arquivos ou `targetPath` vindo do cliente — o plano aplicado é sempre exatamente o que a própria
+Héstia gerou e persistiu no passo 1.
+
+Ao mover entre filesystems diferentes (ex.: de um HD externo para `/KALINE`, se forem
+partições/discos distintos), `rename` falha com `EXDEV`; a Héstia detecta isso e faz
+copy→verifica tamanho→apaga a origem, em vez de deixar o erro estourar.
+
+Cada execução grava um manifesto em `<dataDir>/organizer/runs/<runId>.json` e emite um evento
+JSONL (`organizer.plan.applied` / `.partially_applied` / `.failed`) — consulte via
+`GET /api/local/organizer/runs/:runId` ou `GET /api/presence/events/recent`.
+
+Fora desta PR: undo, rotação/expurgo de planos e execuções antigas, e a UI `/storage`.
 
 ### Service bindings
 
@@ -206,7 +258,7 @@ GET /api/presence/snapshots/latest         # último snapshot com staleness
 GET /api/presence/services       # status de serviços (mesmo que /api/services/status)
 GET /api/presence/storage        # status de disco (mesmo que /api/storage/status)
 GET /api/presence/backups        # plano de backup (stub: "planned" até implementação)
-GET /api/presence/capabilities   # capacidades read-only da Chama
+GET /api/presence/capabilities   # capacidades da Chama (writing.modifyStorage:true; resto false)
 ```
 
 Exemplo:
@@ -328,17 +380,27 @@ Pendências fora do sandbox: testar em Linux real, smoke tests com Vitest, empac
 
 ## Segurança
 
-A v0 é somente leitura.
+A Héstia é majoritariamente somente leitura. A única exceção, deliberada e documentada, é o
+organizer (`POST /api/local/organizer/apply`): move/copia arquivo dentro de um plano gerado
+pela própria Héstia, nunca sobrescreve, nunca apaga um arquivo do usuário sem antes confirmar
+que ele já existe com sucesso no destino, e só roda com o header de confirmação explícita
+`X-Hestia-Local-Confirm: organize`. Isso está refletido de propósito em
+`chama/capabilities.js` (`writing.modifyStorage: true`, `mode: "local-write-with-approval"`) —
+nunca escondido atrás de um `readonly: true` que não seria mais verdade.
+
+Fora isso, continua valendo:
 
 - Sem upload
-- Sem delete
 - Sem shell
 - Sem reiniciar serviço
 - Sem comando arbitrário
+- Sem endpoint de undo (nesta fatia)
 
-`execFile` com argumentos fixos é a única forma de I/O de processo. Nomes
+`execFile` com argumentos fixos é a única forma de I/O de processo (fora do organizer). Nomes
 de serviço e paths de disco vêm de listas fixas no código (ou da whitelist
-`~/.chama/config.json`), nunca da URL.
+`~/.chama/config.json`), nunca da URL. O organizer só enumera arquivos reais internamente
+(nunca expõe a lista bruta em nenhum endpoint) e só aplica planos que a própria Héstia gerou e
+persistiu — o cliente nunca envia um path, nem uma lista de arquivos, só o `planId`.
 
 Camadas adicionais em `hestia.js`/`chama/security.js`:
 
@@ -351,6 +413,8 @@ Camadas adicionais em `hestia.js`/`chama/security.js`:
   dela para `127.0.0.1`).
 - **Rate limit** — `/api/*` aceita no máximo 60 requisições a cada 10s por
   IP; excedentes recebem `429`.
+- **Confirmação de escrita local** — todo `POST /api/local/*` exige o header
+  `X-Hestia-Local-Confirm: organize`; sem ele, `403` antes de qualquer outra coisa.
 - **Headers de resposta** — `X-Content-Type-Options`, `X-Frame-Options`,
   `Referrer-Policy`, `Permissions-Policy` e `Content-Security-Policy` em
   toda resposta (evita clickjacking e reduz a superfície de XSS).
