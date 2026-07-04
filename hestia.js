@@ -12,6 +12,7 @@ import { getServerStatus } from "./chama/system.js";
 import { getStorageStatus } from "./chama/storage.js";
 import { discoverVolumes } from "./chama/storageDiscovery.js";
 import { getServicesStatus } from "./chama/services.js";
+import { getServiceBindings } from "./chama/serviceBindings.js";
 import { getLogs, log } from "./chama/logs.js";
 import { isLoopbackHost, buildAllowedHosts, isAllowedHostHeader, RateLimiter } from "./chama/security.js";
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
@@ -157,6 +158,7 @@ app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/storage/status", async () => await getStorageStatus());
 app.get("/api/storage/discover", async () => await discoverVolumes());
 app.get("/api/services/status", async () => await getServicesStatus());
+app.get("/api/services/bindings", async () => getServiceBindings());
 app.get("/api/logs", async (req) => {
   const raw = Number(req.query?.tail);
   const tail = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 200) : 100;

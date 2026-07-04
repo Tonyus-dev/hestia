@@ -112,6 +112,7 @@ GET /api/server/status
 GET /api/storage/status
 GET /api/storage/discover  # descobre volumes montados de verdade (ver abaixo)
 GET /api/services/status
+GET /api/services/bindings  # vínculos read-only com serviços existentes (ver abaixo)
 GET /api/logs?tail=100      # 1..200
 GET /api/config
 ```
@@ -138,6 +139,25 @@ leitura, não altera a configuração sozinha.
 ```bash
 curl -s http://localhost:4517/api/storage/discover | jq
 ```
+
+### Service bindings
+
+A Héstia reconhece os serviços já existentes no servidor:
+
+- Samba;
+- Jellyfin;
+- Syncthing;
+- Tailscale.
+
+Ela não instala, configura, inicia, para ou reinicia nenhum deles — só descreve o vínculo lógico
+com o `/KALINE` (ex.: Samba dá acesso de rede ao `/KALINE`, Jellyfin lê `/KALINE/midia`).
+
+```bash
+curl -s http://localhost:4517/api/services/bindings | jq
+```
+
+`/api/presence/summary` e `/api/presence/manifest` também incluem uma visão sanitizada desses
+vínculos (só `id`/`label`/`role`, sem `relatedStorage`).
 
 ### Presence (leitura same-origin/local)
 

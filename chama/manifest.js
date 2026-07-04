@@ -1,5 +1,6 @@
 // Chama Local — manifesto estático da estação.
 // Conteúdo versionado no git, não em disco — mesma lógica que config.js.
+import { getPresenceServiceBindings } from "./serviceBindings.js";
 
 export function getManifest() {
   return {
@@ -25,6 +26,7 @@ export function getManifest() {
         },
       ],
     },
+    services: getPresenceServiceBindings(),
     capabilities: {
       readonly: true,
       metrics: true,

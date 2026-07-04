@@ -3,6 +3,7 @@ import { getIdentity } from "./identity.js";
 import { getServicesStatus } from "./services.js";
 import { getStorageStatus } from "./storage.js";
 import { getServerStatus } from "./system.js";
+import { getPresenceServiceBindings } from "./serviceBindings.js";
 
 export async function getPresenceSummary(dataDir) {
   const identity = await getIdentity(dataDir);
@@ -34,5 +35,6 @@ export async function getPresenceSummary(dataDir) {
       total: storage.items.length,
       ok: okStorage,
     },
+    services: getPresenceServiceBindings(),
   };
 }

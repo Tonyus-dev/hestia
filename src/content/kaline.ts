@@ -69,6 +69,11 @@ export const HESTIA = {
       fields: ["name", "active", "status", "checkedAt"],
     },
     {
+      path: "/api/services/bindings",
+      purpose: "vínculos read-only com serviços existentes do servidor",
+      fields: ["id", "serviceName", "label", "role", "relatedStorage"],
+    },
+    {
       path: "/api/logs",
       purpose: "ring buffer da própria Chama",
       fields: ["items[].timestamp", "items[].level", "items[].message"],
