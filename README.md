@@ -21,16 +21,16 @@ A Héstia não deve ser descrita como absolutamente somente leitura: o organizer
 
 ## Rotas públicas do Console
 
-| Rota | Função |
-|---|---|
-| `/` | cockpit da Héstia |
-| `/sistema` | hardware real |
-| `/storage` | volumes, fontes e `/KALINE` |
-| `/organizar` | planos e ações locais |
-| `/servicos` | systemd e vínculos |
+| Rota         | Função                        |
+| ------------ | ----------------------------- |
+| `/`          | cockpit da Héstia             |
+| `/sistema`   | hardware real                 |
+| `/storage`   | volumes, fontes e `/KALINE`   |
+| `/organizar` | planos e ações locais         |
+| `/servicos`  | systemd e vínculos            |
 | `/historico` | eventos, runs e logs legíveis |
-| `/config` | modo protegido |
-| `/endpoints` | contratos da API |
+| `/config`    | modo protegido                |
+| `/endpoints` | contratos da API              |
 
 `/logs` continua existindo como rota técnica/legada, mas `/historico` é a rota pública preferida para leitura humana.
 
@@ -349,7 +349,6 @@ precisa), então expurgar planos velhos nunca quebra undo de execuções já apl
 os botões "Gerar plano"/"Aplicar plano localmente"/"Desfazer"/"Refazer" — sempre com aprovação explícita,
 nunca automático. Sem botão de start/stop/reiniciar serviço, upload, download ou shell.
 
-
 ### Service bindings
 
 A Héstia reconhece os serviços já existentes no servidor:
@@ -467,15 +466,15 @@ item incompleto é ignorado. `path` nunca vem de query/body/header, só deste ar
 
 ## Comandos npm
 
-| Comando | O que faz | Onde usar |
-|---|---|---|
-| `npm install` | Instala dependências | Uma vez no checkout |
-| `npm run dev` | Frontend Lovable com HMR | Preview / desenvolvimento de UI |
-| `npm run build` | Build de produção para `dist/` | Antes de iniciar a Chama |
-| `npm run hestia` | Build + inicia Chama Local em `http://localhost:4517` | Linux local |
-| `npm run dev:local` | Backend com hot reload | Desenvolvimento de `hestia.js/chama/*` |
-| `npm test` | Roda a suite do Vitest uma vez | CI / verificação local |
-| `npm run test:watch` | Roda os testes em modo interativo | Durante refatorações |
+| Comando              | O que faz                                             | Onde usar                              |
+| -------------------- | ----------------------------------------------------- | -------------------------------------- |
+| `npm install`        | Instala dependências                                  | Uma vez no checkout                    |
+| `npm run dev`        | Frontend Lovable com HMR                              | Preview / desenvolvimento de UI        |
+| `npm run build`      | Build de produção para `dist/`                        | Antes de iniciar a Chama               |
+| `npm run hestia`     | Build + inicia Chama Local em `http://localhost:4517` | Linux local                            |
+| `npm run dev:local`  | Backend com hot reload                                | Desenvolvimento de `hestia.js/chama/*` |
+| `npm test`           | Roda a suite do Vitest uma vez                        | CI / verificação local                 |
+| `npm run test:watch` | Roda os testes em modo interativo                     | Durante refatorações                   |
 
 Verificações rápidas:
 
@@ -607,9 +606,9 @@ redo) já estava no ar:
   um `planId`/`runId` vindo direto do cliente (body do POST / param da URL) com algo como
   `"../../../../etc/passwd"` escapava de `dataDir/organizer/{plans,runs}/`. Corrigido validando
   o formato estrito do id (`chama/organizerIds.js`, regex `^(plan|org|undo|redo)_\d+_[0-9a-f]{8}$`)
-  **antes** de montar qualquer path — na função de leitura em si, não só no route handler, pra
-  proteger qualquer chamador futuro também. Confirmado ao vivo com `curl` que a tentativa de
-  traversal agora recebe `404`/plano-não-encontrado, sem tocar o disco fora do esperado.
+**antes** de montar qualquer path — na função de leitura em si, não só no route handler, pra
+proteger qualquer chamador futuro também. Confirmado ao vivo com `curl`que a tentativa de
+traversal agora recebe`404`/plano-não-encontrado, sem tocar o disco fora do esperado.
 - **Symlink**: já mitigado desde a PR do scanner — `storageScanner.js` nunca segue link
   simbólico (`entry.isSymbolicLink()` pula, não entra).
 - **`targetPath` sempre dentro de `/KALINE`**: `organizerPlan.js` usa uma tabela fixa de
@@ -626,3 +625,13 @@ redo) já estava no ar:
   já documentado como tal; não é um segredo, é uma barreira contra disparo acidental/CSRF
   simples (formulário/`<img>` não conseguem setar header customizado sem preflight CORS, que
   esta API não concede pra `/api/local/*`).
+
+## Organizer / Ash — Segurança
+
+- Gerar plano é sempre **dry-run**: nenhum arquivo é movido, copiado, apagado ou renomeado em `GET /api/storage/organizer/plan`.
+- `apply` exige confirmação explícita (`X-Hestia-Local-Confirm: organize`) e planos com mais de 5000 itens exigem confirmação extra do `planId`.
+- Revise o plano antes de aplicar; comece com poucos arquivos e use lotes para legado grande.
+- Planos grandes mostram apenas uma amostra inicial na UI para não travar o navegador.
+- Manifests/runs ficam em `dataDir/organizer/runs/` e podem ser consultados em `/organizar`/`/api/local/organizer/runs` para auditoria.
+- Undo é conservador: só desfaz itens do manifest, pula destinos ausentes/alterados e nunca apaga arquivo desconhecido.
+- Não use uploads para duplicar o HD inteiro sem entender o efeito; para acervos grandes, prefira lotes revisáveis.

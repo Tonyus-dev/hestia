@@ -18,11 +18,13 @@ describe("undoOrganizerRun", () => {
 
   beforeEach(async () => {
     workDir = await makeTmpDir("hestia-undo-work-");
+    process.env.HESTIA_KALINE_ROOT = workDir;
     dataDir = await makeTmpDir("hestia-undo-data-");
     await fs.mkdir(join(dataDir, "events"), { recursive: true });
   });
 
   afterEach(async () => {
+    delete process.env.HESTIA_KALINE_ROOT;
     for (const dir of [workDir, dataDir]) {
       try {
         await fs.rm(dir, { recursive: true, force: true });
@@ -183,5 +185,24 @@ describe("undoOrganizerRun", () => {
     expect(failedOpUndo.status).toBe("skipped");
     const okOpUndo = undoManifest.operations.find((o) => o.to === okSource);
     expect(okOpUndo.status).toBe("ok");
+  });
+
+  it("pula undo se o destino foi alterado depois da execução", async () => {
+    const sourcePath = join(workDir, "alterado.txt");
+    const targetPath = join(workDir, "destino", "alterado.txt");
+    await fs.writeFile(sourcePath, "original");
+    const run = await applyOrganizerPlan(
+      {
+        planId: "plan_changed",
+        items: [{ id: "i1", sourcePath, targetPath, action: "move", status: "planned" }],
+      },
+      dataDir,
+    );
+    await fs.writeFile(targetPath, "modificado");
+
+    const undoManifest = await undoOrganizerRun(run.runId, dataDir);
+
+    expect(undoManifest.operations[0].status).toBe("skipped");
+    await expect(fs.readFile(targetPath, "utf8")).resolves.toBe("modificado");
   });
 });

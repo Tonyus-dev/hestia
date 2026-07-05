@@ -1,5 +1,16 @@
-import { hostname } from "node:os";
+import { accessSync, constants, existsSync } from "node:fs";
+import { hostname, userInfo } from "node:os";
+import { join } from "node:path";
 import { config } from "./config.js";
+
+function canWrite(path) {
+  try {
+    accessSync(path, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function getHealth() {
   return {
@@ -12,5 +23,14 @@ export function getHealth() {
     timestamp: new Date().toISOString(),
     processUptime: process.uptime(),
     readonly: config.readonly,
+    frontendBuilt:
+      existsSync(join(process.cwd(), "dist", "client")) ||
+      existsSync(join(process.cwd(), ".output", "public")),
+    kalineMounted: existsSync("/KALINE"),
+    kalineWritable: canWrite("/KALINE"),
+    serviceUser: userInfo().username,
+    dataDirWritable: existsSync(config.dataDir)
+      ? canWrite(config.dataDir)
+      : canWrite(join(config.dataDir, "..")),
   };
 }

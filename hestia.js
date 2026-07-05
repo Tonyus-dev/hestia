@@ -287,7 +287,23 @@ app.post("/api/local/organizer/apply", async (req, reply) => {
     });
     return;
   }
-  return applyOrganizerPlan(plan, config.dataDir);
+  try {
+    return await applyOrganizerPlan(plan, config.dataDir, {
+      largePlanConfirmed: req.headers["x-hestia-large-plan-confirm"],
+    });
+  } catch (err) {
+    if (err.code === "EPLANEXPIRED" || err.code === "ELARGEPLANCONFIRM") {
+      reply.code(409).send({
+        ok: false,
+        error: err.message,
+        code: err.code,
+        detail: err.detail,
+        at: new Date().toISOString(),
+      });
+      return;
+    }
+    throw err;
+  }
 });
 app.get("/api/local/organizer/runs", async () => ({
   items: await getOrganizerRuns(config.dataDir),
