@@ -115,18 +115,24 @@ describe("writePlan / getPlan", () => {
 
   it("escreve e lê o plano de volta identicamente", async () => {
     const plan = {
-      planId: "plan_teste_123",
+      planId: "plan_1783200000000_deadbeef",
       generatedAt: new Date().toISOString(),
       items: [{ id: "a", sourcePath: "/x", targetPath: "/y", action: "move", status: "planned" }],
       summary: { total: 1, planned: 1, conflicts: 0 },
     };
     await writePlan(plan, tmpDir);
-    const read = await getPlan("plan_teste_123", tmpDir);
+    const read = await getPlan("plan_1783200000000_deadbeef", tmpDir);
     expect(read).toEqual(plan);
   });
 
-  it("retorna null para planId inexistente", async () => {
-    const read = await getPlan("plan_nao_existe", tmpDir);
+  it("retorna null para planId bem formado mas inexistente", async () => {
+    const read = await getPlan("plan_1783299999999_00000000", tmpDir);
     expect(read).toBeNull();
+  });
+
+  it("retorna null para planId malformado, sem tentar ler o disco (proteção contra path traversal)", async () => {
+    expect(await getPlan("plan_nao_existe", tmpDir)).toBeNull();
+    expect(await getPlan("../../../../etc/passwd", tmpDir)).toBeNull();
+    expect(await getPlan(undefined, tmpDir)).toBeNull();
   });
 });

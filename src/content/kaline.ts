@@ -123,6 +123,12 @@ export const HESTIA = {
       fields: ["runId", "undoOf", "status", "operations[]", "summary"],
     },
     {
+      path: "/api/local/organizer/runs/:runId/redo",
+      purpose:
+        "POST — refaz uma execução de undo (exige o mesmo header); só funciona em cima de um undo, terminal (sem novo undo/redo)",
+      fields: ["runId", "redoOf", "status", "operations[]", "summary"],
+    },
+    {
       path: "/api/services/status",
       purpose: "systemctl is-active para lista fixa",
       fields: ["name", "active", "status", "checkedAt"],

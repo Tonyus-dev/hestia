@@ -166,6 +166,8 @@ export type OrganizerRunListing = {
   status: string | null;
   undoOf: string | null;
   undoneBy: string | null;
+  redoOf: string | null;
+  redoneBy: string | null;
 };
 export type OrganizerRuns = { items: OrganizerRunListing[] };
 
@@ -387,6 +389,12 @@ export const hestiaApi = {
   organizerUndo: (runId: string) =>
     safePost<OrganizerRunManifest>(
       `/api/local/organizer/runs/${runId}/undo`,
+      {},
+      { "x-hestia-local-confirm": "organize" },
+    ),
+  organizerRedo: (undoRunId: string) =>
+    safePost<OrganizerRunManifest>(
+      `/api/local/organizer/runs/${undoRunId}/redo`,
       {},
       { "x-hestia-local-confirm": "organize" },
     ),

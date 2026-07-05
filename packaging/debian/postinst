@@ -21,5 +21,15 @@ systemctl restart hestia-console.service
 gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 update-desktop-database /usr/share/applications || true
 
+# O serviço roda com DynamicUser=yes (sem privilégio de root) e escreve de verdade em /KALINE
+# (organizer). Se /KALINE já existir neste momento, libera escrita pro grupo do serviço; se
+# ainda não existir, isso é só um aviso — repita manualmente depois de criar /KALINE.
+if [ -d /KALINE ]; then
+  chgrp hestia-console /KALINE 2>/dev/null && chmod g+rwx /KALINE 2>/dev/null \
+    || echo "Aviso: não consegui ajustar permissões de /KALINE automaticamente. Rode manualmente: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE" >&2
+else
+  echo "Aviso: /KALINE ainda não existe. Depois de criá-la, rode: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE" >&2
+fi
+
 echo "Héstia Console instalada."
 echo "Abra pelo menu ou acesse http://localhost:4517"

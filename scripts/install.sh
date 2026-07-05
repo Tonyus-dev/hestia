@@ -39,6 +39,9 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] && [ "$(id
   systemctl enable --now "${SERVICE_NAME}.service"
   log "serviço instalado e rodando em http://127.0.0.1:4517"
   log "pra atualizar depois: git pull && ./scripts/install.sh (idempotente, reinicia o serviço)"
+  log "IMPORTANTE: o serviço roda sem privilégio de root (DynamicUser=yes). Pra o organizer"
+  log "conseguir escrever em /KALINE: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE"
+  log "e o checkout ($ROOT_DIR) precisa ser legível por 'outros' (chmod o+rX se estiver num \$HOME 700/750)."
 else
   log "sem systemd rodando como init (ou sem privilégio de root): build feito, sem serviço instalado."
   log "rode manualmente com: npm run hestia"

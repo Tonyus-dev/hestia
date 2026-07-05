@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { isLoopbackHost, buildAllowedHosts, isAllowedHostHeader, RateLimiter } from "./security.js";
+import {
+  isLoopbackHost,
+  buildAllowedHosts,
+  isAllowedHostHeader,
+  RateLimiter,
+  resolvePresenceCorsOrigins,
+  isOriginAllowed,
+} from "./security.js";
 
 describe("isLoopbackHost", () => {
   it("reconhece os aliases de loopback", () => {
@@ -71,5 +78,44 @@ describe("RateLimiter", () => {
     expect(rl.hits.has("ip1")).toBe(true);
     rl.sweep(2000);
     expect(rl.hits.has("ip1")).toBe(false);
+  });
+});
+
+describe("resolvePresenceCorsOrigins", () => {
+  it("retorna [] quando a env var não está setada (comportamento restritivo por padrão)", () => {
+    expect(resolvePresenceCorsOrigins({})).toEqual([]);
+  });
+
+  it("faz parse de uma lista separada por vírgula, com espaços", () => {
+    expect(
+      resolvePresenceCorsOrigins({
+        HESTIA_PRESENCE_CORS_ORIGIN: "https://presence.example, https://outra.com",
+      }),
+    ).toEqual(["https://presence.example", "https://outra.com"]);
+  });
+
+  it("aceita '*' literal", () => {
+    expect(resolvePresenceCorsOrigins({ HESTIA_PRESENCE_CORS_ORIGIN: "*" })).toEqual(["*"]);
+  });
+});
+
+describe("isOriginAllowed", () => {
+  it("rejeita sempre que a lista está vazia", () => {
+    expect(isOriginAllowed("https://presence.example", [])).toBe(false);
+  });
+
+  it("aceita origem exata na lista", () => {
+    const allowed = ["https://presence.example"];
+    expect(isOriginAllowed("https://presence.example", allowed)).toBe(true);
+    expect(isOriginAllowed("https://evil.com", allowed)).toBe(false);
+  });
+
+  it("'*' na lista aceita qualquer origem", () => {
+    expect(isOriginAllowed("https://qualquer-coisa.com", ["*"])).toBe(true);
+  });
+
+  it("rejeita origin ausente/vazio mesmo com '*' configurado", () => {
+    expect(isOriginAllowed(undefined, ["*"])).toBe(false);
+    expect(isOriginAllowed("", ["*"])).toBe(false);
   });
 });

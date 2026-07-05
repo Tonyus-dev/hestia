@@ -24,6 +24,23 @@ export function isAllowedHostHeader(hostHeader, allowedHosts) {
   return typeof hostHeader === "string" && allowedHosts.has(hostHeader);
 }
 
+// CORS pra Presence é opt-in explícito, nunca ligado por padrão. HESTIA_PRESENCE_CORS_ORIGIN
+// aceita uma lista separada por vírgula ("https://presence.example, https://outra.com") ou "*"
+// (qualquer origem) — vazio/ausente preserva o comportamento restritivo de sempre.
+export function resolvePresenceCorsOrigins(env = process.env) {
+  const raw = env.HESTIA_PRESENCE_CORS_ORIGIN;
+  if (!raw || typeof raw !== "string") return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function isOriginAllowed(origin, allowedOrigins) {
+  if (!origin || allowedOrigins.length === 0) return false;
+  return allowedOrigins.includes("*") || allowedOrigins.includes(origin);
+}
+
 // Janela fixa por chave (IP). Suficiente para uma API local somente leitura
 // que só precisa impedir martelamento acidental ou abusivo.
 export class RateLimiter {

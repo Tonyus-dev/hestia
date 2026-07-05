@@ -11,6 +11,23 @@ export const RETENTION = {
   eventsMaxAgeMs: 30 * 24 * 60 * 60 * 1000, // 30 dias
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function daysFromEnv(value, fallbackMs) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n * DAY_MS : fallbackMs;
+}
+
+// Permite ajustar retenção via env (nunca via ~/.chama/config.json — é infraestrutura, mesmo
+// tratamento que HESTIA_DATA_DIR). Valores inválidos/ausentes caem nos defaults de RETENTION.
+export function resolveRetention(env = process.env) {
+  return {
+    plansMaxAgeMs: daysFromEnv(env.HESTIA_RETENTION_PLANS_DAYS, RETENTION.plansMaxAgeMs),
+    runsMaxAgeMs: daysFromEnv(env.HESTIA_RETENTION_RUNS_DAYS, RETENTION.runsMaxAgeMs),
+    eventsMaxAgeMs: daysFromEnv(env.HESTIA_RETENTION_EVENTS_DAYS, RETENTION.eventsMaxAgeMs),
+  };
+}
+
 async function sweepDir(dir, maxAgeMs, now) {
   let removed = 0;
   let files;
