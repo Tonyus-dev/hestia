@@ -4,8 +4,9 @@ import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import { isLoopbackHost } from "./security.js";
+import { isLoopbackHost, resolvePresenceCorsOrigins } from "./security.js";
 import { resolveDataDir } from "./dataDir.js";
+import { resolveRetention } from "./retention.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -79,4 +80,10 @@ export const config = {
   services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
   // Fontes externas do HD (ex.: pastas em /mnt/hd), só do whitelist — nunca de fora.
   storageSources: userCfg.storageSources || [],
+  // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
+  // whitelist de ~/.chama/config.json.
+  retention: resolveRetention(),
+  // CORS pra /api/presence/* — opt-in explícito via HESTIA_PRESENCE_CORS_ORIGIN, nunca ligado
+  // por padrão. Vazio preserva o comportamento restritivo de sempre (same-origin/local only).
+  presenceCorsOrigins: resolvePresenceCorsOrigins(),
 };

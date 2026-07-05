@@ -7,6 +7,7 @@ import { promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { appendEvent } from "./events.js";
+import { isValidOrganizerId } from "./organizerIds.js";
 
 // Exportadas para reaproveitar em chama/organizerUndo.js — mesmo fallback de EXDEV, mesma
 // checagem de "não sobrescrever", sem duplicar a lógica em dois lugares.
@@ -123,8 +124,9 @@ export async function applyOrganizerPlan(plan, dataDir) {
   return manifest;
 }
 
-// Devolve metadados mínimos (não o manifesto inteiro) — o suficiente pra UI decidir se mostra
-// o botão "Desfazer" (nunca pra uma execução de undo em si, nunca pra uma já desfeita).
+// Devolve metadados mínimos (não o manifesto inteiro) — o suficiente pra UI decidir quando
+// mostra "Desfazer" (execução original, ainda não desfeita) ou "Refazer" (execução de undo,
+// ainda não refeita). Uma execução de redo é terminal: nunca mostra nenhum dos dois botões.
 export async function getOrganizerRuns(dataDir) {
   try {
     const dir = join(dataDir, "organizer", "runs");
@@ -142,6 +144,8 @@ export async function getOrganizerRuns(dataDir) {
           status: manifest?.status ?? null,
           undoOf: manifest?.undoOf ?? null,
           undoneBy: manifest?.undoneBy ?? null,
+          redoOf: manifest?.redoOf ?? null,
+          redoneBy: manifest?.redoneBy ?? null,
         };
       }),
     );
@@ -151,6 +155,9 @@ export async function getOrganizerRuns(dataDir) {
 }
 
 export async function getOrganizerRun(runId, dataDir) {
+  // runId vem de input do cliente (URL param) — nunca monta o path sem validar o formato
+  // primeiro (path.join normaliza "..", então isso é uma defesa real contra path traversal).
+  if (!isValidOrganizerId(runId)) return null;
   try {
     const raw = await fs.readFile(runPath(runId, dataDir), "utf8");
     return JSON.parse(raw);

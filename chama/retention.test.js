@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs";
 import { tmpdir } from "node:os";
-import { sweepOldData, RETENTION } from "./retention.js";
+import { sweepOldData, RETENTION, resolveRetention } from "./retention.js";
 
 async function makeTmpDir(prefix) {
   return new Promise((resolve, reject) =>
@@ -94,5 +94,41 @@ describe("sweepOldData", () => {
     expect(result.plansRemoved).toBe(1);
     expect(result.runsRemoved).toBe(0);
     await expect(fs.access(run)).resolves.toBeUndefined();
+  });
+});
+
+describe("resolveRetention", () => {
+  it("usa os defaults quando nenhuma env var está setada", () => {
+    expect(resolveRetention({})).toEqual(RETENTION);
+  });
+
+  it("aceita override por dias via env, uma categoria de cada vez", () => {
+    const r = resolveRetention({ HESTIA_RETENTION_PLANS_DAYS: "14" });
+    expect(r.plansMaxAgeMs).toBe(14 * 24 * 60 * 60 * 1000);
+    expect(r.runsMaxAgeMs).toBe(RETENTION.runsMaxAgeMs);
+    expect(r.eventsMaxAgeMs).toBe(RETENTION.eventsMaxAgeMs);
+  });
+
+  it("aceita override das três categorias ao mesmo tempo", () => {
+    const r = resolveRetention({
+      HESTIA_RETENTION_PLANS_DAYS: "1",
+      HESTIA_RETENTION_RUNS_DAYS: "30",
+      HESTIA_RETENTION_EVENTS_DAYS: "7",
+    });
+    expect(r.plansMaxAgeMs).toBe(1 * 24 * 60 * 60 * 1000);
+    expect(r.runsMaxAgeMs).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(r.eventsMaxAgeMs).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("ignora valor inválido (não-numérico, zero, negativo) e cai no default", () => {
+    expect(resolveRetention({ HESTIA_RETENTION_PLANS_DAYS: "abc" }).plansMaxAgeMs).toBe(
+      RETENTION.plansMaxAgeMs,
+    );
+    expect(resolveRetention({ HESTIA_RETENTION_PLANS_DAYS: "0" }).plansMaxAgeMs).toBe(
+      RETENTION.plansMaxAgeMs,
+    );
+    expect(resolveRetention({ HESTIA_RETENTION_PLANS_DAYS: "-5" }).plansMaxAgeMs).toBe(
+      RETENTION.plansMaxAgeMs,
+    );
   });
 });

@@ -18,6 +18,7 @@ import { scanStorageModel, scanConfiguredSources } from "./chama/storageScanner.
 import { generateOrganizerPlan, writePlan, getPlan } from "./chama/organizerPlan.js";
 import { applyOrganizerPlan, getOrganizerRuns, getOrganizerRun } from "./chama/organizerApply.js";
 import { undoOrganizerRun } from "./chama/organizerUndo.js";
+import { redoOrganizerRun } from "./chama/organizerRedo.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getServiceBindings } from "./chama/serviceBindings.js";
 import { getLogs, log } from "./chama/logs.js";
@@ -25,6 +26,7 @@ import {
   isLoopbackHost,
   buildAllowedHosts,
   isAllowedHostHeader,
+  isOriginAllowed,
   RateLimiter,
 } from "./chama/security.js";
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
@@ -86,7 +88,10 @@ try {
   setInterval(() => runSnapshotCycle(config.dataDir), SNAPSHOT_INTERVAL_MS).unref();
   // Expurgo diário de planos/execuções/eventos antigos (ver chama/retention.js).
   const RETENTION_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
-  setInterval(() => sweepOldData(config.dataDir), RETENTION_SWEEP_INTERVAL_MS).unref();
+  setInterval(
+    () => sweepOldData(config.dataDir, config.retention),
+    RETENTION_SWEEP_INTERVAL_MS,
+  ).unref();
 } catch (err) {
   log("warn", `Não foi possível preparar dataDir "${config.dataDir}": ${err.message}`);
 }
@@ -165,6 +170,23 @@ app.addHook("onRequest", async (req, reply) => {
   });
 });
 
+// --- CORS opt-in só para /api/presence/* (Presence pública, outra origem). --
+// Nunca cobre /api/local/* nem o resto de /api/* — a proteção do header de confirmação de
+// escrita depende justamente de não ter CORS habilitado ali (ver hook acima). Desligado por
+// padrão (config.presenceCorsOrigins vazio); só liga com HESTIA_PRESENCE_CORS_ORIGIN explícito.
+app.addHook("onRequest", async (req, reply) => {
+  if (req.method !== "OPTIONS" || !req.url.startsWith("/api/presence/")) return;
+  const origin = req.headers.origin;
+  if (!isOriginAllowed(origin, config.presenceCorsOrigins)) return;
+  reply.header("Access-Control-Allow-Origin", origin);
+  reply.header("Vary", "Origin");
+  reply.header("Access-Control-Allow-Methods", "GET");
+  if (req.headers["access-control-request-private-network"] === "true") {
+    reply.header("Access-Control-Allow-Private-Network", "true");
+  }
+  reply.code(204).send();
+});
+
 // --- Headers de segurança em toda resposta. --------------------------------
 // script-src precisa de 'unsafe-inline': o bundle SSR do TanStack Start
 // injeta um script inline de hidratação (sem isso o React nunca hidrata e a
@@ -175,12 +197,19 @@ const CSP =
   "default-src 'self'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline'; " +
   "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
-app.addHook("onSend", async (_req, reply, payload) => {
+app.addHook("onSend", async (req, reply, payload) => {
   reply.header("X-Content-Type-Options", "nosniff");
   reply.header("X-Frame-Options", "DENY");
   reply.header("Referrer-Policy", "no-referrer");
   reply.header("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
   reply.header("Content-Security-Policy", CSP);
+  if (req.url.startsWith("/api/presence/")) {
+    const origin = req.headers.origin;
+    if (isOriginAllowed(origin, config.presenceCorsOrigins)) {
+      reply.header("Access-Control-Allow-Origin", origin);
+      reply.header("Vary", "Origin");
+    }
+  }
   return payload;
 });
 
@@ -292,6 +321,50 @@ app.post("/api/local/organizer/runs/:runId/undo", async (req, reply) => {
         ok: false,
         error: "Execução já foi desfeita",
         code: "EALREADYUNDONE",
+        at: new Date().toISOString(),
+      });
+      return;
+    }
+    throw err;
+  }
+});
+app.post("/api/local/organizer/runs/:runId/redo", async (req, reply) => {
+  try {
+    const redoManifest = await redoOrganizerRun(req.params.runId, config.dataDir);
+    if (!redoManifest) {
+      reply.code(404).send({
+        ok: false,
+        error: "Execução não encontrada",
+        code: "ERUNNOTFOUND",
+        at: new Date().toISOString(),
+      });
+      return;
+    }
+    return redoManifest;
+  } catch (err) {
+    if (err.code === "ENOTUNDORUN") {
+      reply.code(400).send({
+        ok: false,
+        error: "Execução não é um undo — nada para refazer",
+        code: "ENOTUNDORUN",
+        at: new Date().toISOString(),
+      });
+      return;
+    }
+    if (err.code === "EALREADYREDONE") {
+      reply.code(409).send({
+        ok: false,
+        error: "Undo já foi refeito",
+        code: "EALREADYREDONE",
+        at: new Date().toISOString(),
+      });
+      return;
+    }
+    if (err.code === "EORIGINALNOTFOUND") {
+      reply.code(404).send({
+        ok: false,
+        error: "Execução original não encontrada (pode ter expirado)",
+        code: "EORIGINALNOTFOUND",
         at: new Date().toISOString(),
       });
       return;
