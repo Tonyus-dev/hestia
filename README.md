@@ -252,9 +252,10 @@ curl -s http://localhost:4517/api/storage/scan | jq
 
 ### Organizer (plano dry-run + aplicação local aprovada)
 
-A única capacidade de escrita da Héstia: organizar o que está em `/KALINE/entrada` (alimentada
-pelo Syncthing recebendo arquivos de outros aparelhos) e nas fontes externas configuradas,
-movendo/copiando para a pasta canônica certa por extensão.
+A única capacidade de escrita da Héstia: Entrada recebe arquivos brutos em
+`/KALINE/entrada/uploads`, `/KALINE/entrada/dispositivos` e `/KALINE/entrada/manual`; Ash gera
+um plano seguro; Héstia aplica apenas planos aprovados. Fontes externas configuradas continuam
+read-only: entram no plano como `copy`, nunca como perda do original.
 
 ```
 GET  /api/storage/organizer/plan          # gera e persiste um novo plano dry-run
@@ -272,9 +273,12 @@ curl -s http://localhost:4517/api/storage/organizer/plan | jq
 ```
 
 Cada item do plano tem `sourcePath`/`targetPath`/`action` (`"move"` para `entrada`, `"copy"` para
-fontes externas — o arquivo original de uma fonte externa nunca é apagado) e `status`
-(`"planned"` ou `"conflict"` se já existir algo com o mesmo nome no destino — nesse caso a
-Héstia nunca sobrescreve, só marca conflito e pula).
+fontes externas — o arquivo original de uma fonte externa nunca é apagado), metadados leves de
+origem/data e `status` (`"planned"`, `"conflict"` ou `"ignored"`). O arquivamento final usa
+`/KALINE/{classe}/{tipo}/{YYYY}/{MM}/{arquivo}` por extensão: desconhecidos vão para
+`entrada/revisar`, executáveis/scripts/pacotes para `ash/quarentena`, temporários/sistema podem
+ser ignorados, recém-modificados aguardam estabilidade antes de mover/copiar e arquivos já
+organizados são ignorados para evitar operações inúteis.
 
 **2. Aplicar o plano** — exige três coisas: `Content-Type: application/json`, o header
 `X-Hestia-Local-Confirm: organize`, e o `planId` de um plano já gerado no passo 1:

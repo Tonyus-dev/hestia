@@ -15,6 +15,19 @@ export const DEFAULT_INDEX_LIMITS = {
   maxFiles: 5000,
 };
 
+const IGNORED_DIRS = new Set([".git", "node_modules", ".cache", ".Trash"]);
+const IGNORED_FILES = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
+
+export function isIgnoredFileName(name) {
+  return (
+    IGNORED_FILES.has(name) ||
+    name.startsWith("~$") ||
+    [".tmp", ".temp", ".part", ".crdownload", ".download", ".swp", ".lock"].some((suffix) =>
+      name.toLowerCase().endsWith(suffix),
+    )
+  );
+}
+
 async function walk(rootPath, limits, state) {
   async function walkDir(dirPath, depth) {
     if (state.truncated) return;
@@ -33,6 +46,14 @@ async function walk(rootPath, limits, state) {
     for (const entry of entries) {
       if (state.truncated) return;
       if (entry.isSymbolicLink()) continue; // não segue symlink recursivamente nesta PR
+      if (entry.isDirectory() && IGNORED_DIRS.has(entry.name)) {
+        state.ignored += 1;
+        continue;
+      }
+      if (entry.isFile() && isIgnoredFileName(entry.name)) {
+        state.ignored += 1;
+        continue;
+      }
       const entryPath = join(dirPath, entry.name);
       if (entry.isDirectory()) {
         await walkDir(entryPath, depth + 1);
@@ -47,7 +68,16 @@ async function walk(rootPath, limits, state) {
       try {
         const st = await stat(entryPath);
         const ext = extname(entry.name).toLowerCase() || "(sem extensão)";
-        state.entries.push({ path: entryPath, ext, size: st.size });
+        state.entries.push({
+          name: entry.name,
+          path: entryPath,
+          ext,
+          size: st.size,
+          mtimeMs: st.mtimeMs,
+          birthtimeMs: st.birthtimeMs,
+          mtimeIso: st.mtime.toISOString(),
+          birthtimeIso: st.birthtime.toISOString(),
+        });
       } catch (err) {
         state.safeErrors.push({ path: entryPath, code: err.code || "EUNKNOWN" });
       }
@@ -78,7 +108,13 @@ async function walkTarget(targetPath, limits) {
       safeErrors: [{ path: targetPath, code: "ENOTDIR" }],
     };
   }
-  const state = { entries: [], safeErrors: [], truncated: false, truncatedReason: null };
+  const state = {
+    entries: [],
+    ignored: 0,
+    safeErrors: [],
+    truncated: false,
+    truncatedReason: null,
+  };
   await walk(targetPath, limits, state);
   return { exists: true, ...state };
 }
@@ -98,6 +134,7 @@ export async function scanPath(targetPath, limits = DEFAULT_INDEX_LIMITS) {
     path: targetPath,
     exists: result.exists,
     files: result.entries.length,
+    ignored: result.ignored || 0,
     bytes,
     extensions,
     truncated: result.truncated,
@@ -115,6 +152,7 @@ export async function listFiles(targetPath, limits = DEFAULT_INDEX_LIMITS) {
     path: targetPath,
     exists: result.exists,
     files: result.entries,
+    ignored: result.ignored || 0,
     truncated: result.truncated,
     ...(result.truncated ? { reason: result.truncatedReason } : {}),
     safeErrors: result.safeErrors,

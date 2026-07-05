@@ -209,13 +209,25 @@ export type OrganizerPlanItem = {
   action: "move" | "copy";
   reason: string;
   risk: "low" | "medium" | "high";
-  status: "planned" | "conflict";
+  status: "planned" | "conflict" | "ignored";
+  sourceKind?: "entrada" | "upload" | "dispositivo" | "manual" | "external" | "unknown";
+  sourceLabel?: string;
+  size?: number;
+  mtimeMs?: number;
+  mtimeIso?: string;
+  ignoredReason?: string;
 };
 export type OrganizerPlan = {
   planId: string;
   generatedAt: string;
   items: OrganizerPlanItem[];
-  summary: { total: number; planned: number; conflicts: number };
+  summary: {
+    total: number;
+    planned: number;
+    conflicts: number;
+    ignored?: number;
+    quarantined?: number;
+  };
 };
 
 export type OrganizerOperation = {

@@ -42,6 +42,9 @@ async function applyItem(item) {
   if (item.status === "conflict") {
     return { ...item, status: "skipped", error: "conflito detectado no plano" };
   }
+  if (item.status === "ignored" || item.sourcePath === item.targetPath) {
+    return { ...item, status: "skipped", error: item.ignoredReason || "item ignorado no plano" };
+  }
   await fs.mkdir(dirname(item.targetPath), { recursive: true });
   if (await targetExists(item.targetPath)) {
     return { ...item, status: "skipped", error: "target já existe (conflito)" };

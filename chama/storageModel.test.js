@@ -44,6 +44,20 @@ describe("getStorageModel", () => {
       expect.arrayContaining(["jellyfin", "samba"]),
     );
     expect(byRelativePath["codice/pdf"]).toBeDefined();
+    for (const rel of [
+      "entrada/uploads",
+      "entrada/dispositivos",
+      "entrada/manual",
+      "entrada/revisar",
+      "ash/planos",
+      "ash/runs",
+      "ash/quarentena",
+      "ash/ignorados",
+      "documentos/textos",
+      "documentos/planilhas",
+      "documentos/apresentacoes",
+    ])
+      expect(byRelativePath[rel]).toBeDefined();
   });
 
   it("sempre retorna o mesmo conteúdo (sem mutação entre chamadas)", () => {
