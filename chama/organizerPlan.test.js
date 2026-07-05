@@ -17,13 +17,17 @@ describe("targetRelativePathFor", () => {
     expect(targetRelativePathFor(".epub")).toBe("codice/epub");
     expect(targetRelativePathFor(".md")).toBe("codice/fichamentos");
     expect(targetRelativePathFor(".txt")).toBe("codice/fichamentos");
-    expect(targetRelativePathFor(".docx")).toBe("arquivos");
+    expect(targetRelativePathFor(".docx")).toBe("documentos/textos");
+    expect(targetRelativePathFor(".xlsx")).toBe("documentos/planilhas");
+    expect(targetRelativePathFor(".pptx")).toBe("documentos/apresentacoes");
     expect(targetRelativePathFor(".mp4")).toBe("midia/videos");
     expect(targetRelativePathFor(".mkv")).toBe("midia/videos");
     expect(targetRelativePathFor(".mp3")).toBe("midia/audio");
     expect(targetRelativePathFor(".jpg")).toBe("midia/imagens");
     expect(targetRelativePathFor(".png")).toBe("midia/imagens");
     expect(targetRelativePathFor(".zip")).toBe("arquivos/compactados");
+    expect(targetRelativePathFor(".exe")).toBe("ash/quarentena");
+    expect(targetRelativePathFor(".sh")).toBe("ash/quarentena");
   });
 
   it("cai para entrada/revisar em extensão desconhecida", () => {
@@ -38,9 +42,12 @@ describe("generateOrganizerPlan", () => {
   beforeEach(async () => {
     tmpDir = await makeTmpDir("hestia-organizerplan-");
     vi.resetModules();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T00:00:00.000Z"));
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     vi.resetModules();
     try {
       await fs.rm(tmpDir, { recursive: true, force: true });
@@ -54,8 +61,11 @@ describe("generateOrganizerPlan", () => {
     const sourceDir = join(tmpDir, "hd-fonte");
     await fs.mkdir(entradaDir, { recursive: true });
     await fs.mkdir(sourceDir, { recursive: true });
+    const oldDate = new Date("2026-07-10T00:00:00.000Z");
     await fs.writeFile(join(entradaDir, "recibo.pdf"), "conteudo");
     await fs.writeFile(join(sourceDir, "livro.epub"), "conteudo-livro");
+    await fs.utimes(join(entradaDir, "recibo.pdf"), oldDate, oldDate);
+    await fs.utimes(join(sourceDir, "livro.epub"), oldDate, oldDate);
 
     vi.doMock("./storageModel.js", () => ({
       getStorageModel: () => ({
@@ -85,16 +95,114 @@ describe("generateOrganizerPlan", () => {
 
     const entradaItem = plan.items.find((i) => i.sourcePath.endsWith("recibo.pdf"));
     expect(entradaItem.action).toBe("move");
-    expect(entradaItem.targetPath).toBe("/KALINE/codice/pdf/recibo.pdf");
+    expect(entradaItem.targetPath).toBe("/KALINE/codice/pdf/2026/07/recibo.pdf");
+    expect(entradaItem.sourceKind).toBe("entrada");
     expect(entradaItem.status).toBe("planned");
 
     const sourceItem = plan.items.find((i) => i.sourcePath.endsWith("livro.epub"));
     expect(sourceItem.action).toBe("copy");
-    expect(sourceItem.targetPath).toBe("/KALINE/codice/epub/livro.epub");
+    expect(sourceItem.targetPath).toBe("/KALINE/codice/epub/2026/07/livro.epub");
+    expect(sourceItem.sourceKind).toBe("external");
 
     expect(plan.summary.total).toBe(2);
     expect(plan.summary.planned).toBe(2);
     expect(plan.summary.conflicts).toBe(0);
+    expect(plan.summary.ignored).toBe(0);
+    expect(plan.summary.quarantined).toBe(0);
+  });
+  it("classifica por classe/tipo/ano/mês, quarentena, revisão e ignorados", async () => {
+    const entradaDir = join(tmpDir, "entrada");
+    await fs.mkdir(entradaDir, { recursive: true });
+    const files = [
+      "artigo.pdf",
+      "foto.jpg",
+      "oficio.docx",
+      "tabela.xlsx",
+      "aula.pptx",
+      "livro.epub",
+      "nota.md",
+      "semext",
+      "app.exe",
+      "script.sh",
+      "temp.tmp",
+      "novo.png",
+    ];
+    for (const file of files) await fs.writeFile(join(entradaDir, file), "x");
+    const jul2026 = new Date("2026-07-15T12:00:00.000Z");
+    const dec2025 = new Date("2025-12-20T12:00:00.000Z");
+    for (const file of files.filter((f) => f !== "novo.png"))
+      await fs.utimes(join(entradaDir, file), jul2026, jul2026);
+    await fs.utimes(join(entradaDir, "foto.jpg"), dec2025, dec2025);
+    await fs.utimes(
+      join(entradaDir, "novo.png"),
+      new Date("2026-07-31T23:59:30.000Z"),
+      new Date("2026-07-31T23:59:30.000Z"),
+    );
+
+    vi.doMock("./storageModel.js", () => ({
+      getStorageModel: () => ({
+        root: "/KALINE",
+        folders: [{ id: "entrada", label: "Entrada", absolutePath: entradaDir }],
+      }),
+    }));
+    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
+
+    const { generateOrganizerPlan } = await import("./organizerPlan.js");
+    const plan = await generateOrganizerPlan();
+    const byName = Object.fromEntries(plan.items.map((i) => [i.sourcePath.split("/").pop(), i]));
+
+    expect(byName["artigo.pdf"].targetPath).toBe("/KALINE/codice/pdf/2026/07/artigo.pdf");
+    expect(byName["foto.jpg"].targetPath).toBe("/KALINE/midia/imagens/2025/12/foto.jpg");
+    expect(byName["oficio.docx"].targetPath).toBe("/KALINE/documentos/textos/2026/07/oficio.docx");
+    expect(byName["tabela.xlsx"].targetPath).toBe(
+      "/KALINE/documentos/planilhas/2026/07/tabela.xlsx",
+    );
+    expect(byName["aula.pptx"].targetPath).toBe(
+      "/KALINE/documentos/apresentacoes/2026/07/aula.pptx",
+    );
+    expect(byName["livro.epub"].targetPath).toBe("/KALINE/codice/epub/2026/07/livro.epub");
+    expect(byName["nota.md"].targetPath).toBe("/KALINE/codice/fichamentos/2026/07/nota.md");
+    expect(byName["semext"].targetPath).toBe("/KALINE/entrada/revisar/2026/07/semext");
+    expect(byName["app.exe"].targetPath).toBe("/KALINE/ash/quarentena/2026/07/app.exe");
+    expect(byName["script.sh"].targetPath).toBe("/KALINE/ash/quarentena/2026/07/script.sh");
+    expect(byName["novo.png"].status).toBe("ignored");
+    expect(byName["novo.png"].ignoredReason).toBe("recently_modified");
+    expect(byName["temp.tmp"]).toBeUndefined();
+    expect(plan.summary.ignored).toBe(2);
+    expect(plan.summary.quarantined).toBe(2);
+  });
+  it("rotula dispositivos pela subpasta, mas arquivo solto usa label base", async () => {
+    const dispositivosDir = join(tmpDir, "entrada", "dispositivos");
+    const celularDir = join(dispositivosDir, "celular");
+    await fs.mkdir(celularDir, { recursive: true });
+    await fs.writeFile(join(celularDir, "foto.jpg"), "x");
+    await fs.writeFile(join(dispositivosDir, "arquivo-solto.pdf"), "x");
+    const oldDate = new Date("2026-07-10T00:00:00.000Z");
+    await fs.utimes(join(celularDir, "foto.jpg"), oldDate, oldDate);
+    await fs.utimes(join(dispositivosDir, "arquivo-solto.pdf"), oldDate, oldDate);
+
+    vi.doMock("./storageModel.js", () => ({
+      getStorageModel: () => ({
+        root: "/KALINE",
+        folders: [
+          {
+            id: "entrada-dispositivos",
+            label: "Dispositivos",
+            absolutePath: dispositivosDir,
+          },
+        ],
+      }),
+    }));
+    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
+
+    const { generateOrganizerPlan } = await import("./organizerPlan.js");
+    const plan = await generateOrganizerPlan();
+    const byName = Object.fromEntries(plan.items.map((i) => [i.sourcePath.split("/").pop(), i]));
+
+    expect(byName["foto.jpg"].sourceKind).toBe("dispositivo");
+    expect(byName["foto.jpg"].sourceLabel).toBe("celular");
+    expect(byName["arquivo-solto.pdf"].sourceKind).toBe("dispositivo");
+    expect(byName["arquivo-solto.pdf"].sourceLabel).toBe("dispositivos");
   });
 });
 

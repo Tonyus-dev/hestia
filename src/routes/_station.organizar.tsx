@@ -128,8 +128,9 @@ export function OrganizarPage() {
           {plan && (
             <div className="mt-3 space-y-2">
               <p className="text-[12px] text-[color:var(--kaline-faint)]">
-                {plan.summary.total} itens · {plan.summary.planned} planejados ·{" "}
-                {plan.summary.conflicts} conflitos
+                {plan.summary.total} total · {plan.summary.planned} planejados ·{" "}
+                {plan.summary.conflicts} conflitos · {plan.summary.ignored ?? 0} ignorados ·{" "}
+                {plan.summary.quarantined ?? 0} quarentena
               </p>
               {plan.items.map((item) => (
                 <div
@@ -141,6 +142,10 @@ export function OrganizarPage() {
                   </div>
                   <div className="text-[11px] text-[color:var(--kaline-faint)]">
                     {item.action} · {item.reason} · {item.status}
+                    {item.sourceKind ? ` · ${item.sourceKind}` : ""}
+                    {item.sourceLabel ? `/${item.sourceLabel}` : ""}
+                    {item.mtimeIso ? ` · ${item.mtimeIso}` : ""}
+                    {item.ignoredReason ? ` · ${item.ignoredReason}` : ""}
                   </div>
                 </div>
               ))}
