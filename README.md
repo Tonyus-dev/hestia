@@ -81,9 +81,13 @@ Fluxo repetível:
 ```bash
 git clone https://github.com/Tonyus-dev/hestia.git
 cd hestia
+# Com package-lock.json versionado, prefira instalação reprodutível:
 npm ci
+# Se estiver em uma cópia sem package-lock.json, use npm install para gerá-lo:
+# npm install
 npm run build
-sudo npm run install:local
+HESTIA_SERVICE_USER="$USER" sudo -E npm run install:local
+npm run doctor
 ```
 
 Sem symlink manual, sem editar `/etc/fstab`, sem criar `dist` como root, sem Cloudflare e sem aplicar organizer automaticamente.
