@@ -37,6 +37,10 @@ export function classifyTemperature(tempC) {
   return tempC > 85 ? "critical" : tempC > 70 ? "warn" : "ok";
 }
 
+function firstMountedPartition(disk) {
+  return (disk.children || []).find((child) => child.mountpoint);
+}
+
 async function readProcStat() {
   try {
     const line = (await readFile("/proc/stat", "utf8")).split("\n")[0];
@@ -190,15 +194,25 @@ export async function getHardwareConfig(execFileImpl = pExecFile) {
     const parsed = JSON.parse(stdout);
     disks = {
       available: true,
-      items: (parsed.blockdevices || []).map((d) => ({
-        name: d.name,
-        type: d.type,
-        size: d.size,
-        model: d.model,
-        mountpoint: d.mountpoint,
-        fstype: d.fstype,
-        rota: d.rota == null ? null : Boolean(d.rota),
-      })),
+      items: (parsed.blockdevices || []).map((d) => {
+        const mountedPartition = !d.mountpoint && firstMountedPartition(d);
+        return {
+          name: d.name,
+          type: d.type,
+          size: d.size,
+          model: d.model,
+          mountpoint: d.mountpoint,
+          fstype: d.fstype,
+          rota: d.rota == null ? null : Boolean(d.rota),
+          mountedPartition: mountedPartition
+            ? {
+                name: mountedPartition.name,
+                mountpoint: mountedPartition.mountpoint,
+                fstype: mountedPartition.fstype,
+              }
+            : null,
+        };
+      }),
     };
   } catch (err) {
     disks = {

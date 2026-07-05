@@ -11,11 +11,26 @@ import { getStorageModel } from "./storageModel.js";
 import { config } from "./config.js";
 
 export const DEFAULT_INDEX_LIMITS = {
-  maxDepth: 4,
+  maxDepth: 12,
   maxFiles: 5000,
 };
 
-const IGNORED_DIRS = new Set([".git", "node_modules", ".cache", ".Trash"]);
+const IGNORED_DIR_NAMES = new Set([
+  ".git",
+  "node_modules",
+  ".cache",
+  ".Trash",
+  "$RECYCLE.BIN",
+  "System Volume Information",
+]);
+const IGNORED_KALINE_DIRS = new Set([
+  "/KALINE/ash",
+  "/KALINE/codice",
+  "/KALINE/midia",
+  "/KALINE/design",
+  "/KALINE/documentos",
+  "/KALINE/codigo",
+]);
 const IGNORED_FILES = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
 
 export function isIgnoredFileName(name) {
@@ -46,7 +61,11 @@ async function walk(rootPath, limits, state) {
     for (const entry of entries) {
       if (state.truncated) return;
       if (entry.isSymbolicLink()) continue; // não segue symlink recursivamente nesta PR
-      if (entry.isDirectory() && IGNORED_DIRS.has(entry.name)) {
+      const entryPath = join(dirPath, entry.name);
+      if (
+        entry.isDirectory() &&
+        (IGNORED_DIR_NAMES.has(entry.name) || IGNORED_KALINE_DIRS.has(entryPath))
+      ) {
         state.ignored += 1;
         continue;
       }
@@ -54,7 +73,6 @@ async function walk(rootPath, limits, state) {
         state.ignored += 1;
         continue;
       }
-      const entryPath = join(dirPath, entry.name);
       if (entry.isDirectory()) {
         await walkDir(entryPath, depth + 1);
         continue;

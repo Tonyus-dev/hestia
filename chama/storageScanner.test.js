@@ -59,6 +59,34 @@ describe("scanPath", () => {
     expect(result.extensions[".jpg"]).toBe(3);
   });
 
+  it("varre profundidade prática sem truncar", async () => {
+    const mid = join(tmpDir, ...Array.from({ length: 5 }, (_, i) => `m${i}`));
+    const deep = join(tmpDir, ...Array.from({ length: 10 }, (_, i) => `n${i}`));
+    await fs.mkdir(mid, { recursive: true });
+    await fs.mkdir(deep, { recursive: true });
+    await fs.writeFile(join(tmpDir, "nivel1.pdf"), "x");
+    await fs.writeFile(join(mid, "nivel5.mp4"), "x");
+    await fs.writeFile(join(deep, "nivel10.mkv"), "x");
+
+    const result = await scanPath(tmpDir);
+    expect(result.truncated).toBe(false);
+    expect(result.files).toBe(3);
+    expect(result.extensions[".mp4"]).toBe(1);
+    expect(result.extensions[".mkv"]).toBe(1);
+  });
+
+  it("mantém diretórios de segurança ignorados fora da varredura", async () => {
+    await fs.mkdir(join(tmpDir, "node_modules"), { recursive: true });
+    await fs.mkdir(join(tmpDir, ".git"), { recursive: true });
+    await fs.writeFile(join(tmpDir, "entrada.pdf"), "x");
+    await fs.writeFile(join(tmpDir, "node_modules", "lib.js"), "x");
+    await fs.writeFile(join(tmpDir, ".git", "config"), "x");
+
+    const result = await scanPath(tmpDir);
+    expect(result.files).toBe(1);
+    expect(result.ignored).toBe(2);
+  });
+
   it("marca truncated:true com reason maxFiles ao bater o limite", async () => {
     await fs.writeFile(join(tmpDir, "a.txt"), "x");
     await fs.writeFile(join(tmpDir, "b.txt"), "x");
@@ -101,7 +129,7 @@ describe("scanPath", () => {
   });
 
   it("usa DEFAULT_INDEX_LIMITS quando nenhum limite é passado", async () => {
-    expect(DEFAULT_INDEX_LIMITS).toEqual({ maxDepth: 4, maxFiles: 5000 });
+    expect(DEFAULT_INDEX_LIMITS).toEqual({ maxDepth: 12, maxFiles: 5000 });
   });
 });
 
