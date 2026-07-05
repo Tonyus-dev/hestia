@@ -61,10 +61,22 @@ async function walkTarget(targetPath, limits) {
   try {
     rootStat = await lstat(targetPath);
   } catch (err) {
-    return { exists: false, entries: [], truncated: false, truncatedReason: null, safeErrors: [{ path: targetPath, code: err.code || "ENOENT" }] };
+    return {
+      exists: false,
+      entries: [],
+      truncated: false,
+      truncatedReason: null,
+      safeErrors: [{ path: targetPath, code: err.code || "ENOENT" }],
+    };
   }
   if (!rootStat.isDirectory()) {
-    return { exists: true, entries: [], truncated: false, truncatedReason: null, safeErrors: [{ path: targetPath, code: "ENOTDIR" }] };
+    return {
+      exists: true,
+      entries: [],
+      truncated: false,
+      truncatedReason: null,
+      safeErrors: [{ path: targetPath, code: "ENOTDIR" }],
+    };
   }
   const state = { entries: [], safeErrors: [], truncated: false, truncatedReason: null };
   await walk(targetPath, limits, state);

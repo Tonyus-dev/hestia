@@ -67,7 +67,7 @@ export const config = {
   port,
   // Sobre exposição de rede (bind local vs LAN), não sobre capacidade de escrita — essa
   // vive em chama/capabilities.js (fonte única de verdade: writing.modifyStorage).
-  mode: "local-readonly",
+  mode: "modo protegido",
   readonly: true,
   lanEnabled: !isLoopbackHost(host),
   // Diretório de dados persistentes (identidade, eventos, snapshots). Só

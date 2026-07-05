@@ -70,6 +70,84 @@ export type ServiceStatus = {
 };
 
 export type ServicesStatus = { items: ServiceStatus[] };
+export type HardwareSeverity = "ok" | "warn" | "critical" | "unavailable";
+export type HardwareStatus = {
+  generatedAt: string;
+  overall: { status: HardwareSeverity; reasons: string[] };
+  cpu: {
+    status: HardwareSeverity;
+    model?: string;
+    cores: number;
+    threads: number;
+    loadAverage: number[];
+    loadRatio1m: number | null;
+    usagePercent: number | null;
+  };
+  memory: {
+    status: HardwareSeverity;
+    total: number;
+    free: number;
+    used: number;
+    usedPercent: number;
+  };
+  swap: {
+    status: HardwareSeverity;
+    total: number;
+    free: number;
+    used: number;
+    usedPercent: number | null;
+  };
+  temperature: {
+    status: HardwareSeverity;
+    available: boolean;
+    maxC: number | null;
+    sensors: { label: string; tempC: number; status: HardwareSeverity }[];
+  };
+  storage: { status: HardwareSeverity; items: StoragePath[] };
+  services: { status: HardwareSeverity; active: number; total: number; items: ServiceStatus[] };
+};
+export type HardwareConfig = {
+  generatedAt: string;
+  hostname: string;
+  platform: string;
+  release: string;
+  arch: string;
+  uptime: number;
+  cpu: { model: string; cores: number; threads: number };
+  memory: { total: number };
+  disks: {
+    available: boolean;
+    items: {
+      name: string;
+      type?: string;
+      size?: string;
+      model?: string;
+      mountpoint?: string;
+      fstype?: string;
+      rota?: boolean | null;
+    }[];
+    error?: string;
+  };
+  hestia: {
+    host: string;
+    port: number;
+    mode: string;
+    lanEnabled: boolean;
+    storagePaths: string[];
+    services: string[];
+  };
+};
+export type StorageSources = {
+  items: { id: string; label: string; path: string; category: string; mode: string }[];
+};
+export type ServiceBinding = {
+  id: string;
+  serviceName: string;
+  label: string;
+  role: string;
+  relatedStorage: string[];
+};
+export type ServiceBindings = ServiceBinding[];
 
 export type LogItem = { timestamp: string; level: string; message: string };
 export type Logs = { items: LogItem[]; tail?: number; capacity?: number };
@@ -367,12 +445,16 @@ async function safePost<T>(
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
   server: () => safeFetch<ServerStatus>("/api/server/status"),
+  hardwareStatus: () => safeFetch<HardwareStatus>("/api/hardware/status"),
+  hardwareConfig: () => safeFetch<HardwareConfig>("/api/hardware/config"),
   storage: () => safeFetch<StorageStatus>("/api/storage/status"),
   services: () => safeFetch<ServicesStatus>("/api/services/status"),
+  serviceBindings: () => safeFetch<ServiceBindings>("/api/services/bindings"),
   logs: (tail?: number) =>
     safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
   storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
+  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
   /** Gera um plano novo a cada chamada (persiste arquivo) — só sob ação explícita do usuário. */
   organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan"),

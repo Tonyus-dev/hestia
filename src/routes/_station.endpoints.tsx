@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_station/endpoints")({
       { title: "Héstia Console — Endpoints" },
       { name: "description", content: "Contratos /api expostos pela Chama Local." },
       { property: "og:title", content: "Héstia Console — Endpoints" },
-      { property: "og:description", content: "Endpoints somente leitura da Chama Local." },
+      { property: "og:description", content: "Endpoints modo protegido da Chama Local." },
     ],
   }),
   component: EndpointsPage,
@@ -23,18 +23,27 @@ function EndpointsPage() {
 
   useEffect(() => {
     let alive = true;
-    HESTIA.endpoints.forEach(async (e) => {
-      const p = await hestiaApi.ping(e.path);
-      if (!alive) return;
-      setPings((prev) => ({ ...prev, [e.path]: p }));
-    });
+    HESTIA.endpoints
+      .filter((e) => e.method === "GET")
+      .forEach(async (e) => {
+        const p = await hestiaApi.ping(e.path);
+        if (!alive) return;
+        setPings((prev) => ({ ...prev, [e.path]: p }));
+      });
     return () => {
       alive = false;
     };
   }, []);
 
   const copyCurl = async (path: string) => {
-    const cmd = `curl -s ${hestiaApi.absoluteUrl(path)} | jq`;
+    const e = HESTIA.endpoints.find((x) => x.path === path);
+    const cmd =
+      e?.method === "POST"
+        ? `curl -s -X POST ${hestiaApi.absoluteUrl(path)} \
+  -H "Content-Type: application/json" \
+  -H "X-Hestia-Local-Confirm: organize" \
+  -d '{"planId":"plan_...","mode":"apply"}' | jq`
+        : `curl -s ${hestiaApi.absoluteUrl(path)} | jq`;
     try {
       await navigator.clipboard.writeText(cmd);
       setCopied(path);
@@ -52,8 +61,8 @@ function EndpointsPage() {
           Contratos da Chama
         </h1>
         <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
-          Todos os endpoints são <code>GET</code> e somente leitura. Nenhum aceita comando
-          arbitrário.
+          Endpoints separados por leitura, ações locais e Presence-safe. POST não recebe link nem
+          ping automático.
         </p>
       </header>
 
@@ -66,14 +75,20 @@ function EndpointsPage() {
               className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-5 flex flex-col gap-3"
             >
               <div className="flex items-baseline justify-between gap-3">
-                <a
-                  href={hestiaApi.absoluteUrl(e.path)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-[13.5px] text-[color:var(--kaline-text)] hover:text-[color:var(--kaline-copper)] break-all"
-                >
-                  GET {e.path}
-                </a>
+                {e.method === "GET" ? (
+                  <a
+                    href={hestiaApi.absoluteUrl(e.path)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-[13.5px] text-[color:var(--kaline-text)] hover:text-[color:var(--kaline-copper)] break-all"
+                  >
+                    GET {e.path}
+                  </a>
+                ) : (
+                  <span className="font-mono text-[13.5px] text-[color:var(--kaline-text)] break-all">
+                    POST {e.path}
+                  </span>
+                )}
                 <span
                   className={
                     "text-[10px] uppercase tracking-[0.22em] " +
@@ -84,7 +99,13 @@ function EndpointsPage() {
                         : "text-[color:var(--kaline-ember)]")
                   }
                 >
-                  {p == null ? "consultando" : p.ok ? `ok ${p.status}` : "offline"}
+                  {e.method === "POST"
+                    ? "manual"
+                    : p == null
+                      ? "consultando"
+                      : p.ok
+                        ? `ok ${p.status}`
+                        : "offline"}
                 </span>
               </div>
               <p className="text-[12.5px] text-[color:var(--kaline-muted)]">{e.purpose}</p>
@@ -105,7 +126,7 @@ function EndpointsPage() {
               </div>
               <div className="flex items-center justify-between gap-3 pt-1">
                 <code className="text-[11px] text-[color:var(--kaline-faint)] truncate">
-                  curl {hestiaApi.absoluteUrl(e.path)}
+                  {e.method} · {e.group}
                 </code>
                 <button
                   type="button"

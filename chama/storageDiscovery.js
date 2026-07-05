@@ -63,7 +63,8 @@ export function parseDfOutput(stdout) {
 export function filterRealVolumes(entries) {
   return entries.filter((e) => {
     if (IGNORED_FSTYPES.has(e.fstype)) return false;
-    if (IGNORED_MOUNT_PREFIXES.some((p) => e.mountpoint === p || e.mountpoint.startsWith(p))) return false;
+    if (IGNORED_MOUNT_PREFIXES.some((p) => e.mountpoint === p || e.mountpoint.startsWith(p)))
+      return false;
     return true;
   });
 }

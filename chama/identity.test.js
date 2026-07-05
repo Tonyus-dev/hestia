@@ -13,7 +13,7 @@ describe("getIdentity", () => {
       mkdtemp(join(tmpdir(), "hestia-identity-"), (err, dir) => {
         if (err) reject(err);
         else resolve(dir);
-      })
+      }),
     );
     // Garante o subdiretório
     await fs.mkdir(tmpDir, { recursive: true });

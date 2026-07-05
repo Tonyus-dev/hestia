@@ -49,7 +49,7 @@ export async function getRecentEvents({ limit = 100 }, dataDir) {
 
     // Filtra arquivos events-*.jsonl, ordena reverso (mais recente primeiro)
     const eventFiles = files
-      .filter(f => f.startsWith("events-") && f.endsWith(".jsonl"))
+      .filter((f) => f.startsWith("events-") && f.endsWith(".jsonl"))
       .sort()
       .reverse();
 
@@ -59,7 +59,7 @@ export async function getRecentEvents({ limit = 100 }, dataDir) {
       const filePath = join(eventsDir, file);
       try {
         const content = await fs.readFile(filePath, "utf8");
-        const lines = content.split("\n").filter(l => l.trim());
+        const lines = content.split("\n").filter((l) => l.trim());
 
         // Lê linhas em reverso (mais recente dentro do arquivo primeiro)
         for (let i = lines.length - 1; i >= 0 && events.length < limit; i--) {

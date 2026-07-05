@@ -15,7 +15,6 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 
-
 function NotFoundComponent() {
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
@@ -83,7 +82,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Console local somente leitura da Héstia, com Chama Local embutida para medir saúde, storage e serviços do servidor.",
+          "Console local modo protegido da Héstia, com Chama Local embutida para medir saúde, storage e serviços do servidor.",
       },
       { name: "author", content: "Estação Kaline" },
       { property: "og:title", content: "Héstia Console — Interface local da Héstia" },
@@ -114,7 +113,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap",
       },
     ],
-
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -156,7 +154,6 @@ function RootComponent() {
           }}
         />
       </TooltipProvider>
-
     </QueryClientProvider>
   );
 }

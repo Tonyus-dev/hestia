@@ -11,8 +11,8 @@ export async function getPresenceSummary(dataDir) {
   const storage = await getStorageStatus();
   const server = getServerStatus();
 
-  const activeServices = services.items.filter(s => s.active).length;
-  const okStorage = storage.items.filter(s => s.status === "ok").length;
+  const activeServices = services.items.filter((s) => s.active).length;
+  const okStorage = storage.items.filter((s) => s.status === "ok").length;
 
   return {
     timestamp: new Date().toISOString(),

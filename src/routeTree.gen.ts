@@ -12,7 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as StationRouteImport } from './routes/_station'
 import { Route as StationIndexRouteImport } from './routes/_station.index'
 import { Route as StationStorageRouteImport } from './routes/_station.storage'
+import { Route as StationSistemaRouteImport } from './routes/_station.sistema'
+import { Route as StationServicosRouteImport } from './routes/_station.servicos'
+import { Route as StationOrganizarRouteImport } from './routes/_station.organizar'
 import { Route as StationLogsRouteImport } from './routes/_station.logs'
+import { Route as StationHistoricoRouteImport } from './routes/_station.historico'
 import { Route as StationEndpointsRouteImport } from './routes/_station.endpoints'
 import { Route as StationConfigRouteImport } from './routes/_station.config'
 
@@ -30,9 +34,29 @@ const StationStorageRoute = StationStorageRouteImport.update({
   path: '/storage',
   getParentRoute: () => StationRoute,
 } as any)
+const StationSistemaRoute = StationSistemaRouteImport.update({
+  id: '/sistema',
+  path: '/sistema',
+  getParentRoute: () => StationRoute,
+} as any)
+const StationServicosRoute = StationServicosRouteImport.update({
+  id: '/servicos',
+  path: '/servicos',
+  getParentRoute: () => StationRoute,
+} as any)
+const StationOrganizarRoute = StationOrganizarRouteImport.update({
+  id: '/organizar',
+  path: '/organizar',
+  getParentRoute: () => StationRoute,
+} as any)
 const StationLogsRoute = StationLogsRouteImport.update({
   id: '/logs',
   path: '/logs',
+  getParentRoute: () => StationRoute,
+} as any)
+const StationHistoricoRoute = StationHistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
   getParentRoute: () => StationRoute,
 } as any)
 const StationEndpointsRoute = StationEndpointsRouteImport.update({
@@ -50,13 +74,21 @@ export interface FileRoutesByFullPath {
   '/': typeof StationIndexRoute
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
+  '/historico': typeof StationHistoricoRoute
   '/logs': typeof StationLogsRoute
+  '/organizar': typeof StationOrganizarRoute
+  '/servicos': typeof StationServicosRoute
+  '/sistema': typeof StationSistemaRoute
   '/storage': typeof StationStorageRoute
 }
 export interface FileRoutesByTo {
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
+  '/historico': typeof StationHistoricoRoute
   '/logs': typeof StationLogsRoute
+  '/organizar': typeof StationOrganizarRoute
+  '/servicos': typeof StationServicosRoute
+  '/sistema': typeof StationSistemaRoute
   '/storage': typeof StationStorageRoute
   '/': typeof StationIndexRoute
 }
@@ -65,21 +97,47 @@ export interface FileRoutesById {
   '/_station': typeof StationRouteWithChildren
   '/_station/config': typeof StationConfigRoute
   '/_station/endpoints': typeof StationEndpointsRoute
+  '/_station/historico': typeof StationHistoricoRoute
   '/_station/logs': typeof StationLogsRoute
+  '/_station/organizar': typeof StationOrganizarRoute
+  '/_station/servicos': typeof StationServicosRoute
+  '/_station/sistema': typeof StationSistemaRoute
   '/_station/storage': typeof StationStorageRoute
   '/_station/': typeof StationIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/config' | '/endpoints' | '/logs' | '/storage'
+  fullPaths:
+    | '/'
+    | '/config'
+    | '/endpoints'
+    | '/historico'
+    | '/logs'
+    | '/organizar'
+    | '/servicos'
+    | '/sistema'
+    | '/storage'
   fileRoutesByTo: FileRoutesByTo
-  to: '/config' | '/endpoints' | '/logs' | '/storage' | '/'
+  to:
+    | '/config'
+    | '/endpoints'
+    | '/historico'
+    | '/logs'
+    | '/organizar'
+    | '/servicos'
+    | '/sistema'
+    | '/storage'
+    | '/'
   id:
     | '__root__'
     | '/_station'
     | '/_station/config'
     | '/_station/endpoints'
+    | '/_station/historico'
     | '/_station/logs'
+    | '/_station/organizar'
+    | '/_station/servicos'
+    | '/_station/sistema'
     | '/_station/storage'
     | '/_station/'
   fileRoutesById: FileRoutesById
@@ -111,11 +169,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationStorageRouteImport
       parentRoute: typeof StationRoute
     }
+    '/_station/sistema': {
+      id: '/_station/sistema'
+      path: '/sistema'
+      fullPath: '/sistema'
+      preLoaderRoute: typeof StationSistemaRouteImport
+      parentRoute: typeof StationRoute
+    }
+    '/_station/servicos': {
+      id: '/_station/servicos'
+      path: '/servicos'
+      fullPath: '/servicos'
+      preLoaderRoute: typeof StationServicosRouteImport
+      parentRoute: typeof StationRoute
+    }
+    '/_station/organizar': {
+      id: '/_station/organizar'
+      path: '/organizar'
+      fullPath: '/organizar'
+      preLoaderRoute: typeof StationOrganizarRouteImport
+      parentRoute: typeof StationRoute
+    }
     '/_station/logs': {
       id: '/_station/logs'
       path: '/logs'
       fullPath: '/logs'
       preLoaderRoute: typeof StationLogsRouteImport
+      parentRoute: typeof StationRoute
+    }
+    '/_station/historico': {
+      id: '/_station/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof StationHistoricoRouteImport
       parentRoute: typeof StationRoute
     }
     '/_station/endpoints': {
@@ -138,7 +224,11 @@ declare module '@tanstack/react-router' {
 interface StationRouteChildren {
   StationConfigRoute: typeof StationConfigRoute
   StationEndpointsRoute: typeof StationEndpointsRoute
+  StationHistoricoRoute: typeof StationHistoricoRoute
   StationLogsRoute: typeof StationLogsRoute
+  StationOrganizarRoute: typeof StationOrganizarRoute
+  StationServicosRoute: typeof StationServicosRoute
+  StationSistemaRoute: typeof StationSistemaRoute
   StationStorageRoute: typeof StationStorageRoute
   StationIndexRoute: typeof StationIndexRoute
 }
@@ -146,7 +236,11 @@ interface StationRouteChildren {
 const StationRouteChildren: StationRouteChildren = {
   StationConfigRoute: StationConfigRoute,
   StationEndpointsRoute: StationEndpointsRoute,
+  StationHistoricoRoute: StationHistoricoRoute,
   StationLogsRoute: StationLogsRoute,
+  StationOrganizarRoute: StationOrganizarRoute,
+  StationServicosRoute: StationServicosRoute,
+  StationSistemaRoute: StationSistemaRoute,
   StationStorageRoute: StationStorageRoute,
   StationIndexRoute: StationIndexRoute,
 }

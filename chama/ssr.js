@@ -33,7 +33,9 @@ export function createSsrFetcher(serverEntryPath) {
   let handlerPromise;
   return async function ssrFetch(req) {
     if (!handlerPromise) {
-      handlerPromise = import(pathToFileURL(serverEntryPath).href).then((mod) => mod.default ?? mod);
+      handlerPromise = import(pathToFileURL(serverEntryPath).href).then(
+        (mod) => mod.default ?? mod,
+      );
     }
     const handler = await handlerPromise;
     const request = buildSsrRequest(req);

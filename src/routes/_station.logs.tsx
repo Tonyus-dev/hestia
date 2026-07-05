@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_station/logs")({
   head: () => ({
     meta: [
       { title: "Héstia Console — Logs" },
-      { name: "description", content: "Logs somente leitura da própria Chama Local." },
+      { name: "description", content: "Logs modo protegido da própria Chama Local." },
       { property: "og:title", content: "Héstia Console — Logs" },
       { property: "og:description", content: "Ring buffer da Chama Local, sem logs do sistema." },
     ],
@@ -18,10 +18,9 @@ export const Route = createFileRoute("/_station/logs")({
   component: LogsPage,
 });
 
-function LogsPage() {
+export function LogsPage() {
   const [tail, setTail] = useState<number>(100);
   const { state, retry, refreshing } = useApi(() => hestiaApi.logs(tail), [tail]);
-
 
   return (
     <div className="space-y-6">
@@ -61,7 +60,14 @@ function LogsPage() {
       {state.status === "loading" && (
         <p className="text-[color:var(--kaline-muted)]">consultando…</p>
       )}
-      {state.status === "unavailable" && <UnavailableNote message={state.message} details={state.details} onRetry={retry} refreshing={refreshing} />}
+      {state.status === "unavailable" && (
+        <UnavailableNote
+          message={state.message}
+          details={state.details}
+          onRetry={retry}
+          refreshing={refreshing}
+        />
+      )}
       {state.status === "ok" && (
         <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-obsidian)]/60 overflow-hidden">
           {state.data.items.length === 0 ? (
