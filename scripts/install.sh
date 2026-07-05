@@ -1,49 +1,109 @@
 #!/usr/bin/env bash
-# Instala a Héstia rodando DIRETO deste checkout do git — sem copiar nada pra /opt.
-# Ideal pra quem acompanha o repo: atualizar é só `git pull && ./scripts/install.sh` de novo
-# (idempotente), sem precisar gerar e reinstalar um .deb novo a cada mudança de código.
-# Pra instalar como app empacotado (menu, `apt remove`), use scripts/build-deb.sh.
+# Instala/reinstala a Héstia direto deste checkout. Idempotente e sem buildar como root.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_NAME="hestia-console"
-
+SERVICE_ONLY=0
+[ "${1:-}" = "--service-only" ] && SERVICE_ONLY=1
 log() { echo "[install] $*"; }
+err() { echo "[install] ERRO: $*" >&2; exit 1; }
 
-# --- Pré-requisitos: falha rápido com mensagem clara. -----------------------
-command -v node >/dev/null 2>&1 || {
-  echo "[install] ERRO: node não encontrado. Instale Node.js 20+ antes de continuar." >&2
-  exit 1
-}
+command -v node >/dev/null 2>&1 || err "node não encontrado. Instale Node.js 20+."
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-if [ "$NODE_MAJOR" -lt 20 ]; then
-  echo "[install] ERRO: Node.js 20+ é necessário (detectado $(node -v))." >&2
-  exit 1
-fi
-command -v npm >/dev/null 2>&1 || {
-  echo "[install] ERRO: npm não encontrado." >&2
-  exit 1
+[ "$NODE_MAJOR" -ge 20 ] || err "Node.js 20+ é necessário (detectado $(node -v))."
+command -v npm >/dev/null 2>&1 || err "npm não encontrado."
+
+run_as_checkout_user() {
+  if [ "$(id -u)" = "0" ] && [ -n "${SUDO_USER:-}" ]; then
+    local home
+    home="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+    sudo -H -u "$SUDO_USER" env HOME="$home" "$@"
+  else
+    "$@"
+  fi
 }
 
-log "instalando dependências"
-(cd "$ROOT_DIR" && npm install)
+fix_checkout_owners() {
+  [ "$(id -u)" = "0" ] && [ -n "${SUDO_USER:-}" ] || return 0
+  local paths=()
+  [ -e "$ROOT_DIR/dist" ] && [ "$(stat -c %U "$ROOT_DIR/dist")" = "root" ] && paths+=("$ROOT_DIR/dist")
+  [ -e "$ROOT_DIR/.output" ] && [ "$(stat -c %U "$ROOT_DIR/.output")" = "root" ] && paths+=("$ROOT_DIR/.output")
+  if [ "${#paths[@]}" -gt 0 ]; then
+    log "dist/.output pertence a root; corrigindo dono dentro do checkout"
+    chown -R "$SUDO_USER:$SUDO_USER" "${paths[@]}"
+  fi
+}
 
-log "buildando o frontend"
-(cd "$ROOT_DIR" && npm run build)
+install_deps_and_build() {
+  fix_checkout_owners
+  if [ -f "$ROOT_DIR/package-lock.json" ]; then
+    log "instalando dependências com npm ci"
+    if ! run_as_checkout_user bash -lc "cd '$ROOT_DIR' && npm ci"; then
+      log "npm ci falhou. Verifique package-lock.json; tentando npm install como fallback local."
+      run_as_checkout_user bash -lc "cd '$ROOT_DIR' && npm install"
+    fi
+  elif [ ! -d "$ROOT_DIR/node_modules" ]; then
+    log "package-lock ausente e node_modules ausente; rodando npm install"
+    run_as_checkout_user bash -lc "cd '$ROOT_DIR' && npm install"
+  else
+    log "node_modules já existe; pulando npm install"
+  fi
+  log "buildando frontend sem sudo"
+  run_as_checkout_user bash -lc "cd '$ROOT_DIR' && npm run build"
+}
 
-if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] && [ "$(id -u)" = "0" ]; then
-  log "instalando serviço systemd (aponta direto pra este checkout: $ROOT_DIR)"
-  sed "s#__WORKDIR__#$ROOT_DIR#g" "$ROOT_DIR/packaging/hestia-console.service.in" \
-    > "/etc/systemd/system/${SERVICE_NAME}.service"
+has_build() {
+  [ -d "$ROOT_DIR/dist/client" ] && { [ -f "$ROOT_DIR/dist/server/index.mjs" ] || [ -f "$ROOT_DIR/dist/server/server.js" ] || [ -f "$ROOT_DIR/.output/server/index.mjs" ]; }
+}
+
+diagnose_kaline() {
+  [ -e /KALINE ] || { log "aviso: /KALINE não existe ainda."; return 0; }
+  if command -v findmnt >/dev/null 2>&1 && findmnt -n -T /KALINE >/dev/null 2>&1; then
+    local fs owner
+    fs="$(findmnt -n -T /KALINE -o FSTYPE | head -n1)"
+    owner="$(stat -c %U /KALINE 2>/dev/null || true)"
+    case "$fs" in
+      fuseblk|ntfs|ntfs-3g)
+        log "aviso: /KALINE está em $fs. Permissões são controladas pelas opções de montagem; chown/chgrp/chmod podem não funcionar."
+        log "para organizer/write, use: HESTIA_SERVICE_USER=${owner:-seu_usuario} sudo -E npm run install:local"
+        ;;
+    esac
+  fi
+}
+
+install_service() {
+  [ "$(id -u)" = "0" ] || { log "sem root: build pronto, mas serviço não instalado. Use: sudo npm run install:service"; return 0; }
+  command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] || { log "systemd indisponível: serviço não instalado."; return 0; }
+  log "instalando serviço systemd em /etc/systemd/system/${SERVICE_NAME}.service"
+  sed "s#__WORKDIR__#$ROOT_DIR#g" "$ROOT_DIR/packaging/hestia-console.service.in" > "/etc/systemd/system/${SERVICE_NAME}.service"
+  mkdir -p "/etc/systemd/system/${SERVICE_NAME}.service.d"
+  if [ -n "${HESTIA_SERVICE_USER:-}" ]; then
+    id "$HESTIA_SERVICE_USER" >/dev/null 2>&1 || err "HESTIA_SERVICE_USER=$HESTIA_SERVICE_USER não existe."
+    cat > "/etc/systemd/system/${SERVICE_NAME}.service.d/10-user.conf" <<OVERRIDE
+[Service]
+DynamicUser=no
+User=$HESTIA_SERVICE_USER
+Group=$HESTIA_SERVICE_USER
+ReadWritePaths=/KALINE
+OVERRIDE
+    log "modo organizer/write: serviço rodará como $HESTIA_SERVICE_USER"
+  else
+    rm -f "/etc/systemd/system/${SERVICE_NAME}.service.d/10-user.conf"
+    log "modo protegido padrão: DynamicUser=yes. Para NTFS, use HESTIA_SERVICE_USER=<usuario> sudo -E npm run install:local"
+  fi
   systemctl daemon-reload
   systemctl enable --now "${SERVICE_NAME}.service"
-  log "serviço instalado e rodando em http://127.0.0.1:4517"
-  log "pra atualizar depois: git pull && ./scripts/install.sh (idempotente, reinicia o serviço)"
-  log "IMPORTANTE: o serviço roda sem privilégio de root (DynamicUser=yes). Pra o organizer"
-  log "conseguir escrever em /KALINE: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE"
-  log "e o checkout ($ROOT_DIR) precisa ser legível por 'outros' (chmod o+rX se estiver num \$HOME 700/750)."
+  systemctl restart "${SERVICE_NAME}.service"
+  log "serviço instalado em http://127.0.0.1:4517"
+}
+
+diagnose_kaline
+if [ "$SERVICE_ONLY" = "0" ]; then
+  install_deps_and_build
+  has_build || err "build não encontrado após npm run build. Caminhos esperados: dist/client + dist/server/index.mjs|server.js ou .output/server/index.mjs"
 else
-  log "sem systemd rodando como init (ou sem privilégio de root): build feito, sem serviço instalado."
-  log "rode manualmente com: npm run hestia"
-  log "ou rode este script de novo com sudo, num host com systemd de verdade, pra instalar o serviço."
+  fix_checkout_owners
+  has_build || err "build ausente. Rode npm run setup:local antes de sudo npm run install:service."
 fi
+install_service

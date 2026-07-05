@@ -74,47 +74,60 @@ npm run dev
 A UI abre normalmente. Sem a Chama rodando, cada card mostra
 `Aguardando Chama Local` — nenhuma métrica é inventada.
 
-## Instalação local (Linux)
+## Instalação local limpa (Linux)
 
-Pré-requisitos: **Node.js 20+**, `systemctl` para /api/services/status,
-`df` para /api/storage/status (padrão em qualquer distro).
+Fluxo repetível:
 
 ```bash
-git clone <este-repo> hestia-console
-cd hestia-console
-npm install
-npm run hestia          # build + start em http://localhost:4517
+git clone https://github.com/Tonyus-dev/hestia.git
+cd hestia
+npm ci
+npm run build
+sudo npm run install:local
+```
+
+Sem symlink manual, sem editar `/etc/fstab`, sem criar `dist` como root, sem Cloudflare e sem aplicar organizer automaticamente.
+
+Scripts úteis:
+
+```bash
+npm run setup:local      # npm ci/install + build como usuário normal
+sudo npm run install:service  # só instala/reinstala systemd; exige build pronto
+sudo npm run install:local    # fluxo completo seguro/idempotente
+npm run doctor           # diagnóstico read-only
+npm run kaline:init      # cria apenas diretórios vazios de /KALINE
+```
+
+Se `/KALINE` estiver em NTFS/fuseblk, permissões vêm das opções de montagem e `chown/chmod` podem não funcionar. Para permitir organizer/write no HD montado pelo seu usuário:
+
+```bash
+HESTIA_SERVICE_USER="$USER" sudo -E npm run install:local
+```
+
+Sem `HESTIA_SERVICE_USER`, o serviço mantém o modo protegido padrão com `DynamicUser=yes`. Com `HESTIA_SERVICE_USER`, o instalador cria um override systemd com `DynamicUser=no`, `User=<usuário>`, `Group=<usuário>` e `ReadWritePaths=/KALINE`. O instalador só diagnostica NTFS; ele não edita `/etc/fstab` nem tenta corrigir mount.
+
+Atualização:
+
+```bash
+git pull
+npm ci
+npm run build
+sudo systemctl restart hestia-console
+```
+
+Ou, usando o instalador idempotente:
+
+```bash
+git pull
+sudo npm run install:local
 ```
 
 Para desenvolvimento local do backend com hot reload:
 
 ```bash
 npm run build
-npm run dev:local       # reinicia a Chama a cada mudança em hestia.js/chama/*
+npm run dev:local
 ```
-
-## Rodar como serviço systemd direto do repo (recomendado pra quem acompanha atualizações)
-
-`scripts/install.sh` builda e — se rodado como root num host com systemd de verdade — instala
-um serviço systemd que aponta **direto pra este checkout do git**, sem copiar nada pra `/opt`.
-Atualizar depois é só isso, sem gerar nem reinstalar pacote nenhum:
-
-```bash
-git pull
-npm run install:local   # idempotente: builda de novo e reinicia o serviço
-```
-
-Primeira instalação:
-
-```bash
-git clone <este-repo> hestia-console
-cd hestia-console
-sudo npm run install:local
-```
-
-Sem `sudo`/sem systemd, o script só builda e sugere `npm run hestia` manual — não trava, não
-tenta se auto-elevar. Requer Node.js 20+ (`engines.node` no `package.json` documenta isso; o
-script verifica e falha com mensagem clara se a versão for menor).
 
 ## Instalar como app no Linux Mint Xfce
 

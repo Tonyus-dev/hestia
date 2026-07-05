@@ -428,17 +428,19 @@ function firstExisting(paths) {
   return paths.find((p) => existsSync(p));
 }
 
+const serverEntryCandidates = [
+  join(__dirname, "dist", "server", "index.mjs"),
+  join(__dirname, "dist", "server", "server.js"),
+  join(__dirname, ".output", "server", "index.mjs"),
+];
 const buildTargets = [
   {
     publicDir: join(__dirname, "dist", "client"),
-    serverEntry: firstExisting([
-      join(__dirname, "dist", "server", "index.mjs"),
-      join(__dirname, "dist", "server", "server.js"),
-    ]),
+    serverEntry: firstExisting(serverEntryCandidates),
   },
   {
     publicDir: join(__dirname, ".output", "public"),
-    serverEntry: join(__dirname, ".output", "server", "index.mjs"),
+    serverEntry: firstExisting(serverEntryCandidates),
   },
 ];
 const build = buildTargets.find((b) => existsSync(b.publicDir));
@@ -463,13 +465,37 @@ if (build) {
       }
     });
   } else {
-    log("warn", "bundle SSR não encontrado — só estáticos serão servidos (rotas da SPA podem 404)");
-    app.setNotFoundHandler((_req, reply) =>
-      reply.code(404).send({ ok: false, error: "não encontrado" }),
+    log(
+      "warn",
+      `bundle SSR não encontrado — caminhos testados: ${serverEntryCandidates.join(", ")}`,
     );
+    app.setNotFoundHandler((req, reply) => {
+      if (req.url.startsWith("/api/")) {
+        reply.code(404).send({ ok: false, error: "não encontrado" });
+        return;
+      }
+      reply.code(404).send({
+        ok: false,
+        error: "Interface não encontrada",
+        hint: "Rode npm run build e reinicie hestia-console",
+        checkedPaths: serverEntryCandidates,
+      });
+    });
   }
 } else {
-  log("warn", "frontend buildado não encontrado — rode `npm run build` antes de `npm run start`");
+  log("warn", "frontend buildado não encontrado — rode npm run build antes de iniciar a Héstia");
+  app.setNotFoundHandler((req, reply) => {
+    if (req.url.startsWith("/api/")) {
+      reply.code(404).send({ ok: false, error: "não encontrado" });
+      return;
+    }
+    reply.code(404).send({
+      ok: false,
+      error: "Interface não encontrada",
+      hint: "Rode npm run build e reinicie hestia-console",
+      checkedPaths: serverEntryCandidates,
+    });
+  });
 }
 
 log("info", `Chama Local iniciando em ${config.host}:${config.port}`);
