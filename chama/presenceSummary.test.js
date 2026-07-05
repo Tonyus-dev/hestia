@@ -13,7 +13,7 @@ describe("getPresenceSummary", () => {
       mkdtemp(join(tmpdir(), "hestia-summary-"), (err, dir) => {
         if (err) reject(err);
         else resolve(dir);
-      })
+      }),
     );
     await fs.mkdir(tmpDir, { recursive: true });
   });

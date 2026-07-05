@@ -14,12 +14,8 @@ export function diffServiceTransitions(prevSnapshot, currSnapshot) {
   if (!prevSnapshot?.services) return [];
 
   const transitions = [];
-  const prevByName = Object.fromEntries(
-    prevSnapshot.services.items.map(s => [s.name, s])
-  );
-  const currByName = Object.fromEntries(
-    currSnapshot.services.items.map(s => [s.name, s])
-  );
+  const prevByName = Object.fromEntries(prevSnapshot.services.items.map((s) => [s.name, s]));
+  const currByName = Object.fromEntries(currSnapshot.services.items.map((s) => [s.name, s]));
 
   // Detecta mudanças de estado
   for (const curr of currSnapshot.services.items) {
@@ -113,7 +109,7 @@ export async function runSnapshotCycle(dataDir, identityData) {
               to: transition.to,
             },
           },
-          dataDir
+          dataDir,
         );
       }
     }

@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_station/config")({
   head: () => ({
     meta: [
       { title: "Héstia Console — Configuração" },
-      { name: "description", content: "Configuração somente leitura da Chama Local." },
+      { name: "description", content: "Configuração modo protegido da Chama Local." },
       { property: "og:title", content: "Héstia Console — Configuração" },
       { property: "og:description", content: "Host, porta, modo e paths observados pela Chama." },
     ],
@@ -19,14 +19,13 @@ export const Route = createFileRoute("/_station/config")({
 const expected = {
   host: HESTIA.defaultHost,
   port: HESTIA.defaultPort,
-  mode: "local-readonly",
+  mode: "modo protegido",
   readonly: true,
   agentName: HESTIA.agentName,
 };
 
 function ConfigPage() {
   const { state, retry, refreshing } = useApi(hestiaApi.config);
-
 
   return (
     <div className="space-y-6">
@@ -37,11 +36,18 @@ function ConfigPage() {
         </h1>
       </header>
 
-      {state.status === "loading" && <p className="text-[color:var(--kaline-muted)]">consultando…</p>}
+      {state.status === "loading" && (
+        <p className="text-[color:var(--kaline-muted)]">consultando…</p>
+      )}
 
       {state.status === "unavailable" && (
         <>
-          <UnavailableNote message={state.message} details={state.details} onRetry={retry} refreshing={refreshing} />
+          <UnavailableNote
+            message={state.message}
+            details={state.details}
+            onRetry={retry}
+            refreshing={refreshing}
+          />
           <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-5">
             <p className="kaline-eyebrow">Configuração esperada (não confirmada)</p>
             <div className="mt-3 flex flex-col gap-2">

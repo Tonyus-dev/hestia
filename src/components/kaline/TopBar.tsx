@@ -30,7 +30,7 @@ export function TopBar() {
                   Héstia Console
                 </span>
                 <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-[color:var(--kaline-faint)]">
-                  Chama Local · somente leitura
+                  Chama Local · modo protegido
                 </p>
               </div>
               <div className="p-4 overflow-y-auto flex-1">
@@ -61,7 +61,7 @@ export function TopBar() {
 
         <div className="w-10 h-10 lg:w-auto lg:h-auto flex items-center justify-end">
           <span className="hidden lg:inline text-[10px] uppercase tracking-[0.28em] text-[color:var(--kaline-faint)]">
-            somente leitura
+            modo protegido
           </span>
         </div>
       </div>

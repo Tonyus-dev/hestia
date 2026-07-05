@@ -1,5 +1,5 @@
 // Héstia Console — servidor local Fastify que embute a Chama Local
-// e serve o frontend buildado. Majoritariamente somente leitura — a única exceção é
+// e serve o frontend buildado. Majoritariamente modo protegido — a única exceção é
 // POST /api/local/organizer/apply, que move/copia arquivos dentro de um plano gerado pela
 // própria Héstia e só roda com confirmação explícita (ver chama/organizerApply.js).
 import Fastify from "fastify";
@@ -20,6 +20,7 @@ import { applyOrganizerPlan, getOrganizerRuns, getOrganizerRun } from "./chama/o
 import { undoOrganizerRun } from "./chama/organizerUndo.js";
 import { redoOrganizerRun } from "./chama/organizerRedo.js";
 import { getServicesStatus } from "./chama/services.js";
+import { getHardwareStatus, getHardwareConfig } from "./chama/hardware.js";
 import { getServiceBindings } from "./chama/serviceBindings.js";
 import { getLogs, log } from "./chama/logs.js";
 import {
@@ -215,6 +216,8 @@ app.addHook("onSend", async (req, reply, payload) => {
 
 app.get("/api/health", async () => getHealth());
 app.get("/api/server/status", async () => getServerStatus());
+app.get("/api/hardware/status", async () => await getHardwareStatus());
+app.get("/api/hardware/config", async () => await getHardwareConfig());
 app.get("/api/storage/status", async () => await getStorageStatus());
 app.get("/api/storage/discover", async () => await discoverVolumes());
 app.get("/api/storage/model", async () => getStorageModel());

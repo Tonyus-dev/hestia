@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseDfOutput, filterRealVolumes, baseDiskName, discoverVolumes } from "./storageDiscovery.js";
+import {
+  parseDfOutput,
+  filterRealVolumes,
+  baseDiskName,
+  discoverVolumes,
+} from "./storageDiscovery.js";
 
 const SAMPLE_DF = `Filesystem     Type  1024-blocks    Used Available Capacity Mounted on
 tmpfs          tmpfs     8230588       0   8230588       0% /dev/shm
@@ -32,7 +37,9 @@ describe("parseDfOutput", () => {
   });
 
   it("retorna [] para entrada vazia", () => {
-    expect(parseDfOutput("Filesystem Type 1024-blocks Used Available Capacity Mounted on")).toEqual([]);
+    expect(parseDfOutput("Filesystem Type 1024-blocks Used Available Capacity Mounted on")).toEqual(
+      [],
+    );
   });
 });
 

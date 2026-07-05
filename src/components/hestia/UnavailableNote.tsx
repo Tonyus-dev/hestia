@@ -30,18 +30,12 @@ function sortedReplacer() {
 }
 
 export function formatJson(value: unknown, compact: boolean): string {
-  return compact
-    ? JSON.stringify(value, sortedReplacer())
-    : stableStringify(value);
+  return compact ? JSON.stringify(value, sortedReplacer()) : stableStringify(value);
 }
 
 async function copyErrorJson(payload: unknown) {
   const text = stableStringify(payload);
-  await copyToClipboard(
-    text,
-    "JSON copiado",
-    `${text.length} caracteres · chaves ordenadas`,
-  );
+  await copyToClipboard(text, "JSON copiado", `${text.length} caracteres · chaves ordenadas`);
 }
 
 function downloadErrorJson(payload: unknown, details: ApiErrorDetails) {
@@ -97,7 +91,10 @@ function formatStamp(raw?: string): string {
 
 function sanitizeRouteSlug(route?: string): string {
   const base = route ? route.replace(/^\//, "").replace(/[^a-zA-Z0-9_-]/g, "_") : "error";
-  const slug = base.replace(/_+/g, "_").replace(/^_+|_+$/g, "").slice(0, 100);
+  const slug = base
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 100);
   return slug || "error";
 }
 
@@ -105,7 +102,10 @@ function buildPayload(message: string | undefined, details: ApiErrorDetails) {
   return { message: message ?? null, ...details };
 }
 
-export function buildReadableDetails(message: string | undefined, details: ApiErrorDetails): string {
+export function buildReadableDetails(
+  message: string | undefined,
+  details: ApiErrorDetails,
+): string {
   const lines = [
     `Héstia Console — detalhes do erro`,
     ``,
@@ -122,7 +122,6 @@ export function buildReadableDetails(message: string | undefined, details: ApiEr
   ];
   return lines.join("\n");
 }
-
 
 async function copyToClipboard(text: string, successTitle: string, successDescription: string) {
   try {
@@ -154,7 +153,6 @@ async function copyReadableDetails(message: string | undefined, details: ApiErro
     `${text.length} caracteres · status, rota, code, error, hint, at`,
   );
 }
-
 
 const ORIGIN_LABEL: Record<ApiErrorDetails["origin"], string> = {
   "no-base": "Sem host local",
@@ -297,7 +295,6 @@ export function UnavailableNote({
   );
 }
 
-
 function InlineField({ label, value }: { label: string; value?: string }) {
   return (
     <>
@@ -317,7 +314,6 @@ function getFocusable(root: HTMLElement): HTMLElement[] {
   );
 }
 
-
 function ErrorModal({
   message,
   details,
@@ -333,7 +329,6 @@ function ErrorModal({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
-
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -429,7 +424,9 @@ function ErrorModal({
           <div className="flex flex-wrap gap-2 pt-2">
             <Chip
               label="código"
-              value={details.code ?? (details.httpStatus ? `HTTP_${details.httpStatus}` : undefined)}
+              value={
+                details.code ?? (details.httpStatus ? `HTTP_${details.httpStatus}` : undefined)
+              }
               tone="code"
             />
             <Chip label="rota" value={details.route} tone="route" />
@@ -613,15 +610,14 @@ function JsonPreview({ payload, compact }: { payload: unknown; compact: boolean 
   return <RawBody text={text} />;
 }
 
-
 export type CardStatus = "ok" | "warn" | "error" | "loading" | "idle";
 
 const STATUS_META: Record<CardStatus, { color: string; label: string; pulse: boolean }> = {
-  ok:      { color: "#4ade80", label: "operacional",  pulse: false },
-  warn:    { color: "#facc15", label: "atenção",      pulse: false },
-  error:   { color: "#f87171", label: "indisponível", pulse: false },
-  loading: { color: "#60a5fa", label: "consultando",  pulse: true  },
-  idle:    { color: "#60a5fa", label: "informativo",  pulse: false },
+  ok: { color: "#4ade80", label: "operacional", pulse: false },
+  warn: { color: "#facc15", label: "atenção", pulse: false },
+  error: { color: "#f87171", label: "indisponível", pulse: false },
+  loading: { color: "#60a5fa", label: "consultando", pulse: true },
+  idle: { color: "#60a5fa", label: "informativo", pulse: false },
 };
 
 function StatusLight({ status }: { status: CardStatus }) {

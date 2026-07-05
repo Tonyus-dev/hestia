@@ -104,7 +104,7 @@ describe("writeSnapshot / getLatestSnapshot", () => {
       mkdtemp(join(tmpdir(), "hestia-snapshots-"), (err, dir) => {
         if (err) reject(err);
         else resolve(dir);
-      })
+      }),
     );
     await fs.mkdir(join(tmpDir, "snapshots"), { recursive: true });
   });

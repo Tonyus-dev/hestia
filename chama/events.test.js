@@ -34,7 +34,7 @@ describe("appendEvent / getRecentEvents", () => {
       mkdtemp(join(tmpdir(), "hestia-events-"), (err, dir) => {
         if (err) reject(err);
         else resolve(dir);
-      })
+      }),
     );
     await fs.mkdir(join(tmpDir, "events"), { recursive: true });
   });
@@ -87,7 +87,7 @@ describe("appendEvent / getRecentEvents", () => {
 
     const events = await getRecentEvents({ limit: 10 }, tmpDir);
     expect(events.length).toBe(2);
-    expect(events.every(e => e.type === "valid")).toBe(true);
+    expect(events.every((e) => e.type === "valid")).toBe(true);
   });
 
   it("retorna [] se não há eventos", async () => {

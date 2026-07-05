@@ -14,7 +14,7 @@ export function StationShell({ children }: { children: ReactNode }) {
               Console local
             </p>
             <p className="mt-1 serif text-[15px] text-[color:var(--kaline-muted)]">
-              Chama Local · somente leitura
+              Chama Local · modo protegido
             </p>
           </div>
           <div className="px-3 py-2 flex-1 overflow-y-auto">

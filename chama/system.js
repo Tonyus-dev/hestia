@@ -14,6 +14,9 @@ export function getServerStatus() {
       checkedAt: new Date().toISOString(),
     };
   } catch {
-    return { error: "Não foi possível ler o estado do sistema", checkedAt: new Date().toISOString() };
+    return {
+      error: "Não foi possível ler o estado do sistema",
+      checkedAt: new Date().toISOString(),
+    };
   }
 }
