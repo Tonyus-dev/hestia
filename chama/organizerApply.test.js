@@ -17,12 +17,14 @@ describe("applyOrganizerPlan", () => {
 
   beforeEach(async () => {
     workDir = await makeTmpDir("hestia-apply-work-");
+    process.env.HESTIA_KALINE_ROOT = workDir;
     dataDir = await makeTmpDir("hestia-apply-data-");
     await fs.mkdir(join(dataDir, "events"), { recursive: true });
   });
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    delete process.env.HESTIA_KALINE_ROOT;
     for (const dir of [workDir, dataDir]) {
       try {
         await fs.rm(dir, { recursive: true, force: true });
@@ -135,8 +137,8 @@ describe("applyOrganizerPlan", () => {
 
     const manifest = await applyOrganizerPlan(plan, dataDir);
 
-    expect(manifest.status).toBe("failed");
-    expect(manifest.operations[0].status).toBe("failed");
+    expect(manifest.status).toBe("partially_applied");
+    expect(manifest.operations[0].status).toBe("skipped");
   });
 
   it("faz fallback copy+verify+unlink quando rename lança EXDEV (cross-device)", async () => {
@@ -188,6 +190,88 @@ describe("applyOrganizerPlan", () => {
     const manifest = await applyOrganizerPlan(plan, dataDir);
 
     expect(manifest.status).toBe("partially_applied");
-    expect(manifest.summary).toEqual({ total: 2, ok: 1, failed: 1, skipped: 0 });
+    expect(manifest.summary).toEqual({ total: 2, ok: 1, failed: 0, skipped: 1 });
+  });
+});
+
+describe("applyOrganizerPlan safety gates", () => {
+  let workDir;
+  let dataDir;
+
+  beforeEach(async () => {
+    workDir = await makeTmpDir("hestia-apply-safety-work-");
+    process.env.HESTIA_KALINE_ROOT = workDir;
+    dataDir = await makeTmpDir("hestia-apply-safety-data-");
+    await fs.mkdir(join(dataDir, "events"), { recursive: true });
+  });
+
+  afterEach(async () => {
+    delete process.env.HESTIA_KALINE_ROOT;
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it("recusa plano velho no apply", async () => {
+    await expect(
+      applyOrganizerPlan(
+        { planId: "plan_old", generatedAt: "2026-01-01T00:00:00.000Z", items: [] },
+        dataDir,
+      ),
+    ).rejects.toMatchObject({ code: "EPLANEXPIRED" });
+  });
+
+  it("aceita plano recente", async () => {
+    const manifest = await applyOrganizerPlan(
+      { planId: "plan_recent", generatedAt: new Date().toISOString(), items: [] },
+      dataDir,
+    );
+    expect(manifest.status).toBe("applied");
+  });
+
+  it("recusa target fora de /KALINE sem derrubar o lote", async () => {
+    const sourcePath = join(workDir, "origem.txt");
+    await fs.writeFile(sourcePath, "x");
+    const manifest = await applyOrganizerPlan(
+      {
+        planId: "plan_outside",
+        generatedAt: new Date().toISOString(),
+        items: [
+          {
+            id: "i1",
+            sourcePath,
+            targetPath: join(dataDir, "fora.txt"),
+            action: "move",
+            status: "planned",
+          },
+        ],
+      },
+      dataDir,
+    );
+    expect(manifest.operations[0]).toMatchObject({
+      status: "skipped",
+      error: "targetPath fora de /KALINE",
+    });
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("x");
+  });
+
+  it("plano com mais de 5000 itens exige confirmação extra", async () => {
+    const items = Array.from({ length: 5001 }, (_, i) => ({
+      id: `i${i}`,
+      sourcePath: join(workDir, `${i}.txt`),
+      targetPath: join(workDir, "dest", `${i}.txt`),
+      action: "move",
+      status: "planned",
+    }));
+    await expect(
+      applyOrganizerPlan(
+        {
+          planId: "plan_big",
+          generatedAt: new Date().toISOString(),
+          summary: { planned: 5001 },
+          items,
+        },
+        dataDir,
+      ),
+    ).rejects.toMatchObject({ code: "ELARGEPLANCONFIRM" });
   });
 });

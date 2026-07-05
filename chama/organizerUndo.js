@@ -16,6 +16,16 @@ import {
 } from "./organizerApply.js";
 import { appendEvent } from "./events.js";
 
+async function targetChanged(op) {
+  if (op.targetSize == null || op.targetMtimeMs == null) return false;
+  try {
+    const st = await fs.stat(op.to);
+    return st.size !== op.targetSize || Math.abs(st.mtimeMs - op.targetMtimeMs) > 5;
+  } catch {
+    return false;
+  }
+}
+
 async function undoOperation(op) {
   if (op.status !== "ok") {
     return {
@@ -28,6 +38,9 @@ async function undoOperation(op) {
   if (op.action === "move") {
     if (!(await targetExists(op.to))) {
       return { ...op, undoStatus: "failed", undoError: "arquivo não está mais no destino" };
+    }
+    if (await targetChanged(op)) {
+      return { ...op, undoStatus: "skipped", undoError: "destino foi alterado após a execução" };
     }
     if (await targetExists(op.from)) {
       return {
@@ -55,6 +68,9 @@ async function undoOperation(op) {
   }
   if (!(await targetExists(op.to))) {
     return { ...op, undoStatus: "skipped", undoError: "cópia já não existe no destino" };
+  }
+  if (await targetChanged(op)) {
+    return { ...op, undoStatus: "skipped", undoError: "destino foi alterado após a execução" };
   }
   try {
     await fs.unlink(op.to);

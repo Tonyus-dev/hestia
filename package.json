@@ -20,7 +20,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "setup:local": "bash scripts/setup-local.sh",
+    "install:service": "bash scripts/install.sh --service-only",
+    "doctor": "bash scripts/doctor.sh",
+    "kaline:init": "bash scripts/kaline-init.sh"
   },
   "dependencies": {
     "@fastify/static": "^9.1.3",

@@ -35,6 +35,11 @@ export type Health = {
   timestamp: string;
   processUptime: number;
   readonly: boolean;
+  frontendBuilt?: boolean;
+  kalineMounted?: boolean;
+  kalineWritable?: boolean;
+  serviceUser?: string;
+  dataDirWritable?: boolean;
 };
 
 export type ServerStatus = {
@@ -228,7 +233,10 @@ export type OrganizerPlan = {
     conflicts: number;
     ignored?: number;
     quarantined?: number;
+    byExtension?: Record<string, number>;
+    byTargetArea?: Record<string, number>;
   };
+  dryRun?: boolean;
 };
 
 export type OrganizerOperation = {
@@ -472,11 +480,14 @@ export const hestiaApi = {
   /** Gera um plano novo a cada chamada (persiste arquivo) — só sob ação explícita do usuário. */
   organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan"),
   /** Aplica um plano já gerado. Único POST da Héstia — exige o header de confirmação. */
-  organizerApply: (planId: string) =>
+  organizerApply: (planId: string, largePlanConfirm = false) =>
     safePost<OrganizerRunManifest>(
       "/api/local/organizer/apply",
       { planId, mode: "apply" },
-      { "x-hestia-local-confirm": "organize" },
+      {
+        "x-hestia-local-confirm": "organize",
+        ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
+      },
     ),
   organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
   organizerRun: (runId: string) =>
@@ -496,17 +507,25 @@ export const hestiaApi = {
   /** URL absoluta para exibir/copiar (ex.: comando curl). Sempre localhost:4517. */
   absoluteUrl: (path: string) => `http://localhost:${CHAMA_PORT}${path}`,
   /** Ping simples usado pela página /endpoints. Só bate quando estamos em host local. */
-  ping: async (path: string): Promise<{ status: number | "erro"; ok: boolean }> => {
+  ping: async (
+    path: string,
+  ): Promise<{ status: number | "erro"; ok: boolean; ms: number; error?: string }> => {
     const base = resolveBase();
-    if (!base) return { status: "erro", ok: false };
+    if (!base) return { status: "erro", ok: false, ms: 0, error: "sem base local" };
+    const started = performance.now();
     try {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 3000);
       const res = await fetch(`${base}${path}`, { signal: controller.signal });
       clearTimeout(t);
-      return { status: res.status, ok: res.ok };
-    } catch {
-      return { status: "erro", ok: false };
+      return { status: res.status, ok: res.ok, ms: Math.round(performance.now() - started) };
+    } catch (err) {
+      return {
+        status: "erro",
+        ok: false,
+        ms: Math.round(performance.now() - started),
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   },
 };

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { HESTIA } from "@/content/kaline";
 import { hestiaApi } from "@/lib/hestia/api";
 
-type Ping = { status: number | "erro"; ok: boolean };
+type Ping = { status: number | "erro"; ok: boolean; ms: number; error?: string };
 
 export const Route = createFileRoute("/_station/endpoints")({
   head: () => ({
@@ -24,7 +24,15 @@ function EndpointsPage() {
   useEffect(() => {
     let alive = true;
     HESTIA.endpoints
-      .filter((e) => e.method === "GET")
+      .filter((e) =>
+        [
+          "/api/health",
+          "/api/storage/status",
+          "/api/storage/discover",
+          "/api/storage/organizer/plan",
+          "/api/local/organizer/runs",
+        ].includes(e.path),
+      )
       .forEach(async (e) => {
         const p = await hestiaApi.ping(e.path);
         if (!alive) return;
@@ -104,11 +112,16 @@ function EndpointsPage() {
                     : p == null
                       ? "consultando"
                       : p.ok
-                        ? `ok ${p.status}`
-                        : "offline"}
+                        ? `ok ${p.status} · ${p.ms}ms`
+                        : `erro · ${p.ms}ms`}
                 </span>
               </div>
               <p className="text-[12.5px] text-[color:var(--kaline-muted)]">{e.purpose}</p>
+              {p?.error && (
+                <p className="text-[11px] text-[color:var(--kaline-ember)]">
+                  último erro: {p.error}
+                </p>
+              )}
               <div>
                 <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--kaline-faint)] mb-1">
                   campos esperados

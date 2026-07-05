@@ -21,16 +21,16 @@ A Héstia não deve ser descrita como absolutamente somente leitura: o organizer
 
 ## Rotas públicas do Console
 
-| Rota | Função |
-|---|---|
-| `/` | cockpit da Héstia |
-| `/sistema` | hardware real |
-| `/storage` | volumes, fontes e `/KALINE` |
-| `/organizar` | planos e ações locais |
-| `/servicos` | systemd e vínculos |
+| Rota         | Função                        |
+| ------------ | ----------------------------- |
+| `/`          | cockpit da Héstia             |
+| `/sistema`   | hardware real                 |
+| `/storage`   | volumes, fontes e `/KALINE`   |
+| `/organizar` | planos e ações locais         |
+| `/servicos`  | systemd e vínculos            |
 | `/historico` | eventos, runs e logs legíveis |
-| `/config` | modo protegido |
-| `/endpoints` | contratos da API |
+| `/config`    | modo protegido                |
+| `/endpoints` | contratos da API              |
 
 `/logs` continua existindo como rota técnica/legada, mas `/historico` é a rota pública preferida para leitura humana.
 
@@ -74,47 +74,60 @@ npm run dev
 A UI abre normalmente. Sem a Chama rodando, cada card mostra
 `Aguardando Chama Local` — nenhuma métrica é inventada.
 
-## Instalação local (Linux)
+## Instalação local limpa (Linux)
 
-Pré-requisitos: **Node.js 20+**, `systemctl` para /api/services/status,
-`df` para /api/storage/status (padrão em qualquer distro).
+Fluxo repetível:
 
 ```bash
-git clone <este-repo> hestia-console
-cd hestia-console
-npm install
-npm run hestia          # build + start em http://localhost:4517
+git clone https://github.com/Tonyus-dev/hestia.git
+cd hestia
+npm ci
+npm run build
+sudo npm run install:local
+```
+
+Sem symlink manual, sem editar `/etc/fstab`, sem criar `dist` como root, sem Cloudflare e sem aplicar organizer automaticamente.
+
+Scripts úteis:
+
+```bash
+npm run setup:local      # npm ci/install + build como usuário normal
+sudo npm run install:service  # só instala/reinstala systemd; exige build pronto
+sudo npm run install:local    # fluxo completo seguro/idempotente
+npm run doctor           # diagnóstico read-only
+npm run kaline:init      # cria apenas diretórios vazios de /KALINE
+```
+
+Se `/KALINE` estiver em NTFS/fuseblk, permissões vêm das opções de montagem e `chown/chmod` podem não funcionar. Para permitir organizer/write no HD montado pelo seu usuário:
+
+```bash
+HESTIA_SERVICE_USER="$USER" sudo -E npm run install:local
+```
+
+Sem `HESTIA_SERVICE_USER`, o serviço mantém o modo protegido padrão com `DynamicUser=yes`. Com `HESTIA_SERVICE_USER`, o instalador cria um override systemd com `DynamicUser=no`, `User=<usuário>`, `Group=<usuário>` e `ReadWritePaths=/KALINE`. O instalador só diagnostica NTFS; ele não edita `/etc/fstab` nem tenta corrigir mount.
+
+Atualização:
+
+```bash
+git pull
+npm ci
+npm run build
+sudo systemctl restart hestia-console
+```
+
+Ou, usando o instalador idempotente:
+
+```bash
+git pull
+sudo npm run install:local
 ```
 
 Para desenvolvimento local do backend com hot reload:
 
 ```bash
 npm run build
-npm run dev:local       # reinicia a Chama a cada mudança em hestia.js/chama/*
+npm run dev:local
 ```
-
-## Rodar como serviço systemd direto do repo (recomendado pra quem acompanha atualizações)
-
-`scripts/install.sh` builda e — se rodado como root num host com systemd de verdade — instala
-um serviço systemd que aponta **direto pra este checkout do git**, sem copiar nada pra `/opt`.
-Atualizar depois é só isso, sem gerar nem reinstalar pacote nenhum:
-
-```bash
-git pull
-npm run install:local   # idempotente: builda de novo e reinicia o serviço
-```
-
-Primeira instalação:
-
-```bash
-git clone <este-repo> hestia-console
-cd hestia-console
-sudo npm run install:local
-```
-
-Sem `sudo`/sem systemd, o script só builda e sugere `npm run hestia` manual — não trava, não
-tenta se auto-elevar. Requer Node.js 20+ (`engines.node` no `package.json` documenta isso; o
-script verifica e falha com mensagem clara se a versão for menor).
 
 ## Instalar como app no Linux Mint Xfce
 
@@ -336,7 +349,6 @@ precisa), então expurgar planos velhos nunca quebra undo de execuções já apl
 os botões "Gerar plano"/"Aplicar plano localmente"/"Desfazer"/"Refazer" — sempre com aprovação explícita,
 nunca automático. Sem botão de start/stop/reiniciar serviço, upload, download ou shell.
 
-
 ### Service bindings
 
 A Héstia reconhece os serviços já existentes no servidor:
@@ -454,15 +466,15 @@ item incompleto é ignorado. `path` nunca vem de query/body/header, só deste ar
 
 ## Comandos npm
 
-| Comando | O que faz | Onde usar |
-|---|---|---|
-| `npm install` | Instala dependências | Uma vez no checkout |
-| `npm run dev` | Frontend Lovable com HMR | Preview / desenvolvimento de UI |
-| `npm run build` | Build de produção para `dist/` | Antes de iniciar a Chama |
-| `npm run hestia` | Build + inicia Chama Local em `http://localhost:4517` | Linux local |
-| `npm run dev:local` | Backend com hot reload | Desenvolvimento de `hestia.js/chama/*` |
-| `npm test` | Roda a suite do Vitest uma vez | CI / verificação local |
-| `npm run test:watch` | Roda os testes em modo interativo | Durante refatorações |
+| Comando              | O que faz                                             | Onde usar                              |
+| -------------------- | ----------------------------------------------------- | -------------------------------------- |
+| `npm install`        | Instala dependências                                  | Uma vez no checkout                    |
+| `npm run dev`        | Frontend Lovable com HMR                              | Preview / desenvolvimento de UI        |
+| `npm run build`      | Build de produção para `dist/`                        | Antes de iniciar a Chama               |
+| `npm run hestia`     | Build + inicia Chama Local em `http://localhost:4517` | Linux local                            |
+| `npm run dev:local`  | Backend com hot reload                                | Desenvolvimento de `hestia.js/chama/*` |
+| `npm test`           | Roda a suite do Vitest uma vez                        | CI / verificação local                 |
+| `npm run test:watch` | Roda os testes em modo interativo                     | Durante refatorações                   |
 
 Verificações rápidas:
 
@@ -594,9 +606,9 @@ redo) já estava no ar:
   um `planId`/`runId` vindo direto do cliente (body do POST / param da URL) com algo como
   `"../../../../etc/passwd"` escapava de `dataDir/organizer/{plans,runs}/`. Corrigido validando
   o formato estrito do id (`chama/organizerIds.js`, regex `^(plan|org|undo|redo)_\d+_[0-9a-f]{8}$`)
-  **antes** de montar qualquer path — na função de leitura em si, não só no route handler, pra
-  proteger qualquer chamador futuro também. Confirmado ao vivo com `curl` que a tentativa de
-  traversal agora recebe `404`/plano-não-encontrado, sem tocar o disco fora do esperado.
+**antes** de montar qualquer path — na função de leitura em si, não só no route handler, pra
+proteger qualquer chamador futuro também. Confirmado ao vivo com `curl`que a tentativa de
+traversal agora recebe`404`/plano-não-encontrado, sem tocar o disco fora do esperado.
 - **Symlink**: já mitigado desde a PR do scanner — `storageScanner.js` nunca segue link
   simbólico (`entry.isSymbolicLink()` pula, não entra).
 - **`targetPath` sempre dentro de `/KALINE`**: `organizerPlan.js` usa uma tabela fixa de
@@ -613,3 +625,13 @@ redo) já estava no ar:
   já documentado como tal; não é um segredo, é uma barreira contra disparo acidental/CSRF
   simples (formulário/`<img>` não conseguem setar header customizado sem preflight CORS, que
   esta API não concede pra `/api/local/*`).
+
+## Organizer / Ash — Segurança
+
+- Gerar plano é sempre **dry-run**: nenhum arquivo é movido, copiado, apagado ou renomeado em `GET /api/storage/organizer/plan`.
+- `apply` exige confirmação explícita (`X-Hestia-Local-Confirm: organize`) e planos com mais de 5000 itens exigem confirmação extra do `planId`.
+- Revise o plano antes de aplicar; comece com poucos arquivos e use lotes para legado grande.
+- Planos grandes mostram apenas uma amostra inicial na UI para não travar o navegador.
+- Manifests/runs ficam em `dataDir/organizer/runs/` e podem ser consultados em `/organizar`/`/api/local/organizer/runs` para auditoria.
+- Undo é conservador: só desfaz itens do manifest, pula destinos ausentes/alterados e nunca apaga arquivo desconhecido.
+- Não use uploads para duplicar o HD inteiro sem entender o efeito; para acervos grandes, prefira lotes revisáveis.

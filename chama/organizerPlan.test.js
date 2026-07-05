@@ -115,6 +115,9 @@ describe("generateOrganizerPlan", () => {
     expect(plan.summary.conflicts).toBe(0);
     expect(plan.summary.ignored).toBe(0);
     expect(plan.summary.quarantined).toBe(0);
+    expect(plan.summary.byExtension).toMatchObject({ ".pdf": 1, ".epub": 1 });
+    expect(plan.summary.byTargetArea).toMatchObject({ "codice/pdf": 1, "codice/epub": 1 });
+    expect(plan.dryRun).toBe(true);
   });
   it("classifica por classe/tipo/ano/mês, quarentena, revisão e ignorados", async () => {
     const entradaDir = join(tmpDir, "entrada");

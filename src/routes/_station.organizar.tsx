@@ -12,6 +12,17 @@ function statusOf(s: { status: string }): CardStatus {
   return "ok";
 }
 
+function downloadJson(filename: string, value: unknown) {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const Route = createFileRoute("/_station/organizar")({
   head: () => ({
     meta: [
@@ -37,6 +48,7 @@ export function OrganizarPage() {
   const [applyResult, setApplyResult] = useState<OrganizerRunManifest | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  const [largeConfirm, setLargeConfirm] = useState("");
 
   const [undoingRunId, setUndoingRunId] = useState<string | null>(null);
   const [undoError, setUndoError] = useState<string | null>(null);
@@ -62,7 +74,7 @@ export function OrganizarPage() {
     if (!plan) return;
     setApplying(true);
     setApplyError(null);
-    const result = await hestiaApi.organizerApply(plan.planId);
+    const result = await hestiaApi.organizerApply(plan.planId, (plan.summary.planned ?? 0) > 5000);
     setApplying(false);
     if (result.status === "ok") {
       setApplyResult(result.data);
@@ -105,8 +117,8 @@ export function OrganizarPage() {
           Organizar por plano aprovado
         </h1>
         <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
-          Modo protegido: leitura por padrão; escrita local apenas por planos aprovados
-          explicitamente; sem comandos destrutivos.
+          Modo protegido: gerar plano é dry-run. Nenhum arquivo é alterado até você clicar em
+          Aplicar.
         </p>
       </header>
 
@@ -132,7 +144,50 @@ export function OrganizarPage() {
                 {plan.summary.conflicts} conflitos · {plan.summary.ignored ?? 0} ignorados ·{" "}
                 {plan.summary.quarantined ?? 0} quarentena
               </p>
-              {plan.items.map((item) => (
+              <p className="text-[12px] text-[color:var(--kaline-muted)]">
+                Gerar plano apenas simula a organização. Nenhum arquivo será movido, copiado,
+                apagado ou renomeado até você clicar em Aplicar.
+              </p>
+              {plan.summary.byExtension && (
+                <p className="text-[11px] text-[color:var(--kaline-faint)]">
+                  Extensões:{" "}
+                  {Object.entries(plan.summary.byExtension)
+                    .map(([k, v]) => `${k} ${v}`)
+                    .join(" · ") || "—"}
+                </p>
+              )}
+              {plan.summary.byTargetArea && (
+                <p className="text-[11px] text-[color:var(--kaline-faint)]">
+                  Destinos:{" "}
+                  {Object.entries(plan.summary.byTargetArea)
+                    .map(([k, v]) => `${k} ${v}`)
+                    .join(" · ") || "—"}
+                </p>
+              )}
+              {plan.items.length > 100 && (
+                <p className="text-[11px] text-[color:var(--kaline-amber)]">
+                  exibindo os primeiros 100 de {plan.items.length} itens
+                </p>
+              )}
+              {(plan.summary.planned ?? 0) > 1000 && (
+                <label className="block text-[11px] text-[color:var(--kaline-muted)]">
+                  Confirmação extra: digite exatamente “Estou ciente que este plano afetará{" "}
+                  {plan.summary.planned} arquivos.”
+                  <input
+                    value={largeConfirm}
+                    onChange={(event) => setLargeConfirm(event.target.value)}
+                    className="mt-1 w-full rounded border border-[color:var(--kaline-border-copper)] bg-transparent px-2 py-1 font-mono text-[11px]"
+                  />
+                </label>
+              )}
+              <button
+                type="button"
+                onClick={() => downloadJson(`hestia-plan-${plan.planId}.json`, plan)}
+                className="text-[11px] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper)]/10 transition"
+              >
+                Baixar JSON do plano
+              </button>
+              {plan.items.slice(0, 100).map((item) => (
                 <div
                   key={item.id}
                   className="border-b border-[color:var(--kaline-border-copper)]/40 pb-2 last:border-0"
@@ -152,7 +207,13 @@ export function OrganizarPage() {
               <button
                 type="button"
                 onClick={handleApplyPlan}
-                disabled={applying || plan.items.length === 0}
+                disabled={
+                  applying ||
+                  plan.items.length === 0 ||
+                  ((plan.summary.planned ?? 0) > 1000 &&
+                    largeConfirm !==
+                      `Estou ciente que este plano afetará ${plan.summary.planned} arquivos.`)
+                }
                 className="mt-2 text-[11px] px-3 py-1.5 rounded border border-[color:var(--kaline-copper)] text-[color:var(--kaline-copper)] bg-[color:var(--kaline-copper)]/10 hover:bg-[color:var(--kaline-copper)]/20 transition disabled:opacity-50"
               >
                 {applying ? "aplicando…" : "Aplicar plano localmente"}
@@ -168,8 +229,16 @@ export function OrganizarPage() {
             <div className="mt-3 text-[12px]">
               <p className="text-[color:var(--kaline-faint)]">
                 {applyResult.status} · {applyResult.summary.ok} ok · {applyResult.summary.failed}{" "}
-                falhas · {applyResult.summary.skipped} pulados
+                falhas · {applyResult.summary.skipped} pulados · manifest: dataDir/organizer/runs/
+                {applyResult.runId}.json
               </p>
+              <button
+                type="button"
+                onClick={() => downloadJson(`hestia-run-${applyResult.runId}.json`, applyResult)}
+                className="mt-2 text-[11px] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper)]/10 transition"
+              >
+                Baixar JSON da execução
+              </button>
             </div>
           )}
         </DataCard>

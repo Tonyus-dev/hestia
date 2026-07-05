@@ -202,17 +202,37 @@ export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
   }
 
   const items = [...entradaItems, ...sourceItems];
+  const byExtension = {};
+  const byTargetArea = {};
+  for (const item of items) {
+    if (item.status !== "planned") continue;
+    const ext = item.sourcePath.includes(".")
+      ? `.${item.sourcePath.split(".").pop().toLowerCase()}`
+      : "(sem extensão)";
+    const area = item.targetPath.startsWith(`${ROOT}/`)
+      ? item.targetPath
+          .slice(ROOT.length + 1)
+          .split("/")
+          .slice(0, 2)
+          .join("/")
+      : "fora-de-kaline";
+    byExtension[ext] = (byExtension[ext] || 0) + 1;
+    byTargetArea[area] = (byTargetArea[area] || 0) + 1;
+  }
   const summary = {
     total: items.length + ignoredFromScanner,
     planned: items.filter((i) => i.status === "planned").length,
     conflicts: items.filter((i) => i.status === "conflict").length,
     ignored: items.filter((i) => i.status === "ignored").length + ignoredFromScanner,
     quarantined: items.filter((i) => i.targetPath.includes("/ash/quarentena/")).length,
+    byExtension,
+    byTargetArea,
   };
 
   return {
     planId: `plan_${Date.now()}_${randomUUID().slice(0, 8)}`,
     generatedAt: new Date().toISOString(),
+    dryRun: true,
     items,
     summary,
   };
