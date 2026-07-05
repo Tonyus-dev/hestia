@@ -171,6 +171,39 @@ describe("generateOrganizerPlan", () => {
     expect(plan.summary.ignored).toBe(2);
     expect(plan.summary.quarantined).toBe(2);
   });
+  it("rotula dispositivos pela subpasta, mas arquivo solto usa label base", async () => {
+    const dispositivosDir = join(tmpDir, "entrada", "dispositivos");
+    const celularDir = join(dispositivosDir, "celular");
+    await fs.mkdir(celularDir, { recursive: true });
+    await fs.writeFile(join(celularDir, "foto.jpg"), "x");
+    await fs.writeFile(join(dispositivosDir, "arquivo-solto.pdf"), "x");
+    const oldDate = new Date("2026-07-10T00:00:00.000Z");
+    await fs.utimes(join(celularDir, "foto.jpg"), oldDate, oldDate);
+    await fs.utimes(join(dispositivosDir, "arquivo-solto.pdf"), oldDate, oldDate);
+
+    vi.doMock("./storageModel.js", () => ({
+      getStorageModel: () => ({
+        root: "/KALINE",
+        folders: [
+          {
+            id: "entrada-dispositivos",
+            label: "Dispositivos",
+            absolutePath: dispositivosDir,
+          },
+        ],
+      }),
+    }));
+    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
+
+    const { generateOrganizerPlan } = await import("./organizerPlan.js");
+    const plan = await generateOrganizerPlan();
+    const byName = Object.fromEntries(plan.items.map((i) => [i.sourcePath.split("/").pop(), i]));
+
+    expect(byName["foto.jpg"].sourceKind).toBe("dispositivo");
+    expect(byName["foto.jpg"].sourceLabel).toBe("celular");
+    expect(byName["arquivo-solto.pdf"].sourceKind).toBe("dispositivo");
+    expect(byName["arquivo-solto.pdf"].sourceLabel).toBe("dispositivos");
+  });
 });
 
 describe("writePlan / getPlan", () => {

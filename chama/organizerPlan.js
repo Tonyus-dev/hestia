@@ -70,7 +70,8 @@ function sourceLabelFor(file, source) {
   ) {
     return source.label;
   }
-  return file.path.slice(source.rootPath.length + 1).split(/[\/]/)[0] || source.label;
+  const parts = file.path.slice(source.rootPath.length + 1).split(/[\/]/);
+  return parts.length > 1 ? parts[0] : source.label;
 }
 
 async function targetExists(targetPath) {
@@ -156,7 +157,7 @@ export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
               : folder.id === "entrada-manual"
                 ? "manual"
                 : "entrada",
-        label: folder.label || folder.id,
+        label: folder.id === "entrada-dispositivos" ? "dispositivos" : folder.label || folder.id,
         rootPath: folder.absolutePath,
       }),
     );
