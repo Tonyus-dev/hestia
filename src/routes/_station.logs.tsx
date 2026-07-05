@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { hestiaApi } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
-import { UnavailableNote } from "@/components/hestia/UnavailableNote";
+import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
 
 const TAIL_OPTIONS = [50, 100, 200] as const;
 

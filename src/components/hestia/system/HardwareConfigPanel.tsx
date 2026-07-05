@@ -1,5 +1,5 @@
 import { formatBytes, formatUptime, type HardwareConfig } from "@/lib/hestia/api";
-import { Row } from "./UnavailableNote";
+import { Row } from "../shared/Row";
 export function HardwareConfigPanel({ data }: { data: HardwareConfig }) {
   return (
     <div className="space-y-4">

@@ -1,6 +1,6 @@
 import { formatBytes, type HardwareStatus } from "@/lib/hestia/api";
-import { Row } from "./UnavailableNote";
-import { StatusPill } from "./StatusPill";
+import { Row } from "../shared/Row";
+import { StatusPill } from "../shared/StatusPill";
 export function LiveHardwarePanel({ data }: { data: HardwareStatus }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">

@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { hestiaApi } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { HESTIA } from "@/content/kaline";
-import { UnavailableNote, Row } from "@/components/hestia/UnavailableNote";
+import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
+import { Row } from "@/components/hestia/shared/Row";
 
 export const Route = createFileRoute("/_station/config")({
   head: () => ({

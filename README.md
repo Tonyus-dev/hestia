@@ -1,14 +1,69 @@
-# Héstia Console
+# Héstia Station
 
-Interface local da Héstia com **Chama Local** embutida.
+Héstia é a **Station**: a estação local da Kaline no servidor físico onde ela vive. O Console é a interface visual da Station; a Chama Local é o agente interno; Presence é a superfície externa que consulta.
 
-> Héstia organiza, registra e sustenta.
-> Chama Local mede e serve.
-> Presence mostra e consulta.
+> Héstia é a Estação. A Chama é o pulso. O Console é a face. Presence consulta. Kaline decide.
 
-- **Héstia** — app local do servidor
-- **Héstia Console** — a tela dentro da Héstia (este web app)
-- **Chama Local** — módulo/API somente leitura embutido (o pulso interno)
+## Ontologia atual
+
+- **Héstia** — a Station.
+- **Héstia Station** — estação local da Kaline.
+- **Console** — interface visual da Station (este frontend).
+- **Chama Local** — agente interno que mede, registra e executa apenas ações locais protegidas.
+- **Presence** — superfície que consulta a Station, quando habilitada.
+- **Servidor físico** — corpo onde Héstia vive.
+
+## Modo protegido
+
+Modo protegido: leitura por padrão; escrita local apenas por planos aprovados explicitamente; sem comandos destrutivos.
+
+A Héstia não deve ser descrita como absolutamente somente leitura: o organizer pode aplicar, desfazer e refazer planos locais, mas só com confirmação explícita e sem aceitar paths arbitrários do cliente.
+
+## Rotas públicas do Console
+
+| Rota | Função |
+|---|---|
+| `/` | cockpit da Héstia |
+| `/sistema` | hardware real |
+| `/storage` | volumes, fontes e `/KALINE` |
+| `/organizar` | planos e ações locais |
+| `/servicos` | systemd e vínculos |
+| `/historico` | eventos, runs e logs legíveis |
+| `/config` | modo protegido |
+| `/endpoints` | contratos da API |
+
+`/logs` continua existindo como rota técnica/legada, mas `/historico` é a rota pública preferida para leitura humana.
+
+## Endpoints documentados
+
+### Leitura / diagnóstico
+
+```http
+GET /api/health
+GET /api/server/status
+GET /api/hardware/status
+GET /api/hardware/config
+GET /api/storage/status
+GET /api/storage/model
+GET /api/storage/sources
+GET /api/storage/scan
+GET /api/services/status
+GET /api/services/bindings
+GET /api/logs
+GET /api/config
+```
+
+### Ações locais protegidas
+
+```http
+GET  /api/storage/organizer/plan
+GET  /api/local/organizer/runs
+POST /api/local/organizer/apply
+POST /api/local/organizer/runs/:runId/undo
+POST /api/local/organizer/runs/:runId/redo
+```
+
+Os `POSTs` exigem confirmação explícita via header `X-Hestia-Local-Confirm: organize`.
 
 ## Rodar o frontend no Lovable / dev
 
@@ -127,7 +182,7 @@ Precedência: **CLI > env > `~/.chama/config.json` > padrões**. A v0 é local-f
 
 ## Endpoints
 
-Quase todos são `GET` e somente leitura. A única exceção é
+O modo protegido é leitura por padrão. A escrita local existe apenas nos POSTs protegidos do organizer, com plano aprovado e confirmação explícita. A principal exceção é
 `POST /api/local/organizer/apply` (ver seção Organizer abaixo), que move/copia arquivos dentro
 de um plano gerado pela própria Héstia, só com confirmação explícita.
 
@@ -173,7 +228,7 @@ curl -s http://localhost:4517/api/storage/discover | jq
 
 #### Modelo `/KALINE` e varredura
 
-A Héstia entende `/KALINE` como uma árvore canônica fixa (`entrada`, `codice/{pdf,epub,fichamentos}`,
+A Héstia Station entende `/KALINE` como uma árvore canônica fixa (`entrada`, `codice/{pdf,epub,fichamentos}`,
 `midia/{videos,audio,imagens}`, `arquivos/{compactados}`, `backups`, `modelos`, `logs`,
 `snapshots`) — dado estático em `chama/storageModel.js`, sem relação com o `dataDir` interno da
 própria Chama Local (identidade/eventos/snapshots internos continuam em `~/.chama/data` ou
@@ -186,7 +241,7 @@ arquivo, nem localmente nem na Presence. A varredura tem limites conservadores
 atingido, a pasta volta com `truncated: true` e `reason` (`"maxDepth"` ou `"maxFiles"`).
 
 Fontes externas do HD (opcional, via `~/.chama/config.json`, chave `storageSources` — ver seção
-de Configuração abaixo) entram na mesma varredura, mas o `scan` em si é só leitura: nunca move,
+de Configuração abaixo) entram na mesma varredura, mas o `scan` em si é leitura por padrão: nunca move,
 copia ou apaga nada (isso só acontece via `POST /api/local/organizer/apply`, abaixo).
 
 ```bash
@@ -449,7 +504,7 @@ Pendências fora do sandbox: testar em Linux real, smoke tests com Vitest, empac
 
 ## Segurança
 
-A Héstia é majoritariamente somente leitura. A única exceção, deliberada e documentada, é o
+A Héstia opera em modo protegido: leitura por padrão; escrita local apenas por planos aprovados explicitamente; sem comandos destrutivos. A exceção deliberada e documentada é o
 organizer (`POST /api/local/organizer/apply`): move/copia arquivo dentro de um plano gerado
 pela própria Héstia, nunca sobrescreve, nunca apaga um arquivo do usuário sem antes confirmar
 que ele já existe com sucesso no destino, e só roda com o header de confirmação explícita
