@@ -22,7 +22,22 @@ const EXTENSION_RULES = [
   { extensions: [".doc", ".docx", ".odt"], relativePath: "documentos/textos" },
   { extensions: [".xls", ".xlsx", ".csv", ".ods"], relativePath: "documentos/planilhas" },
   { extensions: [".ppt", ".pptx", ".odp"], relativePath: "documentos/apresentacoes" },
-  { extensions: [".mp4", ".mkv", ".avi", ".mov"], relativePath: "midia/videos" },
+  {
+    extensions: [
+      ".mkv",
+      ".mp4",
+      ".mov",
+      ".avi",
+      ".wmv",
+      ".webm",
+      ".mpeg",
+      ".mpg",
+      ".m4v",
+      ".3gp",
+      ".flv",
+    ],
+    relativePath: "midia/videos",
+  },
   { extensions: [".mp3", ".flac", ".wav", ".m4a"], relativePath: "midia/audio" },
   { extensions: [".eps", ".svg", ".ai", ".cdr"], relativePath: "design/vetores" },
   {
@@ -140,7 +155,12 @@ async function planItemsForFiles(files, action, source = { kind: "unknown", labe
 // Fontes externas (mode: "external-readonly") nunca perdem o arquivo original: é sempre "copy".
 export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
   const model = getStorageModel();
-  const inboxFolders = ["entrada-uploads", "entrada-dispositivos", "entrada-manual"]
+  const inboxFolders = [
+    "entrada-uploads",
+    "entrada-dispositivos",
+    "entrada-manual",
+    "entrada-revisar",
+  ]
     .map((id) => model.folders.find((f) => f.id === id))
     .filter(Boolean);
   const entradaFolders = inboxFolders.length

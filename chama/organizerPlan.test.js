@@ -22,6 +22,7 @@ describe("targetRelativePathFor", () => {
     expect(targetRelativePathFor(".pptx")).toBe("documentos/apresentacoes");
     expect(targetRelativePathFor(".mp4")).toBe("midia/videos");
     expect(targetRelativePathFor(".mkv")).toBe("midia/videos");
+    expect(targetRelativePathFor(".wmv")).toBe("midia/videos");
     expect(targetRelativePathFor(".mp3")).toBe("midia/audio");
     expect(targetRelativePathFor(".eps")).toBe("design/vetores");
     expect(targetRelativePathFor(".svg")).toBe("design/vetores");
@@ -121,6 +122,9 @@ describe("generateOrganizerPlan", () => {
     const files = [
       "artigo.pdf",
       "foto.jpg",
+      "filme.mkv",
+      "clipe.mp4",
+      "legado.wmv",
       "marca.eps",
       "icone.svg",
       "logo.ai",
@@ -163,6 +167,9 @@ describe("generateOrganizerPlan", () => {
 
     expect(byName["artigo.pdf"].targetPath).toBe("/KALINE/codice/pdf/2026/07/artigo.pdf");
     expect(byName["foto.jpg"].targetPath).toBe("/KALINE/midia/imagens/2025/12/foto.jpg");
+    expect(byName["filme.mkv"].targetPath).toBe("/KALINE/midia/videos/2026/07/filme.mkv");
+    expect(byName["clipe.mp4"].targetPath).toBe("/KALINE/midia/videos/2026/07/clipe.mp4");
+    expect(byName["legado.wmv"].targetPath).toBe("/KALINE/midia/videos/2026/07/legado.wmv");
     expect(byName["marca.eps"].targetPath).toBe("/KALINE/design/vetores/2026/07/marca.eps");
     expect(byName["icone.svg"].targetPath).toBe("/KALINE/design/vetores/2026/07/icone.svg");
     expect(byName["logo.ai"].targetPath).toBe("/KALINE/design/vetores/2026/07/logo.ai");
@@ -218,6 +225,29 @@ describe("generateOrganizerPlan", () => {
     expect(byName["foto.jpg"].sourceLabel).toBe("celular");
     expect(byName["arquivo-solto.pdf"].sourceKind).toBe("dispositivo");
     expect(byName["arquivo-solto.pdf"].sourceLabel).toBe("dispositivos");
+  });
+
+  it("planeja arquivo elegível em árvore profunda mantendo só o basename", async () => {
+    const uploadsDir = join(tmpDir, "entrada", "uploads");
+    const deepDir = join(uploadsDir, "lote-legado-001", "Users", "user", "Documents", "filmes");
+    await fs.mkdir(deepDir, { recursive: true });
+    await fs.writeFile(join(deepDir, "exemplo.mkv"), "x");
+    const oldDate = new Date("2018-10-20T12:00:00.000Z");
+    await fs.utimes(join(deepDir, "exemplo.mkv"), oldDate, oldDate);
+
+    vi.doMock("./storageModel.js", () => ({
+      getStorageModel: () => ({
+        root: "/KALINE",
+        folders: [{ id: "entrada-uploads", label: "Uploads", absolutePath: uploadsDir }],
+      }),
+    }));
+    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
+
+    const { generateOrganizerPlan } = await import("./organizerPlan.js");
+    const plan = await generateOrganizerPlan();
+
+    expect(plan.items).toHaveLength(1);
+    expect(plan.items[0].targetPath).toBe("/KALINE/midia/videos/2018/10/exemplo.mkv");
   });
 });
 
