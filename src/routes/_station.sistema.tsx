@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { hestiaApi } from "@/lib/hestia/api";
 import { usePollingApi } from "@/lib/hestia/usePollingApi";
-import { DataCard, UnavailableNote } from "@/components/hestia/UnavailableNote";
-import { MetricCard } from "@/components/hestia/MetricCard";
-import { LiveHardwarePanel } from "@/components/hestia/LiveHardwarePanel";
-import { HardwareConfigPanel } from "@/components/hestia/HardwareConfigPanel";
+import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
+import { DataCard } from "@/components/hestia/shared/DataCard";
+import { MetricCard } from "@/components/hestia/shared/MetricCard";
+import { LiveHardwarePanel } from "@/components/hestia/system/LiveHardwarePanel";
+import { HardwareConfigPanel } from "@/components/hestia/system/HardwareConfigPanel";
 
 export const Route = createFileRoute("/_station/sistema")({ component: SistemaPage });
 function SistemaPage() {

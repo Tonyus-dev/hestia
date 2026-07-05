@@ -2,8 +2,10 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { hestiaApi, formatBytes } from "@/lib/hestia/api";
 import { usePollingApi } from "@/lib/hestia/usePollingApi";
 import { useApi } from "@/lib/hestia/useApi";
-import { MetricCard } from "@/components/hestia/MetricCard";
-import { DataCard, Row, UnavailableNote } from "@/components/hestia/UnavailableNote";
+import { MetricCard } from "@/components/hestia/shared/MetricCard";
+import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
+import { DataCard } from "@/components/hestia/shared/DataCard";
+import { Row } from "@/components/hestia/shared/Row";
 
 export const Route = createFileRoute("/_station/")({ component: Painel });
 function Painel() {

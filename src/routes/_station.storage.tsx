@@ -3,12 +3,9 @@ import { useState } from "react";
 import { hestiaApi, formatBytes } from "@/lib/hestia/api";
 import type { OrganizerPlan, OrganizerRunManifest } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
-import {
-  DataCard,
-  Row,
-  UnavailableNote,
-  type CardStatus,
-} from "@/components/hestia/UnavailableNote";
+import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
+import { DataCard, type CardStatus } from "@/components/hestia/shared/DataCard";
+import { Row } from "@/components/hestia/shared/Row";
 
 function statusOf(s: { status: string }): CardStatus {
   if (s.status === "loading") return "loading";

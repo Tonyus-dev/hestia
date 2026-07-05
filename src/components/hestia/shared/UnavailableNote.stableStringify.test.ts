@@ -4,7 +4,7 @@ import {
   buildReadableDetails,
   formatJson,
   stableStringify,
-} from "@/components/hestia/UnavailableNote";
+} from "@/components/hestia/shared/UnavailableNote";
 import type { ApiErrorDetails } from "@/lib/hestia/api";
 
 describe("stableStringify", () => {
