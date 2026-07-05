@@ -125,6 +125,7 @@ export type HardwareConfig = {
       mountpoint?: string;
       fstype?: string;
       rota?: boolean | null;
+      mountedPartition?: { name: string; mountpoint: string; fstype?: string } | null;
     }[];
     error?: string;
   };

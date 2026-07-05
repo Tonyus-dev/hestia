@@ -424,10 +424,17 @@ app.get(
 // SPA estática com index.html) — estáticos vêm de `publicDir` via
 // @fastify/static, e o que não bater em nenhum arquivo cai no bundle SSR
 // (`serverEntry`), que roda sob Node puro (veja chama/ssr.js).
+function firstExisting(paths) {
+  return paths.find((p) => existsSync(p));
+}
+
 const buildTargets = [
   {
     publicDir: join(__dirname, "dist", "client"),
-    serverEntry: join(__dirname, "dist", "server", "index.mjs"),
+    serverEntry: firstExisting([
+      join(__dirname, "dist", "server", "index.mjs"),
+      join(__dirname, "dist", "server", "server.js"),
+    ]),
   },
   {
     publicDir: join(__dirname, ".output", "public"),
@@ -437,7 +444,7 @@ const buildTargets = [
 const build = buildTargets.find((b) => existsSync(b.publicDir));
 if (build) {
   await app.register(fastifyStatic, { root: build.publicDir, prefix: "/" });
-  if (existsSync(build.serverEntry)) {
+  if (build.serverEntry) {
     const ssrFetch = createSsrFetcher(build.serverEntry);
     app.setNotFoundHandler(async (req, reply) => {
       try {

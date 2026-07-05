@@ -23,6 +23,11 @@ describe("targetRelativePathFor", () => {
     expect(targetRelativePathFor(".mp4")).toBe("midia/videos");
     expect(targetRelativePathFor(".mkv")).toBe("midia/videos");
     expect(targetRelativePathFor(".mp3")).toBe("midia/audio");
+    expect(targetRelativePathFor(".eps")).toBe("design/vetores");
+    expect(targetRelativePathFor(".svg")).toBe("design/vetores");
+    expect(targetRelativePathFor(".ai")).toBe("design/vetores");
+    expect(targetRelativePathFor(".psd")).toBe("design/projetos");
+    expect(targetRelativePathFor(".fig")).toBe("design/projetos");
     expect(targetRelativePathFor(".jpg")).toBe("midia/imagens");
     expect(targetRelativePathFor(".png")).toBe("midia/imagens");
     expect(targetRelativePathFor(".zip")).toBe("arquivos/compactados");
@@ -116,6 +121,11 @@ describe("generateOrganizerPlan", () => {
     const files = [
       "artigo.pdf",
       "foto.jpg",
+      "marca.eps",
+      "icone.svg",
+      "logo.ai",
+      "layout.psd",
+      "mockup.fig",
       "oficio.docx",
       "tabela.xlsx",
       "aula.pptx",
@@ -153,6 +163,11 @@ describe("generateOrganizerPlan", () => {
 
     expect(byName["artigo.pdf"].targetPath).toBe("/KALINE/codice/pdf/2026/07/artigo.pdf");
     expect(byName["foto.jpg"].targetPath).toBe("/KALINE/midia/imagens/2025/12/foto.jpg");
+    expect(byName["marca.eps"].targetPath).toBe("/KALINE/design/vetores/2026/07/marca.eps");
+    expect(byName["icone.svg"].targetPath).toBe("/KALINE/design/vetores/2026/07/icone.svg");
+    expect(byName["logo.ai"].targetPath).toBe("/KALINE/design/vetores/2026/07/logo.ai");
+    expect(byName["layout.psd"].targetPath).toBe("/KALINE/design/projetos/2026/07/layout.psd");
+    expect(byName["mockup.fig"].targetPath).toBe("/KALINE/design/projetos/2026/07/mockup.fig");
     expect(byName["oficio.docx"].targetPath).toBe("/KALINE/documentos/textos/2026/07/oficio.docx");
     expect(byName["tabela.xlsx"].targetPath).toBe(
       "/KALINE/documentos/planilhas/2026/07/tabela.xlsx",

@@ -37,4 +37,34 @@ describe("hardware diagnostics", () => {
     expect(config.disks).toEqual({ available: false, items: [], error: "lsblk indisponível" });
     expect(config.hostname).toEqual(expect.any(String));
   });
+
+  it("associates mounted partitions with their physical disk", async () => {
+    const config = await getHardwareConfig(async () => ({
+      stdout: JSON.stringify({
+        blockdevices: [
+          {
+            name: "sdb",
+            type: "disk",
+            size: "931,5G",
+            mountpoint: null,
+            fstype: null,
+            children: [
+              { name: "sdb1", type: "part", mountpoint: null, fstype: null },
+              { name: "sdb2", type: "part", mountpoint: "/KALINE", fstype: "fuseblk" },
+            ],
+          },
+          { name: "sdc", type: "disk", size: "1T", mountpoint: null, fstype: null },
+        ],
+      }),
+    }));
+
+    expect(config.disks.items.find((d) => d.name === "sdb")).toMatchObject({
+      mountpoint: null,
+      mountedPartition: { name: "sdb2", mountpoint: "/KALINE", fstype: "fuseblk" },
+    });
+    expect(config.disks.items.find((d) => d.name === "sdc")).toMatchObject({
+      mountpoint: null,
+      mountedPartition: null,
+    });
+  });
 });

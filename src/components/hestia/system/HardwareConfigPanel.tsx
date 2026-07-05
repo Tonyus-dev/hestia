@@ -1,5 +1,13 @@
 import { formatBytes, formatUptime, type HardwareConfig } from "@/lib/hestia/api";
 import { Row } from "../shared/Row";
+function formatDisk(d: HardwareConfig["disks"]["items"][number]) {
+  const mount =
+    d.mountpoint ??
+    (d.mountedPartition ? `partição montada em ${d.mountedPartition.mountpoint}` : "sem mount");
+  const fstype = d.fstype ?? (d.mountedPartition ? d.mountedPartition.fstype : "não disponível");
+  return `${d.size ?? "não disponível"} · ${mount} · ${fstype ?? "não disponível"}`;
+}
+
 export function HardwareConfigPanel({ data }: { data: HardwareConfig }) {
   return (
     <div className="space-y-4">
@@ -17,13 +25,7 @@ export function HardwareConfigPanel({ data }: { data: HardwareConfig }) {
       </div>
       <div>
         {data.disks.available ? (
-          data.disks.items.map((d) => (
-            <Row
-              key={d.name}
-              k={d.name}
-              v={`${d.size ?? "não disponível"} · ${d.mountpoint ?? "sem mount"} · ${d.fstype ?? "não disponível"}`}
-            />
-          ))
+          data.disks.items.map((d) => <Row key={d.name} k={d.name} v={formatDisk(d)} />)
         ) : (
           <Row k="discos" v={data.disks.error ?? "não disponível"} />
         )}

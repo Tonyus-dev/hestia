@@ -24,6 +24,11 @@ const EXTENSION_RULES = [
   { extensions: [".ppt", ".pptx", ".odp"], relativePath: "documentos/apresentacoes" },
   { extensions: [".mp4", ".mkv", ".avi", ".mov"], relativePath: "midia/videos" },
   { extensions: [".mp3", ".flac", ".wav", ".m4a"], relativePath: "midia/audio" },
+  { extensions: [".eps", ".svg", ".ai", ".cdr"], relativePath: "design/vetores" },
+  {
+    extensions: [".psd", ".fig", ".sketch", ".xd", ".afdesign", ".indd"],
+    relativePath: "design/projetos",
+  },
   { extensions: [".jpg", ".jpeg", ".png", ".webp", ".heic"], relativePath: "midia/imagens" },
   { extensions: [".zip", ".rar", ".7z", ".tar", ".gz"], relativePath: "arquivos/compactados" },
   {
