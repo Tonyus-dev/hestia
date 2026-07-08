@@ -639,3 +639,57 @@ traversal agora recebe`404`/plano-não-encontrado, sem tocar o disco fora do esp
 - Manifests/runs ficam em `dataDir/organizer/runs/` e podem ser consultados em `/organizar`/`/api/local/organizer/runs` para auditoria.
 - Undo é conservador: só desfaz itens do manifest, pula destinos ausentes/alterados e nunca apaga arquivo desconhecido.
 - Não use uploads para duplicar o HD inteiro sem entender o efeito; para acervos grandes, prefira lotes revisáveis.
+
+## Contrato Kaline V27b
+
+A Héstia expõe uma ponte local para a Kaline V27b:
+
+```http
+GET  /api/llm/health
+POST /api/llm/chat
+```
+
+A Kaline V27 usa `VITE_HESTIA_URL` para localizar a Héstia.
+
+Exemplo:
+
+```bash
+VITE_HESTIA_URL=https://servidor-kaline.tailnet.ts.net
+```
+
+Na Héstia, CORS para a Kaline deve ser habilitado explicitamente:
+
+```bash
+HESTIA_KALINE_CORS_ORIGIN=https://kaline-v27-preview.seu-subdominio.workers.dev
+```
+
+Sem essa variável, a Héstia continua local-only/same-origin.
+
+### Ollama/Qwen
+
+A Héstia espera Ollama local em:
+
+```text
+http://127.0.0.1:11434
+```
+
+Para preparar os modelos:
+
+```bash
+npm run llm:setup
+```
+
+Modelos esperados:
+
+- `qwen2.5:1.5b`
+- `qwen2.5:latest`
+- `qwen2.5-coder` ou `qwen2.5-coder:latest`
+
+### Testes manuais
+
+```bash
+curl http://127.0.0.1:4517/api/llm/health
+curl -X POST http://127.0.0.1:4517/api/llm/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"responda apenas: Kaline local ativa","facet":"kaline","model":"qwen2.5:1.5b"}'
+```

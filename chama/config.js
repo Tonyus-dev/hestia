@@ -86,4 +86,8 @@ export const config = {
   // CORS pra /api/presence/* — opt-in explícito via HESTIA_PRESENCE_CORS_ORIGIN, nunca ligado
   // por padrão. Vazio preserva o comportamento restritivo de sempre (same-origin/local only).
   presenceCorsOrigins: resolvePresenceCorsOrigins(),
+  // CORS da ponte Kaline V27b -> /api/llm/*: opt-in, origem única, sem wildcard.
+  kalineCorsOrigin: process.env.HESTIA_KALINE_CORS_ORIGIN || "",
+  // URL interna do Ollama local. Nunca vem do cliente.
+  ollamaUrl: process.env.OLLAMA_URL || "http://127.0.0.1:11434",
 };

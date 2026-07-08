@@ -24,7 +24,9 @@
     "setup:local": "bash scripts/setup-local.sh",
     "install:service": "bash scripts/install.sh --service-only",
     "doctor": "bash scripts/doctor.sh",
-    "kaline:init": "bash scripts/kaline-init.sh"
+    "kaline:init": "bash scripts/kaline-init.sh",
+    "llm:setup": "bash scripts/setup-ollama-qwen.sh",
+    "doctor:llm": "bash scripts/doctor.sh"
   },
   "dependencies": {
     "@fastify/static": "^9.1.3",
