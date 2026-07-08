@@ -26,7 +26,8 @@
     "doctor": "bash scripts/doctor.sh",
     "kaline:init": "bash scripts/kaline-init.sh",
     "llm:setup": "bash scripts/setup-ollama-qwen.sh",
-    "doctor:llm": "bash scripts/doctor.sh"
+    "doctor:llm": "bash scripts/doctor.sh",
+    "hermes:setup": "bash scripts/setup-hermes.sh"
   },
   "dependencies": {
     "@fastify/static": "^9.1.3",

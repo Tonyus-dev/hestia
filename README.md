@@ -693,3 +693,41 @@ curl -X POST http://127.0.0.1:4517/api/llm/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"responda apenas: Kaline local ativa","facet":"kaline","model":"qwen2.5:1.5b"}'
 ```
+
+## Hermes Inbox/Outbox
+
+A Caixa Hermes permite que a Kaline envie comandos persistentes para a Héstia por arquivos sincronizados via Syncthing.
+
+Syncthing não executa lógica.<br>
+Ele apenas sincroniza arquivos.
+
+A Héstia valida, processa e responde.
+
+Estrutura padrão:
+
+```txt
+/KALINE/HESTIA/inbox
+/KALINE/HESTIA/outbox
+/KALINE/HESTIA/archive
+/KALINE/HESTIA/errors
+```
+
+Config opcional:
+
+```env
+HESTIA_HERMES_ROOT=/KALINE/HESTIA
+```
+
+Endpoints:
+
+```http
+GET  /api/hermes/status
+POST /api/hermes/process-once
+```
+
+Processar uma vez:
+
+```bash
+curl -X POST http://127.0.0.1:4517/api/hermes/process-once \
+  -H "X-Hestia-Local-Confirm: hermes"
+```
