@@ -41,6 +41,7 @@ import { getPresenceSummary } from "./chama/presenceSummary.js";
 import { getBackupsPlan } from "./chama/backups.js";
 import { getCapabilities } from "./chama/capabilities.js";
 import { presenceRoute } from "./chama/presence.js";
+import { ALLOWED_MODELS, getLlmHealth, generateLocalChat } from "./chama/llm.js";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
 function parseCliArgs(argv) {
@@ -171,6 +172,22 @@ app.addHook("onRequest", async (req, reply) => {
   });
 });
 
+function applyKalineLlmCors(req, reply) {
+  const origin = req.headers.origin;
+  if (!config.kalineCorsOrigin || origin !== config.kalineCorsOrigin) return;
+  reply.header("Access-Control-Allow-Origin", origin);
+  reply.header("Vary", "Origin");
+  reply.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  reply.header("Access-Control-Allow-Headers", "Content-Type");
+}
+
+// --- CORS opt-in só para /api/llm/* (Kaline Workers, origem única). --------
+app.addHook("onRequest", async (req, reply) => {
+  if (!req.url.startsWith("/api/llm/")) return;
+  applyKalineLlmCors(req, reply);
+  if (req.method === "OPTIONS") return reply.code(204).send();
+});
+
 // --- CORS opt-in só para /api/presence/* (Presence pública, outra origem). --
 // Nunca cobre /api/local/* nem o resto de /api/* — a proteção do header de confirmação de
 // escrita depende justamente de não ter CORS habilitado ali (ver hook acima). Desligado por
@@ -204,6 +221,9 @@ app.addHook("onSend", async (req, reply, payload) => {
   reply.header("Referrer-Policy", "no-referrer");
   reply.header("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
   reply.header("Content-Security-Policy", CSP);
+  if (req.url.startsWith("/api/llm/")) {
+    applyKalineLlmCors(req, reply);
+  }
   if (req.url.startsWith("/api/presence/")) {
     const origin = req.headers.origin;
     if (isOriginAllowed(origin, config.presenceCorsOrigins)) {
@@ -215,6 +235,47 @@ app.addHook("onSend", async (req, reply, payload) => {
 });
 
 app.get("/api/health", async () => getHealth());
+
+app.get("/api/llm/health", async () => await getLlmHealth());
+app.post("/api/llm/chat", async (req, reply) => {
+  const body = req.body || {};
+  if (typeof body.message !== "string" || !body.message.trim()) {
+    reply.code(400).send({ ok: false, error: "message deve ser string não vazia." });
+    return;
+  }
+  const facet = body.facet || "kaline";
+  if (!["kaline", "klio", "kharis"].includes(facet)) {
+    reply.code(400).send({ ok: false, error: "facet inválida." });
+    return;
+  }
+  try {
+    return await generateLocalChat({
+      message: body.message,
+      facet,
+      presencaRegime: body.presencaRegime,
+      contextBlock: body.contextBlock,
+      structuredPrompt: body.structuredPrompt,
+      model: body.model,
+    });
+  } catch (err) {
+    if (err.code === "EMODELNOTALLOWED") {
+      reply
+        .code(400)
+        .send({ ok: false, error: "Modelo local não permitido.", allowedModels: ALLOWED_MODELS });
+      return;
+    }
+    if (err.code === "ELLMUNAVAILABLE") {
+      reply.code(503).send({
+        ok: false,
+        error: "Runtime local indisponível.",
+        runtime: "hestia-llm",
+        detail: err.detail,
+      });
+      return;
+    }
+    throw err;
+  }
+});
 app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/hardware/status", async () => await getHardwareStatus());
 app.get("/api/hardware/config", async () => await getHardwareConfig());

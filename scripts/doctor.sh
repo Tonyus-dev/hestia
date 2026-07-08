@@ -25,8 +25,21 @@ if command -v findmnt >/dev/null 2>&1 && findmnt -n -T "$KALINE_ROOT" >/dev/null
   ok "$KALINE_ROOT fstype=$fs"
   case "$fs" in fuseblk|ntfs|ntfs-3g) warn "NTFS/fuseblk: permissões vêm das opções de montagem; chown/chgrp/chmod podem não funcionar. Use HESTIA_SERVICE_USER=<dono do mount> para organizer.";; esac
 fi
-if [ "${active:-0}" -eq 1 ] && command -v curl >/dev/null 2>&1; then
-  curl -fsS "$BASE_URL/api/health" >/dev/null && ok "$BASE_URL/api/health responde" || bad "$BASE_URL/api/health não respondeu"
-  curl -fsS "$BASE_URL/api/storage/status" >/dev/null && ok "$BASE_URL/api/storage/status responde" || bad "$BASE_URL/api/storage/status não respondeu"
+if command -v curl >/dev/null 2>&1; then
+  if [ "${active:-0}" -eq 1 ]; then
+    curl -fsS "$BASE_URL/api/health" >/dev/null && ok "$BASE_URL/api/health responde" || bad "$BASE_URL/api/health não respondeu"
+    curl -fsS "$BASE_URL/api/storage/status" >/dev/null && ok "$BASE_URL/api/storage/status responde" || bad "$BASE_URL/api/storage/status não respondeu"
+    curl -fsS "$BASE_URL/api/llm/health" >/dev/null && ok "$BASE_URL/api/llm/health responde" || warn "$BASE_URL/api/llm/health não respondeu"
+  fi
+  if curl -fsS "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+    ok "Ollama responde em 127.0.0.1:11434"
+  elif [ "${HESTIA_REQUIRE_LLM:-0}" = "1" ]; then
+    bad "Ollama não respondeu em 127.0.0.1:11434"
+  else
+    warn "Ollama não respondeu em 127.0.0.1:11434; LLM local ficará indisponível"
+  fi
+else
+  warn "curl indisponível; pulando checagens HTTP/LLM"
 fi
+if command -v ollama >/dev/null 2>&1; then ok "ollama instalado ($(ollama --version 2>/dev/null || echo versão indisponível))"; elif [ "${HESTIA_REQUIRE_LLM:-0}" = "1" ]; then bad "ollama ausente"; else warn "ollama ausente; Héstia sobe sem LLM local"; fi
 exit "$fail"
