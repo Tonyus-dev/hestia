@@ -3,6 +3,7 @@ set -u -o pipefail
 SERVICE_NAME="${HESTIA_SERVICE_NAME:-hestia-console}"
 BASE_URL="${HESTIA_URL:-http://127.0.0.1:4517}"
 KALINE_ROOT="${KALINE_ROOT:-/KALINE}"
+HERMES_ROOT="${HESTIA_HERMES_ROOT:-/KALINE/HESTIA}"
 fail=0
 ok(){ echo "ok: $*"; }
 warn(){ echo "warn: $*"; }
@@ -18,6 +19,17 @@ if command -v systemctl >/dev/null 2>&1; then
   [ "$active" -eq 1 ] && ok "serviço $SERVICE_NAME ativo" || warn "serviço $SERVICE_NAME inativo"
 else warn "systemctl indisponível"; active=0; fi
 check_path "$KALINE_ROOT"
+
+if [ -d "$HERMES_ROOT" ]; then
+  ok "$HERMES_ROOT existe"
+  for dir in inbox outbox archive errors; do
+    [ -d "$HERMES_ROOT/$dir" ] && ok "$HERMES_ROOT/$dir existe" || warn "$HERMES_ROOT/$dir ausente; rode npm run hermes:setup"
+  done
+  [ -w "$HERMES_ROOT/outbox" ] && ok "$HERMES_ROOT/outbox gravável" || warn "$HERMES_ROOT/outbox sem escrita"
+  [ -w "$HERMES_ROOT/errors" ] && ok "$HERMES_ROOT/errors gravável" || warn "$HERMES_ROOT/errors sem escrita"
+else
+  if [ "${HESTIA_REQUIRE_HERMES:-0}" = "1" ]; then bad "$HERMES_ROOT ausente"; else warn "$HERMES_ROOT ausente; rode npm run hermes:setup"; fi
+fi
 [ -w "$KALINE_ROOT" ] && ok "$KALINE_ROOT gravável pelo usuário atual" || warn "$KALINE_ROOT não é gravável pelo usuário atual"
 [ -d "$KALINE_ROOT/entrada" ] && ok "$KALINE_ROOT/entrada existe" || warn "$KALINE_ROOT/entrada ausente; rode npm run kaline:init"
 if command -v findmnt >/dev/null 2>&1 && findmnt -n -T "$KALINE_ROOT" >/dev/null 2>&1; then
@@ -30,6 +42,7 @@ if command -v curl >/dev/null 2>&1; then
     curl -fsS "$BASE_URL/api/health" >/dev/null && ok "$BASE_URL/api/health responde" || bad "$BASE_URL/api/health não respondeu"
     curl -fsS "$BASE_URL/api/storage/status" >/dev/null && ok "$BASE_URL/api/storage/status responde" || bad "$BASE_URL/api/storage/status não respondeu"
     curl -fsS "$BASE_URL/api/llm/health" >/dev/null && ok "$BASE_URL/api/llm/health responde" || warn "$BASE_URL/api/llm/health não respondeu"
+    curl -fsS "$BASE_URL/api/hermes/status" >/dev/null && ok "$BASE_URL/api/hermes/status responde" || warn "$BASE_URL/api/hermes/status não respondeu"
   fi
   if curl -fsS "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
     ok "Ollama responde em 127.0.0.1:11434"

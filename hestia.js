@@ -42,6 +42,7 @@ import { getBackupsPlan } from "./chama/backups.js";
 import { getCapabilities } from "./chama/capabilities.js";
 import { presenceRoute } from "./chama/presence.js";
 import { ALLOWED_MODELS, getLlmHealth, generateLocalChat } from "./chama/llm.js";
+import { getHermesStatus, processHermesOnce } from "./chama/hermes.js";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
 function parseCliArgs(argv) {
@@ -172,6 +173,12 @@ app.addHook("onRequest", async (req, reply) => {
   });
 });
 
+app.addHook("onRequest", async (req, reply) => {
+  if (req.method !== "POST" || !req.url.startsWith("/api/hermes/process-once")) return;
+  if (req.headers["x-hestia-local-confirm"] === "hermes") return;
+  reply.code(403).send({ ok: false, error: "Confirmação local Hermes ausente." });
+});
+
 function applyKalineLlmCors(req, reply) {
   const origin = req.headers.origin;
   if (!config.kalineCorsOrigin || origin !== config.kalineCorsOrigin) return;
@@ -276,6 +283,8 @@ app.post("/api/llm/chat", async (req, reply) => {
     throw err;
   }
 });
+app.get("/api/hermes/status", async () => getHermesStatus(config));
+app.post("/api/hermes/process-once", async () => processHermesOnce(config));
 app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/hardware/status", async () => await getHardwareStatus());
 app.get("/api/hardware/config", async () => await getHardwareConfig());
