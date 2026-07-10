@@ -35,7 +35,7 @@ const FOLDERS = [
     category: "entrada",
     purpose: "Raiz das caixas de chegada da Ash.",
     required: true,
-    serviceHints: ["syncthing"],
+    serviceHints: ["samba"],
   }),
   folder({
     id: "entrada-uploads",
@@ -53,7 +53,7 @@ const FOLDERS = [
     purpose:
       "Arquivos vindos de celular, notebook, pendrive, HD externo, TV Box ou outro dispositivo.",
     required: true,
-    serviceHints: ["syncthing"],
+    serviceHints: ["samba"],
   }),
   folder({
     id: "entrada-manual",
