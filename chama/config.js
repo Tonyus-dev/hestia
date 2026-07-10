@@ -49,7 +49,7 @@ function loadUserConfig() {
   }
 }
 
-const ALLOWED_SERVICES = ["jellyfin", "syncthing", "smbd", "tailscaled"];
+const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
 // "external-readonly" é o único modo aceito: a Héstia nunca apaga o arquivo original de uma
 // fonte externa, só copia (ver chama/organizerPlan.js). Qualquer outro valor é descartado.
 const ALLOWED_SOURCE_MODES = ["external-readonly"];

@@ -38,7 +38,7 @@ describe("getStorageModel", () => {
     const { folders } = getStorageModel();
     const byRelativePath = Object.fromEntries(folders.map((f) => [f.relativePath, f]));
     expect(byRelativePath["entrada"]).toBeDefined();
-    expect(byRelativePath["entrada"].serviceHints).toContain("syncthing");
+    expect(byRelativePath["entrada"].serviceHints).toContain("samba");
     expect(byRelativePath["midia/videos"]).toBeDefined();
     expect(byRelativePath["midia/videos"].serviceHints).toEqual(
       expect.arrayContaining(["jellyfin", "samba"]),
