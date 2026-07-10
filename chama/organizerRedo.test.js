@@ -21,6 +21,7 @@ describe("redoOrganizerRun", () => {
     workDir = await makeTmpDir("hestia-redo-work-");
     process.env.HESTIA_KALINE_ROOT = workDir;
     dataDir = await makeTmpDir("hestia-redo-data-");
+    process.env.HESTIA_KALINE_ROOT = workDir;
     await fs.mkdir(join(dataDir, "events"), { recursive: true });
   });
 
