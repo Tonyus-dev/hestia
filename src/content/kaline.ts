@@ -40,7 +40,7 @@ export const HESTIA = {
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
   storagePaths: ["/", "/KALINE"],
-  services: ["jellyfin", "smbd", "tailscaled"],
+  services: ["jellyfin", "syncthing", "smbd", "tailscaled"],
   endpoints: [
     {
       method: "GET",

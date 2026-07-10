@@ -19,13 +19,11 @@ describe("redoOrganizerRun", () => {
 
   beforeEach(async () => {
     workDir = await makeTmpDir("hestia-redo-work-");
-    process.env.HESTIA_KALINE_ROOT = workDir;
     dataDir = await makeTmpDir("hestia-redo-data-");
     await fs.mkdir(join(dataDir, "events"), { recursive: true });
   });
 
   afterEach(async () => {
-    delete process.env.HESTIA_KALINE_ROOT;
     for (const dir of [workDir, dataDir]) {
       try {
         await fs.rm(dir, { recursive: true, force: true });
