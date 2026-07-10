@@ -10,13 +10,7 @@ export function getServiceBindings() {
       role: "Acesso de rede ao /KALINE",
       relatedStorage: ["/KALINE"],
     },
-    {
-      id: "syncthing",
-      serviceName: "syncthing",
-      label: "Syncthing",
-      role: "Sincronização de entrada/pastas escolhidas",
-      relatedStorage: ["/KALINE/entrada"],
-    },
+
     {
       id: "tailscale",
       serviceName: "tailscaled",

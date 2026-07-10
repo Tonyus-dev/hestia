@@ -253,7 +253,9 @@ describe("hestiaApi.ping", () => {
   it("retorna {status,ok} em sucesso", async () => {
     mockFetch(() => new Response("ok", { status: 200 }));
     const r = await hestiaApi.ping("/api/health");
-    expect(r).toEqual({ status: 200, ok: true });
+    expect(r.status).toBe(200);
+    expect(r.ok).toBe(true);
+    expect(typeof r.ms).toBe("number");
   });
 
   it("retorna status=erro quando o fetch falha", async () => {
@@ -261,7 +263,10 @@ describe("hestiaApi.ping", () => {
       throw new Error("boom");
     });
     const r = await hestiaApi.ping("/api/health");
-    expect(r).toEqual({ status: "erro", ok: false });
+    expect(r.status).toBe("erro");
+    expect(r.ok).toBe(false);
+    expect(typeof r.ms).toBe("number");
+    expect(r.error).toBe("boom");
   });
 
   it("retorna status=erro sem disparar fetch fora de host local", async () => {
@@ -269,7 +274,10 @@ describe("hestiaApi.ping", () => {
     const spy = mockFetch(() => new Response("", { status: 200 }));
     const r = await hestiaApi.ping("/api/health");
     expect(spy).not.toHaveBeenCalled();
-    expect(r).toEqual({ status: "erro", ok: false });
+    expect(r.status).toBe("erro");
+    expect(r.ok).toBe(false);
+    expect(r.ms).toBe(0);
+    expect(r.error).toBe("sem base local");
   });
 });
 

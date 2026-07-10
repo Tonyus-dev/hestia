@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StoragePage } from "./_station.storage";
+import { OrganizarPage } from "./_station.organizar";
 import { hestiaApi } from "@/lib/hestia/api";
 
 vi.mock("@/lib/hestia/api", async (importOriginal) => {
@@ -55,17 +56,10 @@ describe("StoragePage", () => {
     vi.clearAllMocks();
   });
 
-  it("renderiza o cabeçalho e as garantias de segurança", async () => {
+  it("renderiza o cabeçalho do Storage", async () => {
     render(<StoragePage />);
-    expect(screen.getByText("Storage e Organizer")).toBeTruthy();
-    expect(screen.getByText(/Nada é apagado/)).toBeTruthy();
+    expect(screen.getByText("Storage da Héstia Station")).toBeTruthy();
     await waitFor(() => expect(hestiaApi.storageModel).toHaveBeenCalled());
-  });
-
-  it("não gera plano automaticamente ao montar (só sob clique explícito)", async () => {
-    render(<StoragePage />);
-    await waitFor(() => expect(hestiaApi.storageModel).toHaveBeenCalled());
-    expect(hestiaApi.organizerPlan).not.toHaveBeenCalled();
   });
 
   it("expande um card colapsado (Modelo) e mostra o conteúdo", async () => {
@@ -79,9 +73,9 @@ describe("StoragePage", () => {
             relativePath: "entrada",
             absolutePath: "/KALINE/entrada",
             category: "entrada",
-            purpose: "Arquivos recebidos via Syncthing.",
+            purpose: "Raiz das caixas de chegada da Ash.",
             required: true,
-            serviceHints: ["syncthing"],
+            serviceHints: ["samba"],
           },
         ],
       }),
@@ -91,7 +85,32 @@ describe("StoragePage", () => {
     await waitFor(() => expect(screen.getByText("Árvore canônica /KALINE")).toBeTruthy());
 
     await user.click(screen.getByText("Árvore canônica /KALINE"));
-    expect(await screen.findByText("Arquivos recebidos via Syncthing.")).toBeTruthy();
+    expect(await screen.findByText("Raiz das caixas de chegada da Ash.")).toBeTruthy();
+  });
+});
+
+describe("OrganizarPage", () => {
+  beforeEach(() => {
+    vi.mocked(hestiaApi.storageModel).mockResolvedValue(emptyModel());
+    vi.mocked(hestiaApi.storageScan).mockResolvedValue(emptyScan());
+    vi.mocked(hestiaApi.services).mockResolvedValue(emptyServices());
+    vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(emptyRuns());
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renderiza o cabeçalho e as garantias de segurança", async () => {
+    render(<OrganizarPage />);
+    expect(screen.getByText("Organizar por plano aprovado")).toBeTruthy();
+    expect(screen.getByText(/Nenhum arquivo é alterado/)).toBeTruthy();
+  });
+
+  it("não gera plano automaticamente ao montar (só sob clique explícito)", async () => {
+    render(<OrganizarPage />);
+    expect(hestiaApi.organizerPlan).not.toHaveBeenCalled();
   });
 
   it("gera plano sob clique e mostra os itens", async () => {
@@ -114,7 +133,7 @@ describe("StoragePage", () => {
       }),
     );
     const user = userEvent.setup();
-    render(<StoragePage />);
+    render(<OrganizarPage />);
 
     await user.click(screen.getByRole("button", { name: "Gerar plano" }));
 
@@ -131,7 +150,7 @@ describe("StoragePage", () => {
       details: { origin: "network" },
     });
     const user = userEvent.setup();
-    render(<StoragePage />);
+    render(<OrganizarPage />);
 
     await user.click(screen.getByRole("button", { name: "Gerar plano" }));
 
@@ -170,13 +189,13 @@ describe("StoragePage", () => {
     );
 
     const user = userEvent.setup();
-    render(<StoragePage />);
+    render(<OrganizarPage />);
     await user.click(screen.getByRole("button", { name: "Gerar plano" }));
     await screen.findByRole("button", { name: "Aplicar plano localmente" });
 
     await user.click(screen.getByRole("button", { name: "Aplicar plano localmente" }));
 
-    expect(hestiaApi.organizerApply).toHaveBeenCalledWith("plan_1_deadbeef");
+    expect(hestiaApi.organizerApply).toHaveBeenCalledWith("plan_1_deadbeef", false);
     expect(await screen.findByText(/applied/)).toBeTruthy();
     // O plano some da tela depois de aplicado.
     expect(screen.queryByRole("button", { name: "Aplicar plano localmente" })).toBeNull();
@@ -198,7 +217,7 @@ describe("StoragePage", () => {
           ],
         }),
       );
-      render(<StoragePage />);
+      render(<OrganizarPage />);
       expect(await screen.findByRole("button", { name: "Desfazer" })).toBeTruthy();
     });
 
@@ -217,7 +236,7 @@ describe("StoragePage", () => {
           ],
         }),
       );
-      render(<StoragePage />);
+      render(<OrganizarPage />);
       await screen.findByText("org_1");
       expect(screen.queryByRole("button", { name: "Desfazer" })).toBeNull();
       expect(screen.getByText("já desfeita")).toBeTruthy();
@@ -238,7 +257,7 @@ describe("StoragePage", () => {
           ],
         }),
       );
-      render(<StoragePage />);
+      render(<OrganizarPage />);
       expect(await screen.findByRole("button", { name: "Refazer" })).toBeTruthy();
     });
 
@@ -257,7 +276,7 @@ describe("StoragePage", () => {
           ],
         }),
       );
-      render(<StoragePage />);
+      render(<OrganizarPage />);
       await screen.findByText("redo_1");
       expect(screen.queryByRole("button", { name: "Desfazer" })).toBeNull();
       expect(screen.queryByRole("button", { name: "Refazer" })).toBeNull();
@@ -291,7 +310,7 @@ describe("StoragePage", () => {
       );
 
       const user = userEvent.setup();
-      render(<StoragePage />);
+      render(<OrganizarPage />);
       await user.click(await screen.findByRole("button", { name: "Desfazer" }));
 
       expect(hestiaApi.organizerUndo).toHaveBeenCalledWith("org_1");
@@ -326,7 +345,7 @@ describe("StoragePage", () => {
       );
 
       const user = userEvent.setup();
-      render(<StoragePage />);
+      render(<OrganizarPage />);
       await user.click(await screen.findByRole("button", { name: "Refazer" }));
 
       expect(hestiaApi.organizerRedo).toHaveBeenCalledWith("undo_1");
