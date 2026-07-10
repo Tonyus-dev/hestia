@@ -695,12 +695,12 @@ curl -X POST http://127.0.0.1:4517/api/llm/chat \
 
 ## Hermes Inbox/Outbox
 
-A Caixa Hermes permite que a Kaline envie comandos persistentes para a Héstia por arquivos em uma pasta local ou compartilhada via rede (Samba/Tailscale).
+A Caixa Hermes permite que agentes ou scripts coloquem comandos persistentes para a Héstia por arquivos estruturados em uma pasta local ou compartilhada via rede (Samba/Tailscale).
 
 Nenhuma ferramenta de sincronização ativa automática executa lógica ou é pressuposta.<br>
-Os arquivos são lidos diretamente de um diretório.
+Os arquivos são lidos diretamente de um diretório monitorado.
 
-A Héstia valida, processa e responde.
+A Héstia valida, processa e responde localmente.
 
 Estrutura padrão:
 
