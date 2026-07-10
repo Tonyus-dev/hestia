@@ -359,7 +359,6 @@ A Héstia reconhece os serviços já existentes no servidor:
 
 - Samba;
 - Jellyfin;
-- Syncthing;
 - Tailscale.
 
 Ela não instala, configura, inicia, para ou reinicia nenhum deles — só descreve o vínculo lógico
@@ -442,7 +441,7 @@ proteja com Tailscale/firewall na frente).
   "host": "127.0.0.1",
   "port": 4517,
   "storagePaths": ["/", "/KALINE", "/mnt/backup"],
-  "services": ["jellyfin", "syncthing", "smbd", "tailscaled"],
+  "services": ["jellyfin", "smbd", "tailscaled"],
   "storageSources": [
     {
       "id": "filmes-hd",
@@ -456,7 +455,7 @@ proteja com Tailscale/firewall na frente).
 ```
 
 Só os campos acima são lidos. Serviços são intersectados com a lista permitida:
-`jellyfin`, `syncthing`, `smbd`, `tailscaled`. Cada item de `storageSources` só é aceito se tiver
+`jellyfin`, `smbd`, `tailscaled`. Cada item de `storageSources` só é aceito se tiver
 os cinco campos (`id`/`label`/`path`/`category`/`mode`) como string — qualquer outro campo ou
 item incompleto é ignorado. `path` nunca vem de query/body/header, só deste arquivo.
 
@@ -696,10 +695,10 @@ curl -X POST http://127.0.0.1:4517/api/llm/chat \
 
 ## Hermes Inbox/Outbox
 
-A Caixa Hermes permite que a Kaline envie comandos persistentes para a Héstia por arquivos sincronizados via Syncthing.
+A Caixa Hermes permite que a Kaline envie comandos persistentes para a Héstia por arquivos em uma pasta local ou compartilhada via rede (Samba/Tailscale).
 
-Syncthing não executa lógica.<br>
-Ele apenas sincroniza arquivos.
+Nenhuma ferramenta de sincronização ativa automática executa lógica ou é pressuposta.<br>
+Os arquivos são lidos diretamente de um diretório.
 
 A Héstia valida, processa e responde.
 

@@ -1,13 +1,13 @@
-# PR H2 — Hermes Inbox/Outbox via Syncthing
+# PR H2 — Hermes Inbox/Outbox via Pasta Compartilhada
 
 ## Objetivo
 
-Adicionar à Héstia uma caixa persistente de comandos por arquivos, sincronizável via Syncthing.
+Adicionar à Héstia uma caixa persistente de comandos por arquivos, transportada via pasta local/compartilhada.
 
 ## Princípio
 
 - Kaline cria comandos.
-- Syncthing sincroniza arquivos.
+- Pasta compartilhada transporta arquivos.
 - Héstia valida e processa.
 - Outbox devolve resultado.
 
