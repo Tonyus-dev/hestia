@@ -23,7 +23,7 @@ Environment=NODE_ENV=production
 DynamicUser=yes
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/KALINE
+ReadWritePaths=-/KALINE
 
 [Install]
 WantedBy=multi-user.target
