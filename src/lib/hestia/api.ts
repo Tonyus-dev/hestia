@@ -158,6 +158,30 @@ export type ServiceBindings = ServiceBinding[];
 export type LogItem = { timestamp: string; level: string; message: string };
 export type Logs = { items: LogItem[]; tail?: number; capacity?: number };
 
+export type LlmHealth = {
+  ok: boolean;
+  runtime: string;
+  models: string[];
+  allowedModels: string[];
+  defaultModel: string;
+  timeoutMs: number;
+  error?: string;
+  detail?: string;
+  checkedAt: string;
+};
+
+export type HermesStatus = {
+  ok: boolean;
+  root: string;
+  folders?: Record<string, boolean>;
+  pending?: number;
+  processed?: number;
+  failed?: number;
+  code?: string;
+  error?: string;
+  checkedAt: string;
+};
+
 export type Config = {
   appName: string;
   serverName: string;
@@ -465,6 +489,8 @@ async function safePost<T>(
 
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
+  llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
+  hermesStatus: () => safeFetch<HermesStatus>("/api/hermes/status"),
   server: () => safeFetch<ServerStatus>("/api/server/status"),
   hardwareStatus: () => safeFetch<HardwareStatus>("/api/hardware/status"),
   hardwareConfig: () => safeFetch<HardwareConfig>("/api/hardware/config"),
