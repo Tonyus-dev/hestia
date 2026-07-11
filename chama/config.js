@@ -90,6 +90,8 @@ export const config = {
   kalineCorsOrigin: process.env.HESTIA_KALINE_CORS_ORIGIN || "",
   // URL interna do Ollama local. Nunca vem do cliente.
   ollamaUrl: process.env.OLLAMA_URL || "http://127.0.0.1:11434",
+  // Limite curto e explícito para a ponte local não travar consumidores como Klio/Kaline.
+  llmTimeoutMs: Number(process.env.HESTIA_LLM_TIMEOUT_MS) || 15_000,
   // Raiz interna da Caixa Hermes. Nunca vem de body/query.
   hermesRoot: process.env.HESTIA_HERMES_ROOT || "/KALINE/HESTIA",
 };

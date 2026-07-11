@@ -41,7 +41,13 @@ import { getPresenceSummary } from "./chama/presenceSummary.js";
 import { getBackupsPlan } from "./chama/backups.js";
 import { getCapabilities } from "./chama/capabilities.js";
 import { presenceRoute } from "./chama/presence.js";
-import { ALLOWED_MODELS, getLlmHealth, generateLocalChat } from "./chama/llm.js";
+import {
+  ALLOWED_MODELS,
+  getLlmHealth,
+  generateLocalChat,
+  normalizeFacet,
+  validateChatInput,
+} from "./chama/llm.js";
 import { getHermesStatus, processHermesOnce } from "./chama/hermes.js";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
@@ -250,9 +256,11 @@ app.post("/api/llm/chat", async (req, reply) => {
     reply.code(400).send({ ok: false, error: "message deve ser string não vazia." });
     return;
   }
-  const facet = body.facet || "kaline";
-  if (!["kaline", "klio", "kharis"].includes(facet)) {
-    reply.code(400).send({ ok: false, error: "facet inválida." });
+  const facet = normalizeFacet(body.facet);
+  try {
+    validateChatInput({ message: body.message, facet });
+  } catch (err) {
+    reply.code(400).send({ ok: false, error: err.message });
     return;
   }
   try {
