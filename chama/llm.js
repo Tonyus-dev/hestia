@@ -5,6 +5,7 @@ export const ALLOWED_MODELS = [
   "qwen2.5:latest",
   "qwen2.5-coder",
   "qwen2.5-coder:latest",
+  "hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0",
 ];
 export const DEFAULT_MODEL = "qwen2.5:latest";
 

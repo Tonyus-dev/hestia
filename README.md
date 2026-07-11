@@ -698,6 +698,10 @@ Para preparar os modelos:
 npm run llm:setup
 ```
 
+Modelos locais leves recomendados para instalação manual via Ollama:
+
+- [Modelos locais leves](./docs/LOCAL_MODELS.md)
+
 Modelos esperados:
 
 - `qwen2.5:1.5b`
