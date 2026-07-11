@@ -198,6 +198,16 @@ Checklist de fechamento do pacote:
 
 Pendência fora do sandbox: validar instalação real do `.deb` em Linux Mint/systemd como PID 1 antes de chamar o pacote de produção final no host da Station.
 
+## Release local
+
+Para validar a Héstia como Station local instalável, use:
+
+- [Release Checklist](./docs/RELEASE_CHECKLIST.md)
+- [Local Install Smoke Test](./docs/LOCAL_INSTALL_SMOKE_TEST.md)
+- [Safety Freeze](./docs/SAFETY_FREEZE.md)
+
+A Héstia deve permanecer local-first, loopback-first e sem LAN por padrão.
+
 ## CLI
 
 ```

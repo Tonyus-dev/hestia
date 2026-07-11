@@ -85,15 +85,21 @@ mkdir -p "$APP_DIR/$SERVER_DEST_DIR"
 cp -r "$SERVER_SRC_DIR/." "$APP_DIR/$SERVER_DEST_DIR/"
 
 log "instalando dependências de produção no staging"
-(cd "$APP_DIR" && npm install --omit=dev --no-audit --no-fund)
+if [ -f "$APP_DIR/package-lock.json" ]; then
+  (cd "$APP_DIR" && npm ci --omit=dev --no-audit --no-fund)
+else
+  (cd "$APP_DIR" && npm install --omit=dev --no-audit --no-fund)
+fi
 
 log "instalando systemd unit, launcher, desktop entry e ícones"
 mkdir -p "$STAGING/etc/systemd/system"
 cp "$ROOT_DIR/packaging/hestia-console.service" "$STAGING/etc/systemd/system/"
 
 mkdir -p "$STAGING/usr/bin"
-cp "$ROOT_DIR/packaging/bin/hestia-console" "$STAGING/usr/bin/hestia-console"
-chmod 0755 "$STAGING/usr/bin/hestia-console"
+for bin in hestia-console hestia-console-status hestia-console-stop; do
+  cp "$ROOT_DIR/packaging/bin/$bin" "$STAGING/usr/bin/$bin"
+  chmod 0755 "$STAGING/usr/bin/$bin"
+done
 
 mkdir -p "$STAGING/usr/share/applications"
 cp "$ROOT_DIR/packaging/hestia-console.desktop" "$STAGING/usr/share/applications/"
