@@ -2,7 +2,7 @@ import { lstat, mkdir, readdir, readFile, realpath, rename, writeFile } from "no
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
-import { generateLocalChat } from "./llm.js";
+import { generateLocalChat, validateChatInput } from "./llm.js";
 
 export const HERMES_FOLDERS = ["inbox", "outbox", "archive", "errors"];
 export const ALLOWED_HERMES_TYPES = ["station.status", "llm.chat"];
@@ -90,6 +90,7 @@ export async function getHermesStatus(config) {
     return {
       ok: false,
       root: path.resolve(config.hermesRoot),
+      code: "HERMES_ROOT_UNAVAILABLE",
       error: "Hermes root indisponível ou sem permissão.",
       checkedAt,
     };
@@ -113,6 +114,7 @@ function validateCommand(command) {
     throw new Error("createdAt Hermes inválido.");
   if (!command.payload || typeof command.payload !== "object" || Array.isArray(command.payload))
     throw new Error("payload Hermes inválido.");
+  if (command.type === "llm.chat") validateChatInput(command.payload);
 }
 
 async function uniquePath(dir, basename) {
@@ -193,7 +195,22 @@ async function failCommand(filePath, errorsDir, fallbackId, err) {
 
 export async function processHermesOnce(config) {
   const checkedAt = now();
-  const { root } = await ensureHermesFolders(config);
+  let root;
+  try {
+    ({ root } = await ensureHermesFolders(config));
+  } catch {
+    return {
+      ok: false,
+      processed: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+      root: path.resolve(config.hermesRoot),
+      code: "HERMES_ROOT_UNAVAILABLE",
+      error: "Hermes root indisponível ou sem permissão.",
+      checkedAt,
+    };
+  }
   const paths = folderPaths(root);
   const entries = (await readdir(paths.inbox, { withFileTypes: true })).sort((a, b) =>
     a.name.localeCompare(b.name),
