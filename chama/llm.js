@@ -10,20 +10,28 @@ export const DEFAULT_MODEL = "qwen2.5:latest";
 
 const OLLAMA_UNAVAILABLE_DETAIL = "Ollama não respondeu em 127.0.0.1:11434";
 const OLLAMA_TIMEOUT_DETAIL = "Tempo esgotado ao consultar o Ollama local";
+const MAX_MESSAGE_CHARS = 12_000;
+const MAX_PROMPT_BLOCK_CHARS = 40_000;
 
 function checkedAt() {
   return new Date().toISOString();
 }
 
-function timeoutMs() {
-  return Number.isFinite(config.llmTimeoutMs) && config.llmTimeoutMs > 0
-    ? config.llmTimeoutMs
-    : 15_000;
+function resolveTimeoutMs(value, fallback) {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-async function fetchOllama(path, init = {}) {
+function healthTimeoutMs() {
+  return resolveTimeoutMs(config.llmHealthTimeoutMs, 5_000);
+}
+
+function chatTimeoutMs() {
+  return resolveTimeoutMs(config.llmChatTimeoutMs, 90_000);
+}
+
+async function fetchOllama(path, init = {}, timeoutMs) {
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs());
+  const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(new URL(path, config.ollamaUrl), { ...init, signal: controller.signal });
   } catch (err) {
@@ -56,22 +64,36 @@ export function isAllowedFacet(facet) {
   return ["kaline", "klio", "kharis"].includes(facet);
 }
 
-export function validateChatInput({ message, facet = "kaline" }) {
-  if (typeof message !== "string" || !message.trim()) {
-    const err = new Error("message deve ser string não vazia.");
-    err.code = "ELLMBADREQUEST";
-    throw err;
+function badChatInput(message, code) {
+  const err = new Error(message);
+  err.code = code;
+  throw err;
+}
+
+function validateOptionalPromptBlock(value, name, code) {
+  if (value === undefined || value === null || value === "") return;
+  if (typeof value !== "string" || value.length > MAX_PROMPT_BLOCK_CHARS) {
+    badChatInput(
+      `${name} deve ser string com no máximo ${MAX_PROMPT_BLOCK_CHARS} caracteres.`,
+      code,
+    );
+  }
+}
+
+export function validateChatInput({ message, facet = "kaline", contextBlock, structuredPrompt }) {
+  if (typeof message !== "string" || !message.trim() || message.length > MAX_MESSAGE_CHARS) {
+    badChatInput("message deve ser string não vazia.", "INVALID_MESSAGE");
   }
   if (!isAllowedFacet(normalizeFacet(facet))) {
-    const err = new Error("facet inválida.");
-    err.code = "ELLMBADREQUEST";
-    throw err;
+    badChatInput("facet inválida.", "INVALID_FACET");
   }
+  validateOptionalPromptBlock(contextBlock, "contextBlock", "INVALID_CONTEXT_BLOCK");
+  validateOptionalPromptBlock(structuredPrompt, "structuredPrompt", "INVALID_STRUCTURED_PROMPT");
 }
 
 export async function getLlmHealth() {
   try {
-    const res = await fetchOllama("/api/tags");
+    const res = await fetchOllama("/api/tags", {}, healthTimeoutMs());
     if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
     const data = await res.json();
     const models = Array.isArray(data.models)
@@ -83,7 +105,7 @@ export async function getLlmHealth() {
       models,
       allowedModels: ALLOWED_MODELS,
       defaultModel: DEFAULT_MODEL,
-      timeoutMs: timeoutMs(),
+      timeoutMs: healthTimeoutMs(),
       checkedAt: checkedAt(),
     };
   } catch (err) {
@@ -93,7 +115,7 @@ export async function getLlmHealth() {
       models: [],
       allowedModels: ALLOWED_MODELS,
       defaultModel: DEFAULT_MODEL,
-      timeoutMs: timeoutMs(),
+      timeoutMs: healthTimeoutMs(),
       error: "Ollama indisponível",
       detail: err?.code === "ELLM_TIMEOUT" ? OLLAMA_TIMEOUT_DETAIL : OLLAMA_UNAVAILABLE_DETAIL,
       checkedAt: checkedAt(),
@@ -126,7 +148,7 @@ export async function generateLocalChat({
   model,
 }) {
   const normalizedFacet = normalizeFacet(facet);
-  validateChatInput({ message, facet: normalizedFacet });
+  validateChatInput({ message, facet: normalizedFacet, contextBlock, structuredPrompt });
   const chosenModel = normalizeModel(model);
   if (!isAllowedModel(chosenModel)) {
     const err = new Error("Modelo local não permitido.");
@@ -135,21 +157,25 @@ export async function generateLocalChat({
   }
 
   try {
-    const res = await fetchOllama("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: chosenModel,
-        prompt: buildPrompt({
-          message,
-          facet: normalizedFacet,
-          presencaRegime,
-          contextBlock,
-          structuredPrompt,
+    const res = await fetchOllama(
+      "/api/generate",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: chosenModel,
+          prompt: buildPrompt({
+            message,
+            facet: normalizedFacet,
+            presencaRegime,
+            contextBlock,
+            structuredPrompt,
+          }),
+          stream: false,
         }),
-        stream: false,
-      }),
-    });
+      },
+      chatTimeoutMs(),
+    );
     if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
     const data = await res.json();
     return {
@@ -162,6 +188,7 @@ export async function generateLocalChat({
   } catch (err) {
     const unavailable = new Error("Runtime local indisponível.");
     unavailable.code = "ELLMUNAVAILABLE";
+    unavailable.reasonCode = err?.code === "ELLM_TIMEOUT" ? "LLM_TIMEOUT" : "OLLAMA_UNAVAILABLE";
     unavailable.detail =
       err?.code === "ELLM_TIMEOUT" ? OLLAMA_TIMEOUT_DETAIL : OLLAMA_UNAVAILABLE_DETAIL;
     throw unavailable;

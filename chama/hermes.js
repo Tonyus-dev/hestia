@@ -90,6 +90,7 @@ export async function getHermesStatus(config) {
     return {
       ok: false,
       root: path.resolve(config.hermesRoot),
+      code: "HERMES_ROOT_UNAVAILABLE",
       error: "Hermes root indisponível ou sem permissão.",
       checkedAt,
     };
@@ -205,6 +206,7 @@ export async function processHermesOnce(config) {
       skipped: 0,
       results: [],
       root: path.resolve(config.hermesRoot),
+      code: "HERMES_ROOT_UNAVAILABLE",
       error: "Hermes root indisponível ou sem permissão.",
       checkedAt,
     };

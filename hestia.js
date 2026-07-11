@@ -182,7 +182,11 @@ app.addHook("onRequest", async (req, reply) => {
 app.addHook("onRequest", async (req, reply) => {
   if (req.method !== "POST" || !req.url.startsWith("/api/hermes/process-once")) return;
   if (req.headers["x-hestia-local-confirm"] === "hermes") return;
-  reply.code(403).send({ ok: false, error: "Confirmação local Hermes ausente." });
+  reply.code(403).send({
+    ok: false,
+    code: "HERMES_CONFIRMATION_REQUIRED",
+    error: "Confirmação local Hermes ausente.",
+  });
 });
 
 function applyKalineLlmCors(req, reply) {
@@ -252,15 +256,16 @@ app.get("/api/health", async () => getHealth());
 app.get("/api/llm/health", async () => await getLlmHealth());
 app.post("/api/llm/chat", async (req, reply) => {
   const body = req.body || {};
-  if (typeof body.message !== "string" || !body.message.trim()) {
-    reply.code(400).send({ ok: false, error: "message deve ser string não vazia." });
-    return;
-  }
   const facet = normalizeFacet(body.facet);
   try {
-    validateChatInput({ message: body.message, facet });
+    validateChatInput({
+      message: body.message,
+      facet,
+      contextBlock: body.contextBlock,
+      structuredPrompt: body.structuredPrompt,
+    });
   } catch (err) {
-    reply.code(400).send({ ok: false, error: err.message });
+    reply.code(400).send({ ok: false, code: err.code || "INVALID_CHAT_INPUT", error: err.message });
     return;
   }
   try {
@@ -274,14 +279,18 @@ app.post("/api/llm/chat", async (req, reply) => {
     });
   } catch (err) {
     if (err.code === "EMODELNOTALLOWED") {
-      reply
-        .code(400)
-        .send({ ok: false, error: "Modelo local não permitido.", allowedModels: ALLOWED_MODELS });
+      reply.code(400).send({
+        ok: false,
+        code: "MODEL_NOT_ALLOWED",
+        error: "Modelo local não permitido.",
+        allowedModels: ALLOWED_MODELS,
+      });
       return;
     }
     if (err.code === "ELLMUNAVAILABLE") {
       reply.code(503).send({
         ok: false,
+        code: err.reasonCode === "LLM_TIMEOUT" ? "LLM_TIMEOUT" : "OLLAMA_UNAVAILABLE",
         error: "Runtime local indisponível.",
         runtime: "hestia-llm",
         detail: err.detail,

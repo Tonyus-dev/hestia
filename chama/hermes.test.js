@@ -77,4 +77,16 @@ describe("hermes inbox/outbox", () => {
     expect(error.error).toContain("message deve ser string");
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
+
+  it("process-once retorna code estável quando root está indisponível", async () => {
+    const summary = await processHermesOnce({ hermesRoot: "/dev/null/hestia" });
+
+    expect(summary).toMatchObject({
+      ok: false,
+      code: "HERMES_ROOT_UNAVAILABLE",
+      processed: 0,
+      failed: 0,
+      skipped: 0,
+    });
+  });
 });
