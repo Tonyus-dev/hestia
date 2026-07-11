@@ -6,7 +6,7 @@ A Héstia não baixa modelos automaticamente e não chama Hugging Face pelo back
 
 - `/api/llm/health` apenas detecta modelos disponíveis no Ollama local.
 - `/api/llm/chat` só aceita modelos presentes na allowlist interna da Héstia.
-- O modelo default global não muda neste documento.
+- O modelo default global é `qwen2.5:1.5b`.
 - Nenhum endpoint novo, UI nova ou runtime novo é necessário.
 
 ## Geral leve

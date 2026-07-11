@@ -702,11 +702,16 @@ Modelos locais leves recomendados para instalação manual via Ollama:
 
 - [Modelos locais leves](./docs/LOCAL_MODELS.md)
 
-Modelos esperados:
+Modelos recomendados:
 
 - `qwen2.5:1.5b`
+- `hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0`
+
+Modelos legados ainda permitidos:
+
 - `qwen2.5:latest`
-- `qwen2.5-coder` ou `qwen2.5-coder:latest`
+- `qwen2.5-coder`
+- `qwen2.5-coder:latest`
 
 ### Testes manuais
 
