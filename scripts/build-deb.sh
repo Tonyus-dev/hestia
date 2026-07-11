@@ -37,8 +37,13 @@ log "limpando staging e dist-deb/ anteriores"
 rm -rf "$STAGING" "$OUT_DIR"
 mkdir -p "$OUT_DIR" "$STAGING/DEBIAN"
 
-log "instalando dependências do projeto"
-(cd "$ROOT_DIR" && npm install)
+if [ -f "$ROOT_DIR/package-lock.json" ]; then
+  log "instalando dependências do projeto com npm ci"
+  (cd "$ROOT_DIR" && npm ci)
+else
+  log "package-lock ausente; instalando dependências do projeto com npm install"
+  (cd "$ROOT_DIR" && npm install)
+fi
 
 log "buildando o frontend"
 (cd "$ROOT_DIR" && npm run build)
@@ -48,7 +53,7 @@ log "buildando o frontend"
 # runtime. O build é SSR (bundle Nitro), não uma SPA estática: precisa dos
 # dois lados, não só do público.
 PUBLIC_SRC=""
-for candidate in "dist/client:dist/server/index.mjs" ".output/public:.output/server/index.mjs"; do
+for candidate in "dist/client:dist/server/index.mjs" "dist/client:dist/server/server.js" ".output/public:.output/server/index.mjs"; do
   publicRel="${candidate%%:*}"
   serverRel="${candidate##*:}"
   if [ -d "$ROOT_DIR/$publicRel" ] && [ -f "$ROOT_DIR/$serverRel" ]; then
@@ -60,7 +65,7 @@ for candidate in "dist/client:dist/server/index.mjs" ".output/public:.output/ser
   fi
 done
 if [ -z "$PUBLIC_SRC" ]; then
-  echo "[build-deb] ERRO: build do frontend (SSR) não encontrado (dist/client+dist/server ou .output/public+.output/server)." >&2
+  echo "[build-deb] ERRO: build do frontend (SSR) não encontrado (dist/client+dist/server/index.mjs|server.js ou .output/public+.output/server)." >&2
   exit 1
 fi
 log "frontend encontrado em $PUBLIC_DEST (+ bundle SSR em $SERVER_DEST_DIR)"
