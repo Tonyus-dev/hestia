@@ -188,6 +188,26 @@ Requer Node.js 20+ instalado no sistema (o pacote depende de `nodejs` e
 pacote `nodejs` de cada distro/PPA — o `postinst` avisa se a versão
 detectada for antiga).
 
+Checklist de fechamento do pacote:
+
+- [x] Build de produção passa sem erros.
+- [x] `.deb` é gerado por `npm run build-deb` a partir do `package-lock.json` quando ele existe.
+- [x] O pacote instala o serviço systemd em loopback (`127.0.0.1:4517`), launcher de menu e ícones.
+- [x] O launcher só abre a URL local; não abre LAN nem inicia automação.
+- [x] `npm run doctor` é diagnóstico read-only: não cria diretórios, não instala pacotes e não aplica organizer.
+
+Pendência fora do sandbox: validar instalação real do `.deb` em Linux Mint/systemd como PID 1 antes de chamar o pacote de produção final no host da Station.
+
+## Release local
+
+Para validar a Héstia como Station local instalável, use:
+
+- [Release Checklist](./docs/RELEASE_CHECKLIST.md)
+- [Local Install Smoke Test](./docs/LOCAL_INSTALL_SMOKE_TEST.md)
+- [Safety Freeze](./docs/SAFETY_FREEZE.md)
+
+A Héstia deve permanecer local-first, loopback-first e sem LAN por padrão.
+
 ## CLI
 
 ```
@@ -678,11 +698,20 @@ Para preparar os modelos:
 npm run llm:setup
 ```
 
-Modelos esperados:
+Modelos locais leves recomendados para instalação manual via Ollama:
+
+- [Modelos locais leves](./docs/LOCAL_MODELS.md)
+
+Modelos recomendados:
 
 - `qwen2.5:1.5b`
+- `hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0`
+
+Modelos legados ainda permitidos:
+
 - `qwen2.5:latest`
-- `qwen2.5-coder` ou `qwen2.5-coder:latest`
+- `qwen2.5-coder`
+- `qwen2.5-coder:latest`
 
 ### Testes manuais
 

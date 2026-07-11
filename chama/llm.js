@@ -5,8 +5,9 @@ export const ALLOWED_MODELS = [
   "qwen2.5:latest",
   "qwen2.5-coder",
   "qwen2.5-coder:latest",
+  "hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0",
 ];
-export const DEFAULT_MODEL = "qwen2.5:latest";
+export const DEFAULT_MODEL = "qwen2.5:1.5b";
 
 const OLLAMA_UNAVAILABLE_DETAIL = "Ollama não respondeu em 127.0.0.1:11434";
 const OLLAMA_TIMEOUT_DETAIL = "Tempo esgotado ao consultar o Ollama local";

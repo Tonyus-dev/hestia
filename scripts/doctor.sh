@@ -4,11 +4,13 @@ SERVICE_NAME="${HESTIA_SERVICE_NAME:-hestia-console}"
 BASE_URL="${HESTIA_URL:-http://127.0.0.1:4517}"
 KALINE_ROOT="${KALINE_ROOT:-/KALINE}"
 HERMES_ROOT="${HESTIA_HERMES_ROOT:-/KALINE/HESTIA}"
+DESKTOP_FILE="${HESTIA_DESKTOP_FILE:-/usr/share/applications/hestia-console.desktop}"
 fail=0
 ok(){ echo "ok: $*"; }
 warn(){ echo "warn: $*"; }
 bad(){ echo "erro: $*"; fail=1; }
 check_path(){ [ -e "$1" ] && ok "$1 existe" || bad "$1 ausente"; }
+check_command(){ command -v "$1" >/dev/null 2>&1 && ok "$1 disponível ($(command -v "$1"))" || warn "$1 não encontrado no PATH"; }
 if command -v node >/dev/null 2>&1; then major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"; [ "$major" -ge 20 ] && ok "Node $(node -v)" || bad "Node >=20 necessário (detectado $(node -v 2>/dev/null || echo n/a))"; else bad "node ausente"; fi
 command -v npm >/dev/null 2>&1 && ok "npm $(npm -v)" || bad "npm ausente"
 [ -d dist/client ] && ok "dist/client existe" || bad "dist/client ausente; rode npm run build"
@@ -18,7 +20,24 @@ if command -v systemctl >/dev/null 2>&1; then
   systemctl is-active --quiet "$SERVICE_NAME.service" 2>/dev/null && active=1 || active=0
   [ "$active" -eq 1 ] && ok "serviço $SERVICE_NAME ativo" || warn "serviço $SERVICE_NAME inativo"
 else warn "systemctl indisponível"; active=0; fi
-check_path "$KALINE_ROOT"
+check_command hestia-console
+check_command hestia-console-status
+check_command hestia-console-stop
+if [ -f "$DESKTOP_FILE" ]; then
+  ok "$DESKTOP_FILE existe"
+  grep -qx "Exec=hestia-console" "$DESKTOP_FILE" && ok "desktop Exec=hestia-console" || warn "desktop sem Exec=hestia-console"
+  grep -qx "Icon=hestia-console" "$DESKTOP_FILE" && ok "desktop Icon=hestia-console" || warn "desktop sem Icon=hestia-console"
+  grep -qx "Terminal=false" "$DESKTOP_FILE" && ok "desktop Terminal=false" || warn "desktop abre terminal"
+else
+  warn "$DESKTOP_FILE ausente; launcher .desktop não instalado"
+fi
+if [ -e "$KALINE_ROOT" ]; then
+  ok "$KALINE_ROOT existe"
+elif [ "${HESTIA_REQUIRE_KALINE:-0}" = "1" ]; then
+  bad "$KALINE_ROOT ausente"
+else
+  warn "$KALINE_ROOT ausente"
+fi
 
 if [ -d "$HERMES_ROOT" ]; then
   ok "$HERMES_ROOT existe"
@@ -38,11 +57,15 @@ if command -v findmnt >/dev/null 2>&1 && findmnt -n -T "$KALINE_ROOT" >/dev/null
   case "$fs" in fuseblk|ntfs|ntfs-3g) warn "NTFS/fuseblk: permissões vêm das opções de montagem; chown/chgrp/chmod podem não funcionar. Use HESTIA_SERVICE_USER=<dono do mount> para organizer.";; esac
 fi
 if command -v curl >/dev/null 2>&1; then
-  if [ "${active:-0}" -eq 1 ]; then
-    curl -fsS "$BASE_URL/api/health" >/dev/null && ok "$BASE_URL/api/health responde" || bad "$BASE_URL/api/health não respondeu"
+  if curl -fsS "$BASE_URL/api/health" >/dev/null 2>&1; then
+    ok "$BASE_URL/api/health responde"
     curl -fsS "$BASE_URL/api/storage/status" >/dev/null && ok "$BASE_URL/api/storage/status responde" || bad "$BASE_URL/api/storage/status não respondeu"
     curl -fsS "$BASE_URL/api/llm/health" >/dev/null && ok "$BASE_URL/api/llm/health responde" || warn "$BASE_URL/api/llm/health não respondeu"
     curl -fsS "$BASE_URL/api/hermes/status" >/dev/null && ok "$BASE_URL/api/hermes/status responde" || warn "$BASE_URL/api/hermes/status não respondeu"
+  elif [ "${active:-0}" -eq 1 ]; then
+    bad "$BASE_URL/api/health não respondeu com serviço ativo"
+  else
+    warn "$BASE_URL/api/health não respondeu; serviço local aparentemente inativo"
   fi
   if curl -fsS "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
     ok "Ollama responde em 127.0.0.1:11434"

@@ -1,9 +1,9 @@
 [Desktop Entry]
 Name=Héstia Console
-Comment=Console local da Héstia
+Comment=Base local da Kaline
 Exec=hestia-console
 Icon=hestia-console
 Terminal=false
 Type=Application
-Categories=Utility;System;
+Categories=Utility;
 StartupNotify=true
