@@ -9,24 +9,6 @@ A Héstia não baixa modelos automaticamente e não chama Hugging Face pelo back
 - O modelo default global não muda neste documento.
 - Nenhum endpoint novo, UI nova ou runtime novo é necessário.
 
-## Klio Coder local
-
-Nome humano: **Qwen2.5-Coder 1.5B Instruct Q8_0**
-
-ID Ollama/HF:
-
-```txt
-hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0
-```
-
-Uso recomendado: modelo técnico leve para Klio local — HTML único, scripts pequenos, revisão curta, explicação de erro e prompts técnicos.
-
-Instalação manual:
-
-```bash
-ollama run hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0
-```
-
 ## Geral leve
 
 Nome humano: **Qwen2.5 1.5B Instruct**
@@ -43,4 +25,22 @@ Instalação manual:
 
 ```bash
 ollama pull qwen2.5:1.5b
+```
+
+## Klio Coder leve
+
+Nome humano: **Qwen2.5-Coder 1.5B Instruct Q8_0**
+
+ID Ollama/HF:
+
+```txt
+hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0
+```
+
+Uso recomendado: Klio técnica local — HTML único, scripts pequenos, revisão curta, debug leve e prompts técnicos.
+
+Instalação manual:
+
+```bash
+ollama run hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0
 ```
