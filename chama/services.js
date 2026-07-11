@@ -1,4 +1,4 @@
-// Chama Local — systemctl is-active para lista FIXA.
+// Chama Local — systemctl show para lista FIXA.
 // Nunca aceita nome de serviço vindo de fora.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -9,28 +9,35 @@ const pExecFile = promisify(execFile);
 async function check(name) {
   const now = new Date().toISOString();
   try {
-    const { stdout } = await pExecFile("systemctl", ["is-active", name], { timeout: 2500 });
-    const raw = stdout.trim();
-    return { name, active: raw === "active", status: mapStatus(raw), checkedAt: now };
+    const result = await pExecFile(
+      "systemctl",
+      ["show", name, "--property=LoadState", "--property=ActiveState", "--value"],
+      { timeout: 2500 },
+    );
+    const stdout = typeof result === "string" ? result : result.stdout;
+    const status = mapSystemctlShow(stdout);
+    return { name, active: status === "active", status, checkedAt: now };
   } catch (err) {
-    const raw = (err.stdout || "").toString().trim();
-    const stderr = (err.stderr || "").toString();
-    if (/not found|could not be found|not-found|not installed|not-loaded/i.test(stderr)) {
-      return { name, active: false, status: "not-installed", checkedAt: now };
-    }
-    if (raw) return { name, active: false, status: mapStatus(raw), checkedAt: now };
     if (err.code === "ENOENT") {
       return { name, active: false, status: "unavailable", checkedAt: now };
     }
-    return { name, active: false, status: "unknown", checkedAt: now };
+
+    const status = mapSystemctlShow(err.stdout || "");
+    return { name, active: false, status, checkedAt: now };
   }
 }
 
-function mapStatus(raw) {
-  if (raw === "active") return "active";
-  if (raw === "inactive") return "inactive";
-  if (raw === "failed") return "failed";
-  if (raw === "unknown") return "not-installed";
+export function mapSystemctlShow(raw) {
+  const [loadState = "", activeState = ""] = raw
+    .toString()
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (loadState === "not-found") return "not-installed";
+  if (activeState === "active") return "active";
+  if (activeState === "inactive") return "inactive";
+  if (activeState === "failed") return "failed";
   return "unknown";
 }
 
