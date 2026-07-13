@@ -12,13 +12,13 @@ git status --short
 
 Não devem entrar:
 
-* `node_modules/`
-* `dist/`
-* `dist-deb/`
-* `*.deb`
-* `.env`
-* logs locais
-* arquivos de `/KALINE`
+- `node_modules/`
+- `dist/`
+- `dist-deb/`
+- `*.deb`
+- `.env`
+- logs locais
+- arquivos de `/KALINE`
 
 ## 2. Validação local
 
@@ -63,30 +63,30 @@ curl -s http://127.0.0.1:4517/api/hermes/status
 
 Abrir pelo menu do Linux Mint Xfce:
 
-* Héstia Console abre;
-* navegador abre em modo app ou fallback;
-* app responde em `127.0.0.1:4517`.
+- Héstia Console abre;
+- navegador abre em modo app ou fallback;
+- app responde em `127.0.0.1:4517`.
 
 ## 8. Segurança
 
 Confirmar:
 
-* não escuta em `0.0.0.0` por padrão;
-* `HESTIA_ALLOW_LAN` não vem ativado;
-* `/api/local/*` exige confirmação;
-* Hermes process-once exige `X-Hestia-Local-Confirm: hermes`;
-* não há Supabase;
-* não há OpenRouter;
-* não há Syncthing como requisito.
+- não escuta em `0.0.0.0` por padrão;
+- `HESTIA_ALLOW_LAN` não vem ativado;
+- `/api/local/*` exige confirmação;
+- Hermes process-once exige `X-Hestia-Local-Confirm: hermes`;
+- não há Supabase;
+- não há OpenRouter;
+- não há Syncthing como requisito.
 
 ## 9. Resultado
 
 A release só passa se:
 
-* instala;
-* inicia;
-* responde health;
-* mostra Console;
-* doctor roda;
-* nenhum segredo vaza;
-* nenhum endpoint perigoso ficou aberto.
+- instala;
+- inicia;
+- responde health;
+- mostra Console;
+- doctor roda;
+- nenhum segredo vaza;
+- nenhum endpoint perigoso ficou aberto.
