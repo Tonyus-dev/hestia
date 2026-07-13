@@ -187,6 +187,7 @@ export type Config = {
   port: number;
   mode: string;
   readonly: boolean;
+  controlledWrites: boolean;
   lanEnabled: boolean;
   stationBaseUrl: string | null;
   services: string[];

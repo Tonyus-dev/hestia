@@ -45,7 +45,7 @@ export const config = {
   mode: "Console do notebook: leitura local para saúde, hardware, logs, configuração e serviços.",
   readonly: true,
   readonlyByDefault: true,
-  controlledWrites: false,
+  controlledWrites: true,
   lanEnabled: !isLoopbackHost(host),
   // Diretório de dados persistentes (identidade, eventos, snapshots). Só
   // vem de env/systemd — nunca do whitelist de ~/.chama/config.json.

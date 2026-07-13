@@ -10,7 +10,6 @@ vi.mock("./storage.js", () => ({
   }),
 }));
 
-const { config } = await import("./config.js");
 const { getHealth } = await import("./health.js");
 const { getHardwareStatus } = await import("./hardware.js");
 const { getPresenceSummary } = await import("./presenceSummary.js");
@@ -51,10 +50,13 @@ describe("console runtime storage boundary", () => {
     await fs.rm(dataDir, { recursive: true, force: true });
   });
 
-  it("config sem env retorna stationBaseUrl null e não possui storage global", () => {
-    expect(config.stationBaseUrl).toBeNull();
-    expect(config).not.toHaveProperty("storageRoot");
-    expect(config).not.toHaveProperty("storagePaths");
+  it("config sem env retorna stationBaseUrl null e não possui storage global", async () => {
+    vi.resetModules();
+    const { config: cleanConfig } = await import("./config.js");
+
+    expect(cleanConfig.stationBaseUrl).toBeNull();
+    expect(cleanConfig).not.toHaveProperty("storageRoot");
+    expect(cleanConfig).not.toHaveProperty("storagePaths");
   });
 
   it("health, hardware, presence e snapshot não chamam getStorageStatus", async () => {

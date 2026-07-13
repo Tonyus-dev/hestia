@@ -74,6 +74,7 @@ function ConfigPage() {
             <Row k="port" v={state.data.port} />
             <Row k="mode" v={state.data.mode} />
             <Row k="readonly" v={String(state.data.readonly)} />
+            <Row k="controlledWrites" v={String(state.data.controlledWrites)} />
             <Row k="lanEnabled" v={String(state.data.lanEnabled)} />
           </div>
           <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-5 flex flex-col gap-3">

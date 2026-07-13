@@ -1,4 +1,4 @@
-// Chama Local — manifesto estático da estação.
+// Chama Local — manifesto estático do Console do notebook.
 // Conteúdo versionado no git, não em disco — mesma lógica que config.js.
 import { getPresenceServiceBindings } from "./serviceBindings.js";
 
@@ -12,7 +12,7 @@ export function getManifest() {
         {
           name: "Héstia",
           role: "host",
-          description: "App local do servidor",
+          description: "Console local do notebook",
         },
         {
           name: "Héstia Console",
@@ -30,8 +30,8 @@ export function getManifest() {
     capabilities: {
       readonly: true,
       readonlyByDefault: true,
-      controlledWrites: false,
-      writeCapabilities: [],
+      controlledWrites: true,
+      writeCapabilities: ["hermes"],
       metrics: true,
       events: true,
       snapshots: true,

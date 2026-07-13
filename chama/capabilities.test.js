@@ -17,12 +17,13 @@ describe("getCapabilities", () => {
     expect(caps.reading.config).toBe(true);
   });
 
-  it("não habilita escrita no Console do notebook", () => {
+  it("declara apenas Hermes como escrita local controlada no Console do notebook", () => {
     const caps = getCapabilities();
     expect(caps.writing.executeCommands).toBe(false);
     expect(caps.writing.configureServices).toBe(false);
     expect(caps.writing.manageBackups).toBe(false);
     expect(caps.writing.modifyStorage).toBe(false);
     expect(caps.writing.manageUsers).toBe(false);
+    expect(caps.writing.processHermes).toBe(true);
   });
 });

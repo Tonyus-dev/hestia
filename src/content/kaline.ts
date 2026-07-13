@@ -22,11 +22,10 @@ export const HESTIA = {
   agentName: "Chama Local",
   subtitle: "Console visual da Héstia Console com Chama Local embutida",
   motto:
-    "Héstia é a Estação. A Chama é o pulso. O Console é a face. Presence consulta. Kaline decide.",
+    "Héstia é o Console do notebook. A Chama é o pulso local. Presence consulta. Kaline decide.",
   waiting: "Aguardando Chama Local",
-  readonly:
-    "Modo protegido: leitura por padrão; escrita local somente por ações explícitas, allowlisted e auditáveis.",
-  footer: "Héstia é a Estação. Chama pulsa. Console mostra. Presence consulta.",
+  readonly: "Modo protegido: leitura por padrão; apenas Hermes mantém escrita local controlada.",
+  footer: "Héstia é o Console. Chama pulsa. Console mostra. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
   stationBaseUrl: null,

@@ -308,6 +308,7 @@ app.get("/api/config", async () => ({
   port: config.port,
   mode: config.mode,
   readonly: config.readonly,
+  controlledWrites: config.controlledWrites,
   lanEnabled: config.lanEnabled,
   stationBaseUrl: config.stationBaseUrl,
   services: config.services,
