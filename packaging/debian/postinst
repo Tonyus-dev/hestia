@@ -33,6 +33,18 @@ if [ ! -f /etc/default/hestia-console ]; then
 EOF
 fi
 
+# Criar grupo de sistema se não existir
+if ! getent group hestia-console >/dev/null; then
+  echo "Criando grupo de sistema hestia-console..."
+  addgroup --system hestia-console
+fi
+
+# Criar usuário de sistema se não existir
+if ! getent passwd hestia-console >/dev/null; then
+  echo "Criando usuário de sistema hestia-console..."
+  adduser --system --ingroup hestia-console --no-create-home --home /opt/hestia-console --shell /usr/sbin/nologin hestia-console
+fi
+
 systemctl daemon-reload
 systemctl enable hestia-console.service
 systemctl restart hestia-console.service
@@ -40,16 +52,13 @@ systemctl restart hestia-console.service
 gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 update-desktop-database /usr/share/applications || true
 
-# Diagnóstico de /KALINE
+# Diagnóstico e permissões de /KALINE
 if [ -d "/KALINE" ]; then
-  echo "Diagnóstico: /KALINE encontrado."
-  if chgrp hestia-console /KALINE 2>/dev/null && chmod g+rwx /KALINE 2>/dev/null; then
-    echo "Permissões de /KALINE ajustadas com sucesso para o grupo hestia-console."
-  else
-    echo "Aviso: não consegui ajustar permissões de /KALINE automaticamente. Rode se necessário: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE" >&2
-  fi
+  echo "Diagnóstico: /KALINE encontrado. Ajustando ownership para hestia-console:hestia-console..."
+  chown -R hestia-console:hestia-console /KALINE
+  chmod -R 775 /KALINE
 else
-  echo "Aviso: /KALINE ainda não existe. Depois de criá-la, rode se necessário: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE" >&2
+  echo "Aviso: /KALINE ainda não existe. Crie-o e ajuste para hestia-console:hestia-console com chmod 775." >&2
 fi
 
 echo "Héstia Console instalada."
