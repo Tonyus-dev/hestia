@@ -51,7 +51,6 @@ export const config = {
   // vem de env/systemd — nunca do whitelist de ~/.chama/config.json.
   dataDir: resolveDataDir(),
   services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
-  stationBaseUrl: process.env.HESTIA_STATION_BASE_URL?.trim() || null,
   // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
   // whitelist de ~/.chama/config.json.
   retention: resolveRetention(),

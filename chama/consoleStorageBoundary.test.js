@@ -54,7 +54,7 @@ describe("console runtime storage boundary", () => {
     vi.resetModules();
     const { config: cleanConfig } = await import("./config.js");
 
-    expect(cleanConfig.stationBaseUrl).toBeNull();
+    expect(cleanConfig).not.toHaveProperty("stationBaseUrl");
     expect(cleanConfig).not.toHaveProperty("storageRoot");
     expect(cleanConfig).not.toHaveProperty("storagePaths");
   });

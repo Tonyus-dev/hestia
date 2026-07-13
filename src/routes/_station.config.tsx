@@ -79,10 +79,15 @@ function ConfigPage() {
           </div>
           <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-5 flex flex-col gap-3">
             <div>
-              <p className="kaline-eyebrow">stationBaseUrl</p>
-              <p className="mt-2 font-mono text-[13px] text-[color:var(--kaline-muted)]">
-                {state.data.stationBaseUrl ?? "Estação não configurada."}
-              </p>
+              <p className="kaline-eyebrow">Estação</p>
+              <div className="mt-2 flex flex-col gap-2">
+                <Row k="Estação configurada" v={state.data.stationConfigured ? "sim" : "não"} />
+                <Row
+                  k="Credencial configurada"
+                  v={state.data.stationAuthConfigured ? "sim" : "não"}
+                />
+                <Row k="Timeout" v={`${state.data.stationTimeoutMs} ms`} />
+              </div>
             </div>
             <div>
               <p className="kaline-eyebrow">services</p>
