@@ -13,8 +13,12 @@ const STATUS_META: Record<CardStatus, { color: string; label: string; pulse: boo
   unavailable: { color: "#9ca3af", label: "desconectado", pulse: false },
 };
 
-function StatusLight({ status }: { status: CardStatus }) {
-  const meta = STATUS_META[status];
+function getStatusMeta(status: CardStatus | string = "idle") {
+  return STATUS_META[status as CardStatus] ?? STATUS_META.idle;
+}
+
+function StatusLight({ status }: { status?: CardStatus | string }) {
+  const meta = getStatusMeta(status);
   return (
     <span
       className="relative inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
@@ -48,14 +52,14 @@ export function DataCard({
   title: string;
   eyebrow?: string;
   children: React.ReactNode;
-  status?: CardStatus;
+  status?: CardStatus | string;
   summary?: React.ReactNode;
   collapsible?: boolean;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const isOpen = collapsible ? open : true;
-  const meta = STATUS_META[status];
+  const meta = getStatusMeta(status);
 
   const header = (
     <div className="flex items-start justify-between gap-3 w-full text-left">

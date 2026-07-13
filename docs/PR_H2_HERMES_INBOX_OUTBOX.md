@@ -1,15 +1,14 @@
-# PR H2 — Hermes Inbox/Outbox via Pasta Compartilhada
+# PR H2 — Hermes Inbox/Outbox
 
 ## Objetivo
 
-Adicionar à Héstia uma caixa persistente de comandos por arquivos, transportada via pasta local/compartilhada.
+Adicionar à Héstia uma caixa persistente de comandos por arquivos, monitorada e processada localmente a partir de um diretório compartilhado.
 
 ## Princípio
 
-- Kaline cria comandos.
-- Pasta compartilhada transporta arquivos.
-- Héstia valida e processa.
-- Outbox devolve resultado.
+- Kaline/agentes locais criam comandos `.json` na Inbox.
+- A Héstia valida e processa o comando.
+- O resultado é escrito na Outbox como arquivo `*.result.json`.
 
 ## Endpoints
 

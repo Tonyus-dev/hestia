@@ -13,6 +13,9 @@ function Painel() {
   const scan = useApi(hestiaApi.storageScan);
   const runs = useApi(hestiaApi.organizerRuns);
   const logs = useApi(() => hestiaApi.logs(20));
+  const health = useApi(hestiaApi.health);
+  const llm = useApi(hestiaApi.llmHealth);
+  const hermes = useApi(hestiaApi.hermesStatus);
   const d = hw.state.status === "ok" ? hw.state.data : null;
   const kaline = d?.storage.items.find((i) => i.path === "/KALINE");
   const lastRun = runs.state.status === "ok" ? runs.state.data.items[0] : null;
@@ -36,7 +39,7 @@ function Painel() {
           <p className="kaline-eyebrow">Painel operacional</p>
           <h1 className="kaline-serif text-3xl text-[color:var(--kaline-text)]">Héstia</h1>
           <p className="text-[13px] text-[color:var(--kaline-muted)]">
-            Modo protegido · escrita local apenas com aprovação · sem comandos destrutivos.
+            Héstia observa a estação. Klio usa a infraestrutura local. Escrita só com aprovação.
           </p>
         </div>
         <button
@@ -84,6 +87,15 @@ function Painel() {
         />
         <MetricCard label="último run" value={lastRun?.status ?? "não disponível"} />
       </section>
+      <DataCard title="Contrato operacional" eyebrow="Héstia ↔ Klio" status="idle" defaultOpen>
+        <Row k="Héstia" v="observa saúde, storage, serviços e logs da estação local" />
+        <Row k="Klio" v="consome a infraestrutura exposta pela Héstia; não é simulada no Console" />
+        <Row
+          k="Hermes"
+          v="processa comandos locais via inbox/outbox quando a Chama está disponível"
+        />
+        <Row k="Organizer" v="só age depois de gerar plano e receber aprovação explícita" />
+      </DataCard>
       <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <DataCard
           title="Uso do /KALINE por categoria"
@@ -122,6 +134,50 @@ function Painel() {
             <Link to={action[1]} className="text-[color:var(--kaline-copper)]">
               {action[0]} →
             </Link>
+          </DataCard>
+          <DataCard
+            title="Estado para Klio"
+            eyebrow="fontes reais"
+            status={
+              [health.state.status, llm.state.status, hermes.state.status].includes("unavailable")
+                ? "warn"
+                : health.state.status === "ok" &&
+                    llm.state.status === "ok" &&
+                    hermes.state.status === "ok"
+                  ? "ok"
+                  : "loading"
+            }
+          >
+            <Row
+              k="Chama Local"
+              v={
+                health.state.status === "ok"
+                  ? `${health.state.data.hostname} · ${health.state.data.readonly ? "somente leitura" : "escrita controlada"}`
+                  : health.state.status === "unavailable"
+                    ? "indisponível"
+                    : "consultando…"
+              }
+            />
+            <Row
+              k="LLM local"
+              v={
+                llm.state.status === "ok"
+                  ? `${llm.state.data.ok ? "operacional" : "indisponível"} · ${llm.state.data.runtime} · ${llm.state.data.defaultModel}`
+                  : llm.state.status === "unavailable"
+                    ? "indisponível"
+                    : "consultando…"
+              }
+            />
+            <Row
+              k="Hermes"
+              v={
+                hermes.state.status === "ok"
+                  ? `${hermes.state.data.ok ? "operacional" : "indisponível"} · inbox ${hermes.state.data.pending ?? 0} · outbox ${hermes.state.data.processed ?? 0} · erros ${hermes.state.data.failed ?? 0}`
+                  : hermes.state.status === "unavailable"
+                    ? "indisponível"
+                    : "consultando…"
+              }
+            />
           </DataCard>
           <DataCard
             title="Diagnóstico rápido"
