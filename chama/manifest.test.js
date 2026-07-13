@@ -18,9 +18,12 @@ describe("getManifest", () => {
     expect(names).toContain("Chama Local");
   });
 
-  it("define capabilities.readonly como false (organizer tem escrita local aprovada)", () => {
+  it("define capabilities.readonly como true (leitura por padrão)", () => {
     const manifest = getManifest();
-    expect(manifest.capabilities.readonly).toBe(false);
+    expect(manifest.capabilities.readonly).toBe(true);
+    expect(manifest.capabilities.readonlyByDefault).toBe(true);
+    expect(manifest.capabilities.controlledWrites).toBe(true);
+    expect(manifest.capabilities.writeCapabilities).toContain("organizer.apply");
   });
 
   it("sempre retorna o mesmo objeto (sem mutação)", () => {

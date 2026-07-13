@@ -10,7 +10,11 @@ import { listFiles, DEFAULT_INDEX_LIMITS } from "./storageScanner.js";
 import { config } from "./config.js";
 import { isValidOrganizerId } from "./organizerIds.js";
 
-const ROOT = "/KALINE";
+import { LARGE_PLAN_THRESHOLD } from "./organizerApply.js";
+
+function getRoot() {
+  return config.storageRoot || "/KALINE";
+}
 
 const RECENTLY_MODIFIED_MS = 60_000;
 const QUARANTINE_RELATIVE_PATH = "ash/quarentena";
@@ -116,12 +120,12 @@ async function planItemsForFiles(files, action, source = { kind: "unknown", labe
     const targetBaseRelativePath = targetRelativePathFor(file.ext);
     const { yyyy, mm } = datePartsFor(file);
     const targetRelativePath = join(targetBaseRelativePath, yyyy, mm);
-    const targetPath = join(ROOT, targetRelativePath, basename(file.path));
+    const targetPath = join(getRoot(), targetRelativePath, basename(file.path));
     // Cinto e suspensório: EXTENSION_RULES é uma tabela fixa e basename() já corta qualquer
     // ".." do nome do arquivo, então isso nunca deveria disparar — mas se um dia essa tabela
     // vier a ser configurável, isso barra o plano de escapar de /KALINE.
-    if (!targetPath.startsWith(`${ROOT}/`)) {
-      throw new Error(`targetPath calculado fora de ${ROOT}: ${targetPath}`);
+    if (!targetPath.startsWith(`${getRoot()}/`)) {
+      throw new Error(`targetPath calculado fora de ${getRoot()}: ${targetPath}`);
     }
     if (file.path === targetPath) {
       items.push(ignoredItem(file, action, source, "arquivo já organizado", "already_organized"));
@@ -216,9 +220,9 @@ export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
     const ext = item.sourcePath.includes(".")
       ? `.${item.sourcePath.split(".").pop().toLowerCase()}`
       : "(sem extensão)";
-    const area = item.targetPath.startsWith(`${ROOT}/`)
+    const area = item.targetPath.startsWith(`${getRoot()}/`)
       ? item.targetPath
-          .slice(ROOT.length + 1)
+          .slice(getRoot().length + 1)
           .split("/")
           .slice(0, 2)
           .join("/")
@@ -237,10 +241,16 @@ export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
     rules: { extensionRules: EXTENSION_RULES, fallback: FALLBACK_RELATIVE_PATH },
   };
 
+  const plannedCount = items.filter((i) => i.status === "planned").length;
+  const requiresExtraConfirmation = plannedCount > LARGE_PLAN_THRESHOLD;
+
   return {
     planId: `plan_${Date.now()}_${randomUUID().slice(0, 8)}`,
     generatedAt: new Date().toISOString(),
     dryRun: true,
+    requiresExtraConfirmation,
+    largePlanThreshold: LARGE_PLAN_THRESHOLD,
+    planned: plannedCount,
     items,
     summary,
   };
@@ -269,4 +279,26 @@ export async function getPlan(planId, dataDir) {
   } catch {
     return null;
   }
+}
+
+export async function getPlanState(planId, dataDir) {
+  if (!isValidOrganizerId(planId)) return "unknown";
+  const plansDir = join(dataDir, "organizer", "plans");
+  const origPath = join(plansDir, `${planId}.json`);
+  const claimPath = join(plansDir, `${planId}.claimed.json`);
+  const consumedPath = join(plansDir, `${planId}.consumed.json`);
+
+  try {
+    await fs.stat(consumedPath);
+    return "consumed";
+  } catch {}
+  try {
+    await fs.stat(claimPath);
+    return "claimed";
+  } catch {}
+  try {
+    await fs.stat(origPath);
+    return "available";
+  } catch {}
+  return "unknown";
 }

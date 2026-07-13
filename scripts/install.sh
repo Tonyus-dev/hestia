@@ -75,8 +75,28 @@ diagnose_kaline() {
 install_service() {
   [ "$(id -u)" = "0" ] || { log "sem root: build pronto, mas serviço não instalado. Use: sudo npm run install:service"; return 0; }
   command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] || { log "systemd indisponível: serviço não instalado."; return 0; }
+
+  # Criar /etc/default/hestia-console com placeholders se não existir
+  if [ ! -f /etc/default/hestia-console ]; then
+    log "criando template de configuração em /etc/default/hestia-console"
+    cat << 'EOF' > /etc/default/hestia-console
+# Héstia Console Configuration
+
+# Root path for storage (e.g. /KALINE)
+# IMPORTANTE: A raiz de produção oficial do serviço systemd é fixada em /KALINE.
+# Para alterar para testes locais ou execução manual, use HESTIA_STORAGE_PATH.
+# HESTIA_STORAGE_PATH=/KALINE
+
+# Allowed Host headers (comma-separated, exact values, no wildcards)
+# HESTIA_ALLOWED_HOSTS=hestia.exemplo.ts.net,hestia.exemplo.ts.net:443
+
+# Allowed origins for Codice CORS requests (comma-separated, exact values, no wildcards)
+# HESTIA_CODICE_CORS_ORIGIN=https://codice.exemplo.com
+EOF
+  fi
+
   log "instalando serviço systemd em /etc/systemd/system/${SERVICE_NAME}.service"
-  sed "s#__WORKDIR__#$ROOT_DIR#g" "$ROOT_DIR/packaging/hestia-console.service.in" > "/etc/systemd/system/${SERVICE_NAME}.service"
+  sed -e "s#__WORKDIR__#$ROOT_DIR#g" "$ROOT_DIR/packaging/hestia-console.service.in" > "/etc/systemd/system/${SERVICE_NAME}.service"
   mkdir -p "/etc/systemd/system/${SERVICE_NAME}.service.d"
   if [ -n "${HESTIA_SERVICE_USER:-}" ]; then
     id "$HESTIA_SERVICE_USER" >/dev/null 2>&1 || err "HESTIA_SERVICE_USER=$HESTIA_SERVICE_USER não existe."
@@ -85,7 +105,7 @@ install_service() {
 DynamicUser=no
 User=$HESTIA_SERVICE_USER
 Group=$HESTIA_SERVICE_USER
-ReadWritePaths=/KALINE
+ReadWritePaths=-/KALINE
 OVERRIDE
     log "modo organizer/write: serviço rodará como $HESTIA_SERVICE_USER"
   else

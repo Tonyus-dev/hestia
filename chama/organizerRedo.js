@@ -24,7 +24,7 @@ async function redoOperation(originalOp) {
     if (originalOp.action === "move") {
       await moveWithExdevFallback(originalOp.from, originalOp.to);
     } else {
-      await fs.copyFile(originalOp.from, originalOp.to);
+      await fs.copyFile(originalOp.from, originalOp.to, fs.constants.COPYFILE_EXCL);
     }
     return { ...originalOp, status: "ok" };
   } catch (err) {

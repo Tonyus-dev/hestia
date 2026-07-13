@@ -146,7 +146,7 @@ describe("applyOrganizerPlan", () => {
     const targetPath = join(workDir, "destino", "cross-device.mp4");
     await fs.writeFile(sourcePath, "conteudo-video-grande");
 
-    const renameSpy = vi.spyOn(fs, "rename").mockImplementationOnce(() => {
+    const linkSpy = vi.spyOn(fs, "link").mockImplementationOnce(() => {
       const err = new Error("cross-device link");
       err.code = "EXDEV";
       return Promise.reject(err);
@@ -163,7 +163,7 @@ describe("applyOrganizerPlan", () => {
     await expect(fs.access(sourcePath)).rejects.toThrow();
     const content = await fs.readFile(targetPath, "utf8");
     expect(content).toBe("conteudo-video-grande");
-    expect(renameSpy).toHaveBeenCalled();
+    expect(linkSpy).toHaveBeenCalled();
   });
 
   it("continua em falha parcial: um item falha, outro é aplicado com sucesso", async () => {
@@ -273,5 +273,80 @@ describe("applyOrganizerPlan safety gates", () => {
         dataDir,
       ),
     ).rejects.toMatchObject({ code: "ELARGEPLANCONFIRM" });
+  });
+
+  it("se link deu certo mas unlink da origem falhar, desfaz/remove o target e falha a operacao", async () => {
+    const sourcePath = join(workDir, "origem.pdf");
+    const targetPath = join(workDir, "destino", "origem.pdf");
+    await fs.writeFile(sourcePath, "conteudo-pdf");
+
+    const originalUnlink = fs.unlink;
+    const unlinkSpy = vi.spyOn(fs, "unlink").mockImplementation((path) => {
+      if (path === sourcePath) {
+        const err = new Error("permission denied");
+        err.code = "EACCES";
+        return Promise.reject(err);
+      }
+      return originalUnlink(path);
+    });
+
+    const plan = {
+      planId: "plan_rollback1",
+      generatedAt: new Date().toISOString(),
+      items: [{ id: "i1", sourcePath, targetPath, action: "move", status: "planned" }],
+    };
+
+    const manifest = await applyOrganizerPlan(plan, dataDir);
+
+    expect(manifest.status).toBe("failed");
+    expect(manifest.summary.failed).toBe(1);
+    expect(manifest.operations[0].status).toBe("failed");
+
+    const sourceContent = await fs.readFile(sourcePath, "utf8");
+    expect(sourceContent).toBe("conteudo-pdf");
+
+    await expect(fs.access(targetPath)).rejects.toThrow();
+
+    unlinkSpy.mockRestore();
+  });
+
+  it("se fallback copyFile deu certo mas unlink da origem falhar, desfaz/remove a copia e falha a operacao", async () => {
+    const sourcePath = join(workDir, "origem.pdf");
+    const targetPath = join(workDir, "destino", "origem.pdf");
+    await fs.writeFile(sourcePath, "conteudo-pdf");
+
+    const linkSpy = vi
+      .spyOn(fs, "link")
+      .mockRejectedValue(Object.assign(new Error("cross-device"), { code: "EXDEV" }));
+
+    const originalUnlink = fs.unlink;
+    const unlinkSpy = vi.spyOn(fs, "unlink").mockImplementation((path) => {
+      if (path === sourcePath) {
+        const err = new Error("permission denied");
+        err.code = "EACCES";
+        return Promise.reject(err);
+      }
+      return originalUnlink(path);
+    });
+
+    const plan = {
+      planId: "plan_rollback2",
+      generatedAt: new Date().toISOString(),
+      items: [{ id: "i1", sourcePath, targetPath, action: "move", status: "planned" }],
+    };
+
+    const manifest = await applyOrganizerPlan(plan, dataDir);
+
+    expect(manifest.status).toBe("failed");
+    expect(manifest.summary.failed).toBe(1);
+    expect(manifest.operations[0].status).toBe("failed");
+
+    const sourceContent = await fs.readFile(sourcePath, "utf8");
+    expect(sourceContent).toBe("conteudo-pdf");
+
+    await expect(fs.access(targetPath)).rejects.toThrow();
+
+    linkSpy.mockRestore();
+    unlinkSpy.mockRestore();
   });
 });

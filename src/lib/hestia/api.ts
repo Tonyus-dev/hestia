@@ -265,6 +265,9 @@ export type OrganizerPlan = {
     };
   };
   dryRun?: boolean;
+  requiresExtraConfirmation: boolean;
+  largePlanThreshold: number;
+  planned: number;
 };
 
 export type OrganizerOperation = {
@@ -311,17 +314,10 @@ const CHAMA_PORT = 4517;
 function resolveBase(): string | null {
   if (typeof window === "undefined") return null;
   const { hostname, protocol, port, origin } = window.location;
-  const isLocal =
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "0.0.0.0" ||
-    hostname.endsWith(".local") ||
-    /^10\./.test(hostname) ||
-    /^192\.168\./.test(hostname) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
-  if (!isLocal) return null;
-  if (port && port !== "5173") return origin;
-  return `${protocol}//${hostname}:${CHAMA_PORT}`;
+  if (port === "5173") {
+    return `${protocol}//${hostname}:${CHAMA_PORT}`;
+  }
+  return origin;
 }
 
 function unavailable<T>(message: string, details: ApiErrorDetails): ApiState<T> {
@@ -537,8 +533,12 @@ export const hestiaApi = {
       { "x-hestia-local-confirm": "organize" },
       60000,
     ),
-  /** URL absoluta para exibir/copiar (ex.: comando curl). Sempre localhost:4517. */
-  absoluteUrl: (path: string) => `http://localhost:${CHAMA_PORT}${path}`,
+  /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
+  absoluteUrl: (path: string) => {
+    const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${base}${cleanPath}`;
+  },
   /** Ping simples usado pela página /endpoints. Só bate quando estamos em host local. */
   ping: async (
     path: string,

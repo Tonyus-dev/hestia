@@ -1,10 +1,5 @@
-// Chama Local — modelo canônico do armazenamento /KALINE.
-// Constante estática, mesma lógica que chama/manifest.js: não lê nem escreve disco.
-// `logs`/`snapshots` aqui são pastas do usuário dentro de /KALINE — não confundir com os
-// arquivos internos da própria Chama Local (identity.json, events/, snapshots/) que vivem em
-// config.dataDir (~/.chama/data ou STATE_DIRECTORY), nunca dentro de /KALINE.
-
-const ROOT = "/KALINE";
+import path from "node:path";
+import { config } from "./config.js";
 
 function folder({
   id,
@@ -19,7 +14,6 @@ function folder({
     id,
     label,
     relativePath,
-    absolutePath: `${ROOT}/${relativePath}`,
     category,
     purpose,
     required,
@@ -280,5 +274,10 @@ const FOLDERS = [
 ];
 
 export function getStorageModel() {
-  return { root: ROOT, folders: FOLDERS };
+  const root = config.storageRoot;
+  const mappedFolders = FOLDERS.map((f) => ({
+    ...f,
+    absolutePath: path.join(root, f.relativePath),
+  }));
+  return { root, folders: mappedFolders };
 }

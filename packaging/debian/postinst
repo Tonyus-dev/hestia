@@ -14,6 +14,25 @@ else
   echo "Aviso: binário 'node' não encontrado no PATH; o serviço não vai conseguir iniciar." >&2
 fi
 
+# Criar /etc/default/hestia-console se não existir
+if [ ! -f /etc/default/hestia-console ]; then
+  echo "Criando template de configuração em /etc/default/hestia-console"
+  cat << 'EOF' > /etc/default/hestia-console
+# Héstia Console Configuration
+
+# Root path for storage (e.g. /KALINE)
+# IMPORTANTE: A raiz de produção oficial do serviço systemd é fixada em /KALINE.
+# Para alterar para testes locais ou execução manual, use HESTIA_STORAGE_PATH.
+# HESTIA_STORAGE_PATH=/KALINE
+
+# Allowed Host headers (comma-separated, exact values, no wildcards)
+# HESTIA_ALLOWED_HOSTS=hestia.exemplo.ts.net,hestia.exemplo.ts.net:443
+
+# Allowed origins for Codice CORS requests (comma-separated, exact values, no wildcards)
+# HESTIA_CODICE_CORS_ORIGIN=https://codice.exemplo.com
+EOF
+fi
+
 systemctl daemon-reload
 systemctl enable hestia-console.service
 systemctl restart hestia-console.service
@@ -21,14 +40,16 @@ systemctl restart hestia-console.service
 gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 update-desktop-database /usr/share/applications || true
 
-# O serviço roda com DynamicUser=yes (sem privilégio de root) e escreve de verdade em /KALINE
-# (organizer). Se /KALINE já existir neste momento, libera escrita pro grupo do serviço; se
-# ainda não existir, isso é só um aviso — repita manualmente depois de criar /KALINE.
-if [ -d /KALINE ]; then
-  chgrp hestia-console /KALINE 2>/dev/null && chmod g+rwx /KALINE 2>/dev/null \
-    || echo "Aviso: não consegui ajustar permissões de /KALINE automaticamente. Rode manualmente: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE" >&2
+# Diagnóstico de /KALINE
+if [ -d "/KALINE" ]; then
+  echo "Diagnóstico: /KALINE encontrado."
+  if chgrp hestia-console /KALINE 2>/dev/null && chmod g+rwx /KALINE 2>/dev/null; then
+    echo "Permissões de /KALINE ajustadas com sucesso para o grupo hestia-console."
+  else
+    echo "Aviso: não consegui ajustar permissões de /KALINE automaticamente. Rode se necessário: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE" >&2
+  fi
 else
-  echo "Aviso: /KALINE ainda não existe. Depois de criá-la, rode: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE" >&2
+  echo "Aviso: /KALINE ainda não existe. Depois de criá-la, rode se necessário: sudo chgrp hestia-console /KALINE && sudo chmod g+rwx /KALINE" >&2
 fi
 
 echo "Héstia Console instalada."

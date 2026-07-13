@@ -35,7 +35,7 @@ export const HESTIA = {
     "Héstia é a Estação. A Chama é o pulso. O Console é a face. Presence consulta. Kaline decide.",
   waiting: "Aguardando Chama Local",
   readonly:
-    "Modo protegido: leitura por padrão; escrita local apenas por planos aprovados explicitamente; sem comandos destrutivos.",
+    "Modo protegido: leitura por padrão; escrita local somente por ações explícitas, allowlisted e auditáveis.",
   footer: "Héstia é a Estação. Chama pulsa. Console mostra. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
@@ -139,7 +139,7 @@ export const HESTIA = {
       group: "Ações locais protegidas",
       path: "/api/local/organizer/apply",
       purpose:
-        "POST — aplica um plano já gerado (exige header X-Hestia-Local-Confirm: organize); única rota de escrita",
+        "POST — aplica um plano já gerado (exige header X-Hestia-Local-Confirm: organize); escrita local controlada",
       fields: ["runId", "planId", "status", "operations[]", "summary"],
     },
     {

@@ -16,10 +16,19 @@ export function buildAllowedHosts(host, port, extraHostsRaw = "") {
     allowed.add(`127.0.0.1:${port}`);
     allowed.add(`localhost:${port}`);
     allowed.add(`[::1]:${port}`);
+    allowed.add("127.0.0.1");
+    allowed.add("localhost");
+    allowed.add("[::1]");
   }
   if (extraHostsRaw && typeof extraHostsRaw === "string") {
-    const extra = extraHostsRaw.split(",").map(s => s.trim()).filter(Boolean);
-    for (const e of extra) allowed.add(e);
+    const extra = extraHostsRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const e of extra) {
+      if (e.includes("*")) continue; // Rejeitar wildcards
+      allowed.add(e);
+    }
   }
   return allowed;
 }
@@ -75,15 +84,24 @@ export class RateLimiter {
 
 export function applyCodiceCors(req, reply, allowedOrigin) {
   if (!allowedOrigin) return false;
-  
+
   const reqOrigin = req.headers.origin;
-  const isAllowed = allowedOrigin.split(",").map(o => o.trim()).includes(reqOrigin);
+  if (!reqOrigin) return false;
+
+  // Por segurança absoluta, rejeitamos wildcard "*" no CORS da biblioteca Códice
+  const isAllowed = allowedOrigin
+    .split(",")
+    .map((o) => o.trim())
+    .filter((o) => o !== "*")
+    .includes(reqOrigin);
   if (!isAllowed) return false;
 
   reply.header("Access-Control-Allow-Origin", reqOrigin);
   reply.header("Vary", "Origin");
   reply.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  
+  reply.header("Access-Control-Allow-Headers", "Content-Type");
+  reply.header("Access-Control-Allow-Credentials", "true");
+
   if (req.headers["access-control-request-private-network"] === "true") {
     reply.header("Access-Control-Allow-Private-Network", "true");
   }

@@ -23,14 +23,17 @@ const IGNORED_DIR_NAMES = new Set([
   "$RECYCLE.BIN",
   "System Volume Information",
 ]);
-const IGNORED_KALINE_DIRS = new Set([
-  "/KALINE/ash",
-  "/KALINE/codice",
-  "/KALINE/midia",
-  "/KALINE/design",
-  "/KALINE/documentos",
-  "/KALINE/codigo",
-]);
+function getIgnoredKalineDirs() {
+  const root = config.storageRoot || "/KALINE";
+  return new Set([
+    join(root, "ash"),
+    join(root, "codice"),
+    join(root, "midia"),
+    join(root, "design"),
+    join(root, "documentos"),
+    join(root, "codigo"),
+  ]);
+}
 const IGNORED_FILES = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
 
 export function isIgnoredFileName(name) {
@@ -64,7 +67,7 @@ async function walk(rootPath, limits, state) {
       const entryPath = join(dirPath, entry.name);
       if (
         entry.isDirectory() &&
-        (IGNORED_DIR_NAMES.has(entry.name) || IGNORED_KALINE_DIRS.has(entryPath))
+        (IGNORED_DIR_NAMES.has(entry.name) || getIgnoredKalineDirs().has(entryPath))
       ) {
         state.ignored += 1;
         continue;

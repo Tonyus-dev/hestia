@@ -211,15 +211,18 @@ describe("hestiaApi.safeFetch — parser de erros estruturados", () => {
     expect(s.details.route).toBe("GET /api/config");
   });
 
-  it("retorna origin=no-base sem disparar fetch quando não estamos em host local", async () => {
-    setLocation("app.exemplo.com", "https:");
-    const fetchSpy = mockFetch(() => new Response("nope", { status: 200 }));
-
-    const s = expectUnavailable(await hestiaApi.health());
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(s.details.origin).toBe("no-base");
-    expect(s.details.route).toBe("GET /api/health");
-    expect(s.message).toContain("Aguardando Chama Local");
+  it("retorna origin=no-base em SSR", async () => {
+    const savedWindow = global.window;
+    // @ts-expect-error - Simulating SSR by deleting window from global scope
+    delete global.window;
+    try {
+      const s = expectUnavailable(await hestiaApi.health());
+      expect(s.details.origin).toBe("no-base");
+      expect(s.details.route).toBe("GET /api/health");
+      expect(s.message).toContain("Aguardando Chama Local");
+    } finally {
+      global.window = savedWindow;
+    }
   });
 
   it("clampa e sanitiza o parâmetro tail dos logs", async () => {
@@ -269,15 +272,19 @@ describe("hestiaApi.ping", () => {
     expect(r.error).toBe("boom");
   });
 
-  it("retorna status=erro sem disparar fetch fora de host local", async () => {
-    setLocation("preview.lovable.app", "https:");
-    const spy = mockFetch(() => new Response("", { status: 200 }));
-    const r = await hestiaApi.ping("/api/health");
-    expect(spy).not.toHaveBeenCalled();
-    expect(r.status).toBe("erro");
-    expect(r.ok).toBe(false);
-    expect(r.ms).toBe(0);
-    expect(r.error).toBe("sem base local");
+  it("retorna status=erro em SSR", async () => {
+    const savedWindow = global.window;
+    // @ts-expect-error - Simulating SSR by deleting window from global scope
+    delete global.window;
+    try {
+      const r = await hestiaApi.ping("/api/health");
+      expect(r.status).toBe("erro");
+      expect(r.ok).toBe(false);
+      expect(r.ms).toBe(0);
+      expect(r.error).toBe("sem base local");
+    } finally {
+      global.window = savedWindow;
+    }
   });
 });
 
@@ -297,5 +304,52 @@ describe("formatBytes / formatUptime", () => {
     expect(formatUptime(60 * 5)).toBe("5m");
     expect(formatUptime(60 * 60 * 3 + 60 * 20)).toBe("3h 20m");
     expect(formatUptime(86400 * 2 + 3600 * 4)).toBe("2d 4h");
+  });
+});
+
+describe("hestiaApi.absoluteUrl", () => {
+  const savedWindow = global.window;
+
+  afterEach(() => {
+    global.window = savedWindow;
+  });
+
+  function mockLocation(hostname: string, port: string, protocol = "http:") {
+    const origin = port ? `${protocol}//${hostname}:${port}` : `${protocol}//${hostname}`;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        hostname,
+        protocol,
+        port,
+        origin,
+      },
+      writable: true,
+    });
+  }
+
+  it("Vite em localhost:5173 -> resolve para http://localhost:4517", () => {
+    mockLocation("localhost", "5173");
+    expect(hestiaApi.absoluteUrl("/api/health")).toBe("http://localhost:4517/api/health");
+    expect(hestiaApi.absoluteUrl("api/health")).toBe("http://localhost:4517/api/health");
+  });
+
+  it("app servido em http://127.0.0.1:4517", () => {
+    mockLocation("127.0.0.1", "4517");
+    expect(hestiaApi.absoluteUrl("/api/health")).toBe("http://127.0.0.1:4517/api/health");
+    expect(hestiaApi.absoluteUrl("api/health")).toBe("http://127.0.0.1:4517/api/health");
+  });
+
+  it("app servido em https://hestia.example.ts.net", () => {
+    mockLocation("hestia.example.ts.net", "", "https:");
+    expect(hestiaApi.absoluteUrl("/api/health")).toBe("https://hestia.example.ts.net/api/health");
+    expect(hestiaApi.absoluteUrl("api/health")).toBe("https://hestia.example.ts.net/api/health");
+  });
+
+  it("SSR -> fallback para http://localhost:4517", () => {
+    // @ts-expect-error - Simulating SSR by deleting window from global scope
+    delete global.window;
+    expect(hestiaApi.absoluteUrl("/api/health")).toBe("http://localhost:4517/api/health");
+    expect(hestiaApi.absoluteUrl("api/health")).toBe("http://localhost:4517/api/health");
   });
 });

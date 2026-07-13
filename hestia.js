@@ -15,8 +15,12 @@ import { getStorageStatus } from "./chama/storage.js";
 import { discoverVolumes } from "./chama/storageDiscovery.js";
 import { getStorageModel } from "./chama/storageModel.js";
 import { scanStorageModel, scanConfiguredSources } from "./chama/storageScanner.js";
-import { generateOrganizerPlan, writePlan, getPlan } from "./chama/organizerPlan.js";
-import { applyOrganizerPlan, getOrganizerRuns, getOrganizerRun } from "./chama/organizerApply.js";
+import { generateOrganizerPlan, writePlan, getPlan, getPlanState } from "./chama/organizerPlan.js";
+import {
+  claimAndApplyOrganizerPlan,
+  getOrganizerRuns,
+  getOrganizerRun,
+} from "./chama/organizerApply.js";
 import { undoOrganizerRun } from "./chama/organizerUndo.js";
 import { redoOrganizerRun } from "./chama/organizerRedo.js";
 import { getServicesStatus } from "./chama/services.js";
@@ -50,7 +54,7 @@ import {
   validateChatInput,
 } from "./chama/llm.js";
 import { getHermesStatus, processHermesOnce } from "./chama/hermes.js";
-import { getCodiceHealth, getCodiceLibrary, resolveCodiceBook } from "./chama/codice.js";
+import { registerCodiceRoutes } from "./chama/codiceRoutes.js";
 import { createReadStream } from "node:fs";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
@@ -138,6 +142,17 @@ app.setErrorHandler((err, req, reply) => {
 // --- Anti DNS-rebinding: só aceita Host headers que apontem para este bind. -
 const allowedHosts = buildAllowedHosts(config.host, config.port, config.allowedHosts);
 app.addHook("onRequest", async (req, reply) => {
+  if (req.headers["x-forwarded-host"]) {
+    log("warn", `X-Forwarded-Host detectado e rejeitado: "${req.headers["x-forwarded-host"]}"`);
+    reply.code(421).send({
+      ok: false,
+      error: "Proxy header não permitido",
+      code: "EBADHOST",
+      detail: "O cabeçalho X-Forwarded-Host não é permitido nesta estação.",
+      at: new Date().toISOString(),
+    });
+    return;
+  }
   if (isAllowedHostHeader(req.headers.host, allowedHosts)) return;
   log("warn", `Host não permitido: "${req.headers.host ?? ""}" — ${req.method} ${req.url}`);
   reply.code(421).send({
@@ -353,57 +368,7 @@ app.get("/api/config", async () => ({
 }));
 
 // --- Rotas do Códice (Leitura restrita) -------------------------------------
-app.get("/api/codice/health", async (req, reply) => {
-  try {
-    return await getCodiceHealth(config.storagePathBase);
-  } catch (err) {
-    if (err.code === "ECODICELIBRARY") {
-      reply.code(503).send({
-        ok: false,
-        error: "Biblioteca do Códice indisponível",
-        code: "ECODICELIBRARY"
-      });
-      return;
-    }
-    throw err;
-  }
-});
-
-app.get("/api/codice/library", async (req, reply) => {
-  return await getCodiceLibrary(config.storagePathBase);
-});
-
-app.head("/api/codice/books/:bookId", async (req, reply) => {
-  const resolved = await resolveCodiceBook(config.storagePathBase, req.params.bookId);
-  if (!resolved) {
-    reply.code(404).send();
-    return;
-  }
-  
-  reply.header("Content-Type", resolved.mimeType);
-  reply.header("Content-Length", resolved.stat.size);
-  reply.header("Last-Modified", resolved.stat.mtime.toUTCString());
-  reply.code(200).send();
-});
-
-app.get("/api/codice/books/:bookId", async (req, reply) => {
-  const resolved = await resolveCodiceBook(config.storagePathBase, req.params.bookId);
-  if (!resolved) {
-    reply.code(404).send({
-      ok: false,
-      error: "Livro não encontrado",
-      code: "ENOTFOUND"
-    });
-    return;
-  }
-  
-  reply.header("Content-Type", resolved.mimeType);
-  reply.header("Content-Length", resolved.stat.size);
-  reply.header("Last-Modified", resolved.stat.mtime.toUTCString());
-  reply.header("Content-Disposition", `inline; filename="${encodeURIComponent(resolved.filename)}"`);
-  
-  return reply.send(createReadStream(resolved.fullPath));
-});
+registerCodiceRoutes(app, config);
 
 // --- Rotas locais de escrita controlada (organizer) -------------------------
 // Só aplica plano já gerado por GET /api/storage/organizer/plan (planId). Nunca aceita path,
@@ -429,28 +394,33 @@ app.post("/api/local/organizer/apply", async (req, reply) => {
     });
     return;
   }
-  const plan = await getPlan(body.planId, config.dataDir);
-  if (!plan) {
-    reply.code(404).send({
-      ok: false,
-      error: "Plano não encontrado",
-      code: "EPLANNOTFOUND",
-      detail: "planId inválido, expirado ou nunca gerado por GET /api/storage/organizer/plan.",
-      at: new Date().toISOString(),
-    });
-    return;
-  }
+
   try {
-    return await applyOrganizerPlan(plan, config.dataDir, {
+    return await claimAndApplyOrganizerPlan(body.planId, config.dataDir, {
       largePlanConfirmed: req.headers["x-hestia-large-plan-confirm"],
     });
   } catch (err) {
-    if (err.code === "EPLANEXPIRED" || err.code === "ELARGEPLANCONFIRM") {
+    if (err.code === "EPLANNOTFOUND") {
+      reply.code(404).send({
+        ok: false,
+        error: err.message,
+        code: "EPLANNOTFOUND",
+        detail: "planId inválido, expirado ou nunca gerado por GET /api/storage/organizer/plan.",
+        at: new Date().toISOString(),
+      });
+      return;
+    }
+    if (
+      err.code === "PLAN_ALREADY_CLAIMED" ||
+      err.code === "PLAN_ALREADY_APPLIED" ||
+      err.code === "EPLANEXPIRED" ||
+      err.code === "ELARGEPLANCONFIRM"
+    ) {
       reply.code(409).send({
         ok: false,
         error: err.message,
         code: err.code,
-        detail: err.detail,
+        detail: err.detail || "",
         at: new Date().toISOString(),
       });
       return;

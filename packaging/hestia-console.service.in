@@ -13,6 +13,7 @@ LogsDirectory=hestia-console
 Environment=HESTIA_HOST=127.0.0.1
 Environment=HESTIA_PORT=4517
 Environment=NODE_ENV=production
+EnvironmentFile=-/etc/default/hestia-console
 
 # Roda sem privilégio de root — ver comentário equivalente em hestia-console.service.
 # IMPORTANTE pra este caminho (checkout de git, não /opt): __WORKDIR__ precisa ser legível
@@ -23,7 +24,7 @@ Environment=NODE_ENV=production
 DynamicUser=yes
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/KALINE
+ReadWritePaths=-/KALINE
 
 [Install]
 WantedBy=multi-user.target

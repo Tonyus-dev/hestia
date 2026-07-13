@@ -30,7 +30,10 @@ export function getManifest() {
     // readonly:false desde que a Héstia ganhou uma única capacidade de escrita local (mover/copiar
     // dentro de um plano aprovado — ver chama/capabilities.js). Presence nunca vê o plano em si.
     capabilities: {
-      readonly: false,
+      readonly: true,
+      readonlyByDefault: true,
+      controlledWrites: true,
+      writeCapabilities: ["organizer.apply", "organizer.undo", "organizer.redo", "hermes"],
       metrics: true,
       events: true,
       snapshots: true,
