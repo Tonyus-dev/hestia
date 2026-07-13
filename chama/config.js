@@ -11,21 +11,6 @@ import { resolveRetention } from "./retention.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
 
-let resolvedStorageRoot =
-  process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE";
-
-export function setStorageRootForTest(newRoot) {
-  resolvedStorageRoot = newRoot;
-}
-
-const isSystemd = !!process.env.INVOCATION_ID;
-if (isSystemd && resolvedStorageRoot !== "/KALINE") {
-  console.error(
-    `[Erro] Héstia rodando via systemd com raiz de armazenamento inválida: ${resolvedStorageRoot}. O serviço systemd suporta apenas /KALINE como raiz de produção.`,
-  );
-  process.exit(1);
-}
-
 // Whitelist opcional em ~/.chama/config.json (JSON puro).
 // Só campos declarados são lidos; qualquer outro é ignorado.
 function loadUserConfig() {
@@ -36,38 +21,15 @@ function loadUserConfig() {
     const out = {};
     if (typeof raw.host === "string") out.host = raw.host;
     if (Number.isFinite(raw.port)) out.port = Number(raw.port);
-    if (Array.isArray(raw.storagePaths))
-      out.storagePaths = raw.storagePaths.filter((s) => typeof s === "string");
     if (Array.isArray(raw.services))
       out.services = raw.services.filter((s) => ALLOWED_SERVICES.includes(s));
-    if (Array.isArray(raw.storageSources))
-      out.storageSources = raw.storageSources
-        .filter((s) => s && typeof s === "object")
-        .map((s) => ({
-          id: s.id,
-          label: s.label,
-          path: s.path,
-          category: s.category,
-          mode: s.mode,
-        }))
-        .filter(
-          (s) =>
-            typeof s.id === "string" &&
-            typeof s.label === "string" &&
-            typeof s.path === "string" &&
-            typeof s.category === "string" &&
-            ALLOWED_SOURCE_MODES.includes(s.mode),
-        );
     return out;
   } catch {
     return {};
   }
 }
 
-const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
-// "external-readonly" é o único modo aceito: a Héstia nunca apaga o arquivo original de uma
-// fonte externa, só copia (ver chama/organizerPlan.js). Qualquer outro valor é descartado.
-const ALLOWED_SOURCE_MODES = ["external-readonly"];
+const ALLOWED_SERVICES = ["tailscaled"];
 const userCfg = loadUserConfig();
 
 const host = process.env.HESTIA_HOST || userCfg.host || "127.0.0.1";
@@ -80,9 +42,7 @@ export const config = {
   version: pkg.version || "0.1.0",
   host,
   port,
-  // Sobre exposição de rede (bind local vs LAN), não sobre capacidade de escrita — essa
-  // vive em chama/capabilities.js (fonte única de verdade: writing.modifyStorage).
-  mode: "Modo protegido: leitura por padrão; escrita local somente por ações explícitas, allowlisted e auditáveis.",
+  mode: "Console do notebook: leitura local para saúde, hardware, logs, configuração e serviços.",
   readonly: true,
   readonlyByDefault: true,
   controlledWrites: true,
@@ -90,20 +50,8 @@ export const config = {
   // Diretório de dados persistentes (identidade, eventos, snapshots). Só
   // vem de env/systemd — nunca do whitelist de ~/.chama/config.json.
   dataDir: resolveDataDir(),
-  get storageRoot() {
-    if (process.env.NODE_ENV === "test") {
-      return process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE";
-    }
-    return resolvedStorageRoot;
-  },
-  get storagePaths() {
-    return userCfg.storagePaths && userCfg.storagePaths.length > 0
-      ? userCfg.storagePaths
-      : ["/", this.storageRoot];
-  },
   services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
-  // Fontes externas do HD (ex.: pastas em /mnt/hd), só do whitelist — nunca de fora.
-  storageSources: userCfg.storageSources || [],
+  stationBaseUrl: process.env.HESTIA_STATION_BASE_URL?.trim() || null,
   // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
   // whitelist de ~/.chama/config.json.
   retention: resolveRetention(),
@@ -125,13 +73,8 @@ export const config = {
     Number(process.env.HESTIA_LLM_TIMEOUT_MS) ||
     90_000,
   get hermesRoot() {
-    return process.env.HESTIA_HERMES_ROOT || join(this.storageRoot, "HESTIA");
+    return process.env.HESTIA_HERMES_ROOT || join(this.dataDir, "hermes");
   },
-  get storagePathBase() {
-    return this.storageRoot;
-  },
-  // Origem permitida para o Códice acessar via CORS (Tailscale/Cloudflare)
-  codiceCorsOrigin: process.env.HESTIA_CODICE_CORS_ORIGIN || "",
   // Hosts extras permitidos (útil para o Tailscale Serve passar o Hostname)
   allowedHosts: process.env.HESTIA_ALLOWED_HOSTS || "",
 };

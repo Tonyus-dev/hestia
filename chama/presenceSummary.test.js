@@ -46,10 +46,9 @@ describe("getPresenceSummary", () => {
     expect(typeof summary.servicesSummary.active).toBe("number");
   });
 
-  it("contém storageSummary com total e ok", async () => {
+  it("não contém storageSummary no Console do notebook", async () => {
     const summary = await getPresenceSummary(tmpDir);
-    expect(typeof summary.storageSummary.total).toBe("number");
-    expect(typeof summary.storageSummary.ok).toBe("number");
+    expect(summary).not.toHaveProperty("storageSummary");
   });
 
   it("inclui server com uptime, loadAverage, freeMemory", async () => {

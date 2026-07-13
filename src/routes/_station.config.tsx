@@ -74,16 +74,15 @@ function ConfigPage() {
             <Row k="port" v={state.data.port} />
             <Row k="mode" v={state.data.mode} />
             <Row k="readonly" v={String(state.data.readonly)} />
+            <Row k="controlledWrites" v={String(state.data.controlledWrites)} />
             <Row k="lanEnabled" v={String(state.data.lanEnabled)} />
           </div>
           <div className="rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] p-5 flex flex-col gap-3">
             <div>
-              <p className="kaline-eyebrow">storagePaths</p>
-              <ul className="mt-2 font-mono text-[13px] text-[color:var(--kaline-muted)]">
-                {state.data.storagePaths.map((p) => (
-                  <li key={p}>· {p}</li>
-                ))}
-              </ul>
+              <p className="kaline-eyebrow">stationBaseUrl</p>
+              <p className="mt-2 font-mono text-[13px] text-[color:var(--kaline-muted)]">
+                {state.data.stationBaseUrl ?? "Estação não configurada."}
+              </p>
             </div>
             <div>
               <p className="kaline-eyebrow">services</p>

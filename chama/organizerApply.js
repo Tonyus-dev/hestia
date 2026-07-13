@@ -8,7 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { appendEvent } from "./events.js";
 import { isValidOrganizerId } from "./organizerIds.js";
-import { config } from "./config.js";
+import { legacyStorageRoot } from "./legacyStorageConfig.js";
 
 // Exportadas para reaproveitar em chama/organizerUndo.js — mesmo fallback de EXDEV, mesma
 // checagem de "não sobrescrever", sem duplicar a lógica em dois lugares.
@@ -22,7 +22,7 @@ export async function targetExists(targetPath) {
 }
 
 function kalineRoot() {
-  return config.storageRoot;
+  return legacyStorageRoot();
 }
 const PLAN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const LARGE_PLAN_THRESHOLD = 5000;
@@ -51,7 +51,7 @@ async function getNearestExistingAncestor(targetPath) {
 }
 
 function allowedSourceRoots() {
-  return [kalineRoot(), ...(config.storageSources || []).map((s) => s.path).filter(Boolean)];
+  return [kalineRoot()];
 }
 
 async function validateItem(item) {

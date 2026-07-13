@@ -83,7 +83,7 @@ describe("diffServiceTransitions", () => {
 });
 
 describe("generateSnapshot", () => {
-  it("retorna snapshot com server/services/storage", async () => {
+  it("retorna snapshot com server/services, sem storage", async () => {
     // Mock os imports para não depender de systemctl real
     vi.mocked = vi.mocked || {};
 
@@ -92,7 +92,7 @@ describe("generateSnapshot", () => {
     expect(snapshot.expiresAt).toBeDefined();
     expect(snapshot.server).toBeDefined();
     expect(snapshot.services).toBeDefined();
-    expect(snapshot.storage).toBeDefined();
+    expect(snapshot).not.toHaveProperty("storage");
   });
 });
 
@@ -124,6 +124,8 @@ describe("writeSnapshot / getLatestSnapshot", () => {
       expiresAt: new Date(now.getTime() + SNAPSHOT_INTERVAL_MS * 2).toISOString(),
       server: { hostname: "test" },
       services: { items: [] },
+      // Snapshots antigos persistidos podem conter storage histórico; getLatestSnapshot
+      // deve continuar lendo sem migração, mas snapshots novos não escrevem storage.
       storage: { items: [] },
     };
 

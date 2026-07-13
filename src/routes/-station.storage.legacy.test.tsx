@@ -1,19 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StoragePage } from "./_station.storage";
-import { OrganizarPage } from "./_station.organizar";
-import { hestiaApi } from "@/lib/hestia/api";
+import { StoragePage } from "./-station.storage.legacy";
+import { OrganizarPage } from "./-station.organizar.legacy";
+import { hestiaLegacyApi } from "@/lib/hestia/api";
 
 vi.mock("@/lib/hestia/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/hestia/api")>();
   return {
     ...actual,
-    hestiaApi: {
-      ...actual.hestiaApi,
+    hestiaLegacyApi: {
+      ...actual.hestiaLegacyApi,
       storageModel: vi.fn(),
       storageScan: vi.fn(),
-      services: vi.fn(),
       organizerRuns: vi.fn(),
       organizerPlan: vi.fn(),
       organizerApply: vi.fn(),
@@ -45,10 +44,9 @@ function emptyRuns() {
 
 describe("StoragePage", () => {
   beforeEach(() => {
-    vi.mocked(hestiaApi.storageModel).mockResolvedValue(emptyModel());
-    vi.mocked(hestiaApi.storageScan).mockResolvedValue(emptyScan());
-    vi.mocked(hestiaApi.services).mockResolvedValue(emptyServices());
-    vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(emptyRuns());
+    vi.mocked(hestiaLegacyApi.storageModel).mockResolvedValue(emptyModel());
+    vi.mocked(hestiaLegacyApi.storageScan).mockResolvedValue(emptyScan());
+    vi.mocked(hestiaLegacyApi.organizerRuns).mockResolvedValue(emptyRuns());
   });
 
   afterEach(() => {
@@ -58,12 +56,12 @@ describe("StoragePage", () => {
 
   it("renderiza o cabeçalho do Storage", async () => {
     render(<StoragePage />);
-    expect(screen.getByText("Storage da Héstia Station")).toBeTruthy();
-    await waitFor(() => expect(hestiaApi.storageModel).toHaveBeenCalled());
+    expect(screen.getByText("Storage da Héstia Console")).toBeTruthy();
+    await waitFor(() => expect(hestiaLegacyApi.storageModel).toHaveBeenCalled());
   });
 
   it("expande um card colapsado (Modelo) e mostra o conteúdo", async () => {
-    vi.mocked(hestiaApi.storageModel).mockResolvedValue(
+    vi.mocked(hestiaLegacyApi.storageModel).mockResolvedValue(
       ok({
         root: "/KALINE",
         folders: [
@@ -91,10 +89,9 @@ describe("StoragePage", () => {
 
 describe("OrganizarPage", () => {
   beforeEach(() => {
-    vi.mocked(hestiaApi.storageModel).mockResolvedValue(emptyModel());
-    vi.mocked(hestiaApi.storageScan).mockResolvedValue(emptyScan());
-    vi.mocked(hestiaApi.services).mockResolvedValue(emptyServices());
-    vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(emptyRuns());
+    vi.mocked(hestiaLegacyApi.storageModel).mockResolvedValue(emptyModel());
+    vi.mocked(hestiaLegacyApi.storageScan).mockResolvedValue(emptyScan());
+    vi.mocked(hestiaLegacyApi.organizerRuns).mockResolvedValue(emptyRuns());
   });
 
   afterEach(() => {
@@ -110,11 +107,11 @@ describe("OrganizarPage", () => {
 
   it("não gera plano automaticamente ao montar (só sob clique explícito)", async () => {
     render(<OrganizarPage />);
-    expect(hestiaApi.organizerPlan).not.toHaveBeenCalled();
+    expect(hestiaLegacyApi.organizerPlan).not.toHaveBeenCalled();
   });
 
   it("gera plano sob clique e mostra os itens", async () => {
-    vi.mocked(hestiaApi.organizerPlan).mockResolvedValue(
+    vi.mocked(hestiaLegacyApi.organizerPlan).mockResolvedValue(
       ok({
         planId: "plan_1_deadbeef",
         generatedAt: "",
@@ -139,11 +136,11 @@ describe("OrganizarPage", () => {
 
     expect(await screen.findByText(/livro\.pdf/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Aplicar plano localmente" })).toBeTruthy();
-    expect(hestiaApi.organizerPlan).toHaveBeenCalledTimes(1);
+    expect(hestiaLegacyApi.organizerPlan).toHaveBeenCalledTimes(1);
   });
 
   it("mostra erro de plano quando a API fica indisponível", async () => {
-    vi.mocked(hestiaApi.organizerPlan).mockResolvedValue({
+    vi.mocked(hestiaLegacyApi.organizerPlan).mockResolvedValue({
       status: "unavailable",
       message: "Chama Local não respondeu",
       fetchedAt: "",
@@ -158,7 +155,7 @@ describe("OrganizarPage", () => {
   });
 
   it("aplica o plano gerado e mostra o resultado", async () => {
-    vi.mocked(hestiaApi.organizerPlan).mockResolvedValue(
+    vi.mocked(hestiaLegacyApi.organizerPlan).mockResolvedValue(
       ok({
         planId: "plan_1_deadbeef",
         generatedAt: "",
@@ -176,7 +173,7 @@ describe("OrganizarPage", () => {
         summary: { total: 1, planned: 1, conflicts: 0 },
       }),
     );
-    vi.mocked(hestiaApi.organizerApply).mockResolvedValue(
+    vi.mocked(hestiaLegacyApi.organizerApply).mockResolvedValue(
       ok({
         runId: "org_1_deadbeef",
         planId: "plan_1_deadbeef",
@@ -195,7 +192,7 @@ describe("OrganizarPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Aplicar plano localmente" }));
 
-    expect(hestiaApi.organizerApply).toHaveBeenCalledWith("plan_1_deadbeef", false);
+    expect(hestiaLegacyApi.organizerApply).toHaveBeenCalledWith("plan_1_deadbeef", false);
     expect(await screen.findByText(/applied/)).toBeTruthy();
     // O plano some da tela depois de aplicado.
     expect(screen.queryByRole("button", { name: "Aplicar plano localmente" })).toBeNull();
@@ -203,7 +200,7 @@ describe("OrganizarPage", () => {
 
   describe("Execuções anteriores: Desfazer/Refazer conforme o estado", () => {
     it("mostra 'Desfazer' só numa execução original ainda não desfeita", async () => {
-      vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(
+      vi.mocked(hestiaLegacyApi.organizerRuns).mockResolvedValue(
         ok({
           items: [
             {
@@ -222,7 +219,7 @@ describe("OrganizarPage", () => {
     });
 
     it("não mostra nenhum botão numa execução original já desfeita", async () => {
-      vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(
+      vi.mocked(hestiaLegacyApi.organizerRuns).mockResolvedValue(
         ok({
           items: [
             {
@@ -243,7 +240,7 @@ describe("OrganizarPage", () => {
     });
 
     it("mostra 'Refazer' numa execução de undo ainda não refeita", async () => {
-      vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(
+      vi.mocked(hestiaLegacyApi.organizerRuns).mockResolvedValue(
         ok({
           items: [
             {
@@ -262,7 +259,7 @@ describe("OrganizarPage", () => {
     });
 
     it("não mostra nenhum botão numa execução de redo (terminal)", async () => {
-      vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(
+      vi.mocked(hestiaLegacyApi.organizerRuns).mockResolvedValue(
         ok({
           items: [
             {
@@ -283,7 +280,7 @@ describe("OrganizarPage", () => {
     });
 
     it("clicar em Desfazer chama organizerUndo e recarrega a lista", async () => {
-      vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(
+      vi.mocked(hestiaLegacyApi.organizerRuns).mockResolvedValue(
         ok({
           items: [
             {
@@ -297,7 +294,7 @@ describe("OrganizarPage", () => {
           ],
         }),
       );
-      vi.mocked(hestiaApi.organizerUndo).mockResolvedValue(
+      vi.mocked(hestiaLegacyApi.organizerUndo).mockResolvedValue(
         ok({
           runId: "undo_1",
           undoOf: "org_1",
@@ -313,12 +310,12 @@ describe("OrganizarPage", () => {
       render(<OrganizarPage />);
       await user.click(await screen.findByRole("button", { name: "Desfazer" }));
 
-      expect(hestiaApi.organizerUndo).toHaveBeenCalledWith("org_1");
-      await waitFor(() => expect(hestiaApi.organizerRuns).toHaveBeenCalledTimes(2));
+      expect(hestiaLegacyApi.organizerUndo).toHaveBeenCalledWith("org_1");
+      await waitFor(() => expect(hestiaLegacyApi.organizerRuns).toHaveBeenCalledTimes(2));
     });
 
     it("clicar em Refazer chama organizerRedo e recarrega a lista", async () => {
-      vi.mocked(hestiaApi.organizerRuns).mockResolvedValue(
+      vi.mocked(hestiaLegacyApi.organizerRuns).mockResolvedValue(
         ok({
           items: [
             {
@@ -332,7 +329,7 @@ describe("OrganizarPage", () => {
           ],
         }),
       );
-      vi.mocked(hestiaApi.organizerRedo).mockResolvedValue(
+      vi.mocked(hestiaLegacyApi.organizerRedo).mockResolvedValue(
         ok({
           runId: "redo_1",
           redoOf: "undo_1",
@@ -348,8 +345,8 @@ describe("OrganizarPage", () => {
       render(<OrganizarPage />);
       await user.click(await screen.findByRole("button", { name: "Refazer" }));
 
-      expect(hestiaApi.organizerRedo).toHaveBeenCalledWith("undo_1");
-      await waitFor(() => expect(hestiaApi.organizerRuns).toHaveBeenCalledTimes(2));
+      expect(hestiaLegacyApi.organizerRedo).toHaveBeenCalledWith("undo_1");
+      await waitFor(() => expect(hestiaLegacyApi.organizerRuns).toHaveBeenCalledTimes(2));
     });
   });
 });

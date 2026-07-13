@@ -1,10 +1,9 @@
-// Chama Local — snapshots periódicos do estado (server/services/storage).
+// Chama Local — snapshots periódicos do estado (server/services).
 // Escreve atomicamente; emite eventos apenas quando um serviço muda de estado.
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { getServerStatus } from "./system.js";
 import { getServicesStatus } from "./services.js";
-import { getStorageStatus } from "./storage.js";
 import { appendEvent } from "./events.js";
 
 export const SNAPSHOT_INTERVAL_MS = 60_000; // 60 segundos
@@ -35,14 +34,11 @@ export function diffServiceTransitions(prevSnapshot, currSnapshot) {
 export async function generateSnapshot() {
   const server = getServerStatus();
   const services = await getServicesStatus();
-  const storage = await getStorageStatus();
-
   return {
     timestamp: new Date().toISOString(),
     expiresAt: new Date(Date.now() + SNAPSHOT_INTERVAL_MS * 2).toISOString(),
     server,
     services,
-    storage,
   };
 }
 

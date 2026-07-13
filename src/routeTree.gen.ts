@@ -11,10 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StationRouteImport } from './routes/_station'
 import { Route as StationIndexRouteImport } from './routes/_station.index'
-import { Route as StationStorageRouteImport } from './routes/_station.storage'
 import { Route as StationSistemaRouteImport } from './routes/_station.sistema'
 import { Route as StationServicosRouteImport } from './routes/_station.servicos'
-import { Route as StationOrganizarRouteImport } from './routes/_station.organizar'
 import { Route as StationLogsRouteImport } from './routes/_station.logs'
 import { Route as StationHistoricoRouteImport } from './routes/_station.historico'
 import { Route as StationEndpointsRouteImport } from './routes/_station.endpoints'
@@ -29,11 +27,6 @@ const StationIndexRoute = StationIndexRouteImport.update({
   path: '/',
   getParentRoute: () => StationRoute,
 } as any)
-const StationStorageRoute = StationStorageRouteImport.update({
-  id: '/storage',
-  path: '/storage',
-  getParentRoute: () => StationRoute,
-} as any)
 const StationSistemaRoute = StationSistemaRouteImport.update({
   id: '/sistema',
   path: '/sistema',
@@ -42,11 +35,6 @@ const StationSistemaRoute = StationSistemaRouteImport.update({
 const StationServicosRoute = StationServicosRouteImport.update({
   id: '/servicos',
   path: '/servicos',
-  getParentRoute: () => StationRoute,
-} as any)
-const StationOrganizarRoute = StationOrganizarRouteImport.update({
-  id: '/organizar',
-  path: '/organizar',
   getParentRoute: () => StationRoute,
 } as any)
 const StationLogsRoute = StationLogsRouteImport.update({
@@ -76,20 +64,16 @@ export interface FileRoutesByFullPath {
   '/endpoints': typeof StationEndpointsRoute
   '/historico': typeof StationHistoricoRoute
   '/logs': typeof StationLogsRoute
-  '/organizar': typeof StationOrganizarRoute
   '/servicos': typeof StationServicosRoute
   '/sistema': typeof StationSistemaRoute
-  '/storage': typeof StationStorageRoute
 }
 export interface FileRoutesByTo {
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
   '/historico': typeof StationHistoricoRoute
   '/logs': typeof StationLogsRoute
-  '/organizar': typeof StationOrganizarRoute
   '/servicos': typeof StationServicosRoute
   '/sistema': typeof StationSistemaRoute
-  '/storage': typeof StationStorageRoute
   '/': typeof StationIndexRoute
 }
 export interface FileRoutesById {
@@ -99,10 +83,8 @@ export interface FileRoutesById {
   '/_station/endpoints': typeof StationEndpointsRoute
   '/_station/historico': typeof StationHistoricoRoute
   '/_station/logs': typeof StationLogsRoute
-  '/_station/organizar': typeof StationOrganizarRoute
   '/_station/servicos': typeof StationServicosRoute
   '/_station/sistema': typeof StationSistemaRoute
-  '/_station/storage': typeof StationStorageRoute
   '/_station/': typeof StationIndexRoute
 }
 export interface FileRouteTypes {
@@ -113,20 +95,16 @@ export interface FileRouteTypes {
     | '/endpoints'
     | '/historico'
     | '/logs'
-    | '/organizar'
     | '/servicos'
     | '/sistema'
-    | '/storage'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/config'
     | '/endpoints'
     | '/historico'
     | '/logs'
-    | '/organizar'
     | '/servicos'
     | '/sistema'
-    | '/storage'
     | '/'
   id:
     | '__root__'
@@ -135,10 +113,8 @@ export interface FileRouteTypes {
     | '/_station/endpoints'
     | '/_station/historico'
     | '/_station/logs'
-    | '/_station/organizar'
     | '/_station/servicos'
     | '/_station/sistema'
-    | '/_station/storage'
     | '/_station/'
   fileRoutesById: FileRoutesById
 }
@@ -162,13 +138,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationIndexRouteImport
       parentRoute: typeof StationRoute
     }
-    '/_station/storage': {
-      id: '/_station/storage'
-      path: '/storage'
-      fullPath: '/storage'
-      preLoaderRoute: typeof StationStorageRouteImport
-      parentRoute: typeof StationRoute
-    }
     '/_station/sistema': {
       id: '/_station/sistema'
       path: '/sistema'
@@ -181,13 +150,6 @@ declare module '@tanstack/react-router' {
       path: '/servicos'
       fullPath: '/servicos'
       preLoaderRoute: typeof StationServicosRouteImport
-      parentRoute: typeof StationRoute
-    }
-    '/_station/organizar': {
-      id: '/_station/organizar'
-      path: '/organizar'
-      fullPath: '/organizar'
-      preLoaderRoute: typeof StationOrganizarRouteImport
       parentRoute: typeof StationRoute
     }
     '/_station/logs': {
@@ -226,10 +188,8 @@ interface StationRouteChildren {
   StationEndpointsRoute: typeof StationEndpointsRoute
   StationHistoricoRoute: typeof StationHistoricoRoute
   StationLogsRoute: typeof StationLogsRoute
-  StationOrganizarRoute: typeof StationOrganizarRoute
   StationServicosRoute: typeof StationServicosRoute
   StationSistemaRoute: typeof StationSistemaRoute
-  StationStorageRoute: typeof StationStorageRoute
   StationIndexRoute: typeof StationIndexRoute
 }
 
@@ -238,10 +198,8 @@ const StationRouteChildren: StationRouteChildren = {
   StationEndpointsRoute: StationEndpointsRoute,
   StationHistoricoRoute: StationHistoricoRoute,
   StationLogsRoute: StationLogsRoute,
-  StationOrganizarRoute: StationOrganizarRoute,
   StationServicosRoute: StationServicosRoute,
   StationSistemaRoute: StationSistemaRoute,
-  StationStorageRoute: StationStorageRoute,
   StationIndexRoute: StationIndexRoute,
 }
 

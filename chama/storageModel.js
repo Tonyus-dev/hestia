@@ -1,5 +1,5 @@
 import path from "node:path";
-import { config } from "./config.js";
+import { legacyStorageRoot } from "./legacyStorageConfig.js";
 
 function folder({
   id,
@@ -274,7 +274,7 @@ const FOLDERS = [
 ];
 
 export function getStorageModel() {
-  const root = config.storageRoot;
+  const root = legacyStorageRoot();
   const mappedFolders = FOLDERS.map((f) => ({
     ...f,
     absolutePath: path.join(root, f.relativePath),

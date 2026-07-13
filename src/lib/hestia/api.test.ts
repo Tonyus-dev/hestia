@@ -141,12 +141,12 @@ describe("hestiaApi.safeFetch — parser de erros estruturados", () => {
   it("aplica fallback claro quando o corpo NÃO é JSON, preservando status e rota", async () => {
     mockFetch(() => new Response("<html>bad gateway</html>", { status: 502 }));
 
-    const s = expectUnavailable(await hestiaApi.storage());
+    const s = expectUnavailable(await hestiaApi.server());
     // Status + statusText sempre visíveis
-    expect(s.message).toContain("GET /api/storage/status respondeu 502");
+    expect(s.message).toContain("GET /api/server/status respondeu 502");
     expect(s.details.origin).toBe("http");
     expect(s.details.httpStatus).toBe(502);
-    expect(s.details.route).toBe("GET /api/storage/status");
+    expect(s.details.route).toBe("GET /api/server/status");
     // rawBody preservado integralmente (até 2000 chars)
     expect(s.details.rawBody).toBe("<html>bad gateway</html>");
     // Fallback preenche code/detail/hint em vez de deixar em branco

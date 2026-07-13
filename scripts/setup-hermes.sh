@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="${HESTIA_HERMES_ROOT:-/KALINE/HESTIA}"
+ROOT="${HESTIA_HERMES_ROOT:-${XDG_STATE_HOME:-$HOME/.local/state}/hestia-console/hermes}"
 for dir in inbox outbox archive errors; do
   mkdir -p "$ROOT/$dir"
   echo "$ROOT/$dir"

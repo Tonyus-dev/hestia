@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { hestiaApi, formatBytes } from "@/lib/hestia/api";
+import { hestiaLegacyApi, formatBytes } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
 import { DataCard, type CardStatus } from "@/components/hestia/shared/DataCard";
@@ -14,12 +14,12 @@ function statusOf(s: { status: string }): CardStatus {
 export const Route = createFileRoute("/_station/storage")({
   head: () => ({
     meta: [
-      { title: "Héstia Station — Storage" },
+      { title: "Héstia Console — Storage" },
       {
         name: "description",
         content: "Volumes, caminhos, fontes externas, estado do /KALINE e scan read-only.",
       },
-      { property: "og:title", content: "Héstia Station — Storage" },
+      { property: "og:title", content: "Héstia Console — Storage" },
       {
         property: "og:description",
         content: "Leitura de armazenamento local: volumes, fontes e /KALINE.",
@@ -30,17 +30,17 @@ export const Route = createFileRoute("/_station/storage")({
 });
 
 export function StoragePage() {
-  const storage = useApi(hestiaApi.storage);
-  const model = useApi(hestiaApi.storageModel);
-  const sources = useApi(hestiaApi.storageSources);
-  const scan = useApi(hestiaApi.storageScan);
+  const storage = useApi(hestiaLegacyApi.storage);
+  const model = useApi(hestiaLegacyApi.storageModel);
+  const sources = useApi(hestiaLegacyApi.storageSources);
+  const scan = useApi(hestiaLegacyApi.storageScan);
 
   return (
     <div className="space-y-10">
       <header className="space-y-2">
         <p className="kaline-eyebrow">/storage</p>
         <h1 className="kaline-serif text-3xl md:text-4xl text-[color:var(--kaline-text)]">
-          Storage da Héstia Station
+          Storage da Héstia Console
         </h1>
         <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
           Volumes, caminhos, fontes externas e estado do /KALINE. Esta rota consulta o scan

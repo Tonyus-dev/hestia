@@ -1,8 +1,4 @@
-// Chama Local — capabilities estáticas.
-// Única capacidade de escrita real: mover/copiar arquivo dentro de um plano gerado pela própria
-// Héstia e aplicado com confirmação explícita (ver chama/organizerPlan.js/organizerApply.js).
-// Todo o resto (executar comando, configurar/reiniciar serviço, gerenciar usuário) continua
-// hardcoded como false — não existe em nenhum lugar do código.
+// Chama Local — capabilities estáticas do console puro do notebook.
 
 export function getCapabilities() {
   return {
@@ -18,9 +14,10 @@ export function getCapabilities() {
       executeCommands: false,
       configureServices: false,
       manageBackups: false,
-      modifyStorage: true,
+      modifyStorage: false,
       manageUsers: false,
+      processHermes: true,
     },
-    mode: "local-write-with-approval",
+    mode: "notebook-console",
   };
 }

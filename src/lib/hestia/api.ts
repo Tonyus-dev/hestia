@@ -36,8 +36,6 @@ export type Health = {
   processUptime: number;
   readonly: boolean;
   frontendBuilt?: boolean;
-  kalineMounted?: boolean;
-  kalineWritable?: boolean;
   serviceUser?: string;
   dataDirWritable?: boolean;
 };
@@ -108,7 +106,6 @@ export type HardwareStatus = {
     maxC: number | null;
     sensors: { label: string; tempC: number; status: HardwareSeverity }[];
   };
-  storage: { status: HardwareSeverity; items: StoragePath[] };
   services: { status: HardwareSeverity; active: number; total: number; items: ServiceStatus[] };
 };
 export type HardwareConfig = {
@@ -139,7 +136,7 @@ export type HardwareConfig = {
     port: number;
     mode: string;
     lanEnabled: boolean;
-    storagePaths: string[];
+    stationBaseUrl: string | null;
     services: string[];
   };
 };
@@ -151,7 +148,6 @@ export type ServiceBinding = {
   serviceName: string;
   label: string;
   role: string;
-  relatedStorage: string[];
 };
 export type ServiceBindings = ServiceBinding[];
 
@@ -191,8 +187,9 @@ export type Config = {
   port: number;
   mode: string;
   readonly: boolean;
+  controlledWrites: boolean;
   lanEnabled: boolean;
-  storagePaths: string[];
+  stationBaseUrl: string | null;
   services: string[];
 };
 
@@ -454,11 +451,7 @@ async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promi
   }
 }
 
-/**
- * POST com header customizado — só usado pelo organizer (a única mutação da Héstia).
- * Nunca usado sem `X-Hestia-Local-Confirm`; a confirmação é sempre passada explicitamente
- * pelo chamador (ver hestiaApi.organizerApply/organizerUndo), nunca implícita aqui.
- */
+/** POST legado para telas excluídas do runtime ativo do Console. */
 async function safePost<T>(
   path: string,
   body: unknown,
@@ -494,45 +487,11 @@ export const hestiaApi = {
   server: () => safeFetch<ServerStatus>("/api/server/status"),
   hardwareStatus: () => safeFetch<HardwareStatus>("/api/hardware/status"),
   hardwareConfig: () => safeFetch<HardwareConfig>("/api/hardware/config"),
-  storage: () => safeFetch<StorageStatus>("/api/storage/status"),
   services: () => safeFetch<ServicesStatus>("/api/services/status"),
   serviceBindings: () => safeFetch<ServiceBindings>("/api/services/bindings"),
   logs: (tail?: number) =>
     safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
-  storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
-  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
-  storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
-  /** Gera um plano novo a cada chamada (persiste arquivo) — só sob ação explícita do usuário. */
-  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 60000),
-  /** Aplica um plano já gerado. Único POST da Héstia — exige o header de confirmação. */
-  organizerApply: (planId: string, largePlanConfirm = false) =>
-    safePost<OrganizerRunManifest>(
-      "/api/local/organizer/apply",
-      { planId, mode: "apply" },
-      {
-        "x-hestia-local-confirm": "organize",
-        ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
-      },
-      60000,
-    ),
-  organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
-  organizerRun: (runId: string) =>
-    safeFetch<OrganizerRunManifest>(`/api/local/organizer/runs/${runId}`),
-  organizerUndo: (runId: string) =>
-    safePost<OrganizerRunManifest>(
-      `/api/local/organizer/runs/${runId}/undo`,
-      {},
-      { "x-hestia-local-confirm": "organize" },
-      60000,
-    ),
-  organizerRedo: (undoRunId: string) =>
-    safePost<OrganizerRunManifest>(
-      `/api/local/organizer/runs/${undoRunId}/redo`,
-      {},
-      { "x-hestia-local-confirm": "organize" },
-      60000,
-    ),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
@@ -561,6 +520,41 @@ export const hestiaApi = {
       };
     }
   },
+};
+
+export const hestiaLegacyApi = {
+  storage: () => safeFetch<StorageStatus>("/api/storage/status"),
+  storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
+  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
+  storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
+  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 60000),
+  organizerApply: (planId: string, largePlanConfirm = false) =>
+    safePost<OrganizerRunManifest>(
+      "/api/local/organizer/apply",
+      { planId, mode: "apply" },
+      {
+        "x-hestia-local-confirm": "organize",
+        ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
+      },
+      60000,
+    ),
+  organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
+  organizerRun: (runId: string) =>
+    safeFetch<OrganizerRunManifest>(`/api/local/organizer/runs/${runId}`),
+  organizerUndo: (runId: string) =>
+    safePost<OrganizerRunManifest>(
+      `/api/local/organizer/runs/${runId}/undo`,
+      {},
+      { "x-hestia-local-confirm": "organize" },
+      60000,
+    ),
+  organizerRedo: (undoRunId: string) =>
+    safePost<OrganizerRunManifest>(
+      `/api/local/organizer/runs/${undoRunId}/redo`,
+      {},
+      { "x-hestia-local-confirm": "organize" },
+      60000,
+    ),
 };
 
 export function formatBytes(bytes: number | null | undefined): string {

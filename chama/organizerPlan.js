@@ -7,13 +7,14 @@ import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getStorageModel } from "./storageModel.js";
 import { listFiles, DEFAULT_INDEX_LIMITS } from "./storageScanner.js";
-import { config } from "./config.js";
 import { isValidOrganizerId } from "./organizerIds.js";
+import { config } from "./config.js";
+import { legacyStorageRoot } from "./legacyStorageConfig.js";
 
 import { LARGE_PLAN_THRESHOLD } from "./organizerApply.js";
 
 function getRoot() {
-  return config.storageRoot || "/KALINE";
+  return legacyStorageRoot();
 }
 
 const RECENTLY_MODIFIED_MS = 60_000;

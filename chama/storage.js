@@ -3,7 +3,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
-import { config } from "./config.js";
+import { legacyStoragePaths } from "./legacyStorageConfig.js";
 
 const pExecFile = promisify(execFile);
 
@@ -51,7 +51,7 @@ async function readOne(path) {
   }
 }
 
-export async function getStorageStatus() {
-  const items = await Promise.all(config.storagePaths.map(readOne));
+export async function getStorageStatus(paths = legacyStoragePaths()) {
+  const items = await Promise.all(paths.map(readOne));
   return { items, checkedAt: new Date().toISOString() };
 }
