@@ -120,10 +120,26 @@ function validateStationHealth(body) {
   };
 }
 
+function isJsonContentType(header) {
+  const mediaType = String(header || "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  return mediaType === "application/json" || mediaType.endsWith("+json");
+}
+
+function declaredBodyTooLarge(header) {
+  if (!header) return false;
+  const value = Number(header);
+  return Number.isFinite(value) && value > MAX_HEALTH_BODY_BYTES;
+}
+
 async function readLimitedJson(res) {
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.toLowerCase().includes("application/json")) {
+  if (!isJsonContentType(res.headers.get("content-type"))) {
     return { ok: false, code: STATION_CODES.INVALID_CONTENT_TYPE };
+  }
+  if (declaredBodyTooLarge(res.headers.get("content-length"))) {
+    return { ok: false, code: STATION_CODES.RESPONSE_TOO_LARGE };
   }
   const reader = res.body?.getReader();
   if (!reader) return { ok: false, code: STATION_CODES.CONTRACT_MISMATCH };

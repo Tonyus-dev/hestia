@@ -163,25 +163,29 @@ describe("fetchStationHealth", () => {
   }, 4000);
 
   it("normaliza falhas HTTP, content-type, tamanho e contrato", async () => {
-    const unauthorized = await peer((req, res) => {
-      res.statusCode = 401;
-      res.end();
-    });
-    expect(
-      await fetchStationHealth(
-        env({ HESTIA_STATION_BASE_URL: unauthorized.baseUrl, HESTIA_STATION_TOKEN: "secret" }),
-      ),
-    ).toMatchObject({ state: "unauthorized", code: "STATION_AUTH_FAILED" });
+    for (const authStatus of [401, 403]) {
+      const unauthorized = await peer((req, res) => {
+        res.statusCode = authStatus;
+        res.end();
+      });
+      expect(
+        await fetchStationHealth(
+          env({ HESTIA_STATION_BASE_URL: unauthorized.baseUrl, HESTIA_STATION_TOKEN: "secret" }),
+        ),
+      ).toMatchObject({ state: "unauthorized", code: "STATION_AUTH_FAILED" });
+    }
 
-    const html = await peer((req, res) => {
-      res.setHeader("content-type", "text/html");
-      res.end("<html></html>");
-    });
-    expect(
-      await fetchStationHealth(
-        env({ HESTIA_STATION_BASE_URL: html.baseUrl, HESTIA_STATION_TOKEN: "secret" }),
-      ),
-    ).toMatchObject({ state: "incompatible", code: "STATION_INVALID_CONTENT_TYPE" });
+    for (const contentType of ["text/html", "application/jsonp"]) {
+      const html = await peer((req, res) => {
+        res.setHeader("content-type", contentType);
+        res.end("<html></html>");
+      });
+      expect(
+        await fetchStationHealth(
+          env({ HESTIA_STATION_BASE_URL: html.baseUrl, HESTIA_STATION_TOKEN: "secret" }),
+        ),
+      ).toMatchObject({ state: "incompatible", code: "STATION_INVALID_CONTENT_TYPE" });
+    }
 
     const large = await peer((req, res) => {
       res.setHeader("content-type", "application/json");
@@ -190,6 +194,17 @@ describe("fetchStationHealth", () => {
     expect(
       await fetchStationHealth(
         env({ HESTIA_STATION_BASE_URL: large.baseUrl, HESTIA_STATION_TOKEN: "secret" }),
+      ),
+    ).toMatchObject({ state: "incompatible", code: "STATION_RESPONSE_TOO_LARGE" });
+
+    const declaredLarge = await peer((req, res) => {
+      res.setHeader("content-type", "application/json; charset=utf-8");
+      res.setHeader("content-length", String(70 * 1024));
+      res.end(validHealth());
+    });
+    expect(
+      await fetchStationHealth(
+        env({ HESTIA_STATION_BASE_URL: declaredLarge.baseUrl, HESTIA_STATION_TOKEN: "secret" }),
       ),
     ).toMatchObject({ state: "incompatible", code: "STATION_RESPONSE_TOO_LARGE" });
 
@@ -226,6 +241,22 @@ describe("fetchStationHealth", () => {
         ),
       ).toMatchObject({ state: "incompatible", code: "STATION_CONTRACT_MISMATCH" });
     }
+  });
+
+  it("conexão recusada vira indisponível", async () => {
+    const p = await peer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(validHealth());
+    });
+    const baseUrl = p.baseUrl;
+    await new Promise((resolve) => p.server.close(resolve));
+    servers.splice(servers.indexOf(p.server), 1);
+
+    expect(
+      await fetchStationHealth(
+        env({ HESTIA_STATION_BASE_URL: baseUrl, HESTIA_STATION_TOKEN: "secret" }),
+      ),
+    ).toMatchObject({ state: "unavailable", code: "STATION_UNAVAILABLE" });
   });
 
   it("não vaza token em status de conexão", async () => {
