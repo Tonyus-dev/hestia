@@ -235,6 +235,10 @@ export type OrganizerPlan = {
     quarantined?: number;
     byExtension?: Record<string, number>;
     byTargetArea?: Record<string, number>;
+    rules?: {
+      extensionRules: { extensions: string[]; relativePath: string }[];
+      fallback: string;
+    };
   };
   dryRun?: boolean;
 };
@@ -478,7 +482,7 @@ export const hestiaApi = {
   storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
   /** Gera um plano novo a cada chamada (persiste arquivo) — só sob ação explícita do usuário. */
-  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan"),
+  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 60000),
   /** Aplica um plano já gerado. Único POST da Héstia — exige o header de confirmação. */
   organizerApply: (planId: string, largePlanConfirm = false) =>
     safePost<OrganizerRunManifest>(
@@ -488,6 +492,7 @@ export const hestiaApi = {
         "x-hestia-local-confirm": "organize",
         ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
       },
+      60000,
     ),
   organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
   organizerRun: (runId: string) =>
@@ -497,12 +502,14 @@ export const hestiaApi = {
       `/api/local/organizer/runs/${runId}/undo`,
       {},
       { "x-hestia-local-confirm": "organize" },
+      60000,
     ),
   organizerRedo: (undoRunId: string) =>
     safePost<OrganizerRunManifest>(
       `/api/local/organizer/runs/${undoRunId}/redo`,
       {},
       { "x-hestia-local-confirm": "organize" },
+      60000,
     ),
   /** URL absoluta para exibir/copiar (ex.: comando curl). Sempre localhost:4517. */
   absoluteUrl: (path: string) => `http://localhost:${CHAMA_PORT}${path}`,

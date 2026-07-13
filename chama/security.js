@@ -10,12 +10,16 @@ export function isLoopbackHost(host) {
 // Host headers aceitos para host:port configurados. Quando o bind é loopback,
 // aceitamos também os aliases usuais (127.0.0.1, localhost, [::1]) no mesmo
 // porto, já que todos apontam para a própria máquina.
-export function buildAllowedHosts(host, port) {
+export function buildAllowedHosts(host, port, extraHostsRaw = "") {
   const allowed = new Set([`${host}:${port}`]);
   if (isLoopbackHost(host)) {
     allowed.add(`127.0.0.1:${port}`);
     allowed.add(`localhost:${port}`);
     allowed.add(`[::1]:${port}`);
+  }
+  if (extraHostsRaw && typeof extraHostsRaw === "string") {
+    const extra = extraHostsRaw.split(",").map(s => s.trim()).filter(Boolean);
+    for (const e of extra) allowed.add(e);
   }
   return allowed;
 }
@@ -67,4 +71,21 @@ export class RateLimiter {
       if (now > entry.resetAt) this.hits.delete(key);
     }
   }
+}
+
+export function applyCodiceCors(req, reply, allowedOrigin) {
+  if (!allowedOrigin) return false;
+  
+  const reqOrigin = req.headers.origin;
+  const isAllowed = allowedOrigin.split(",").map(o => o.trim()).includes(reqOrigin);
+  if (!isAllowed) return false;
+
+  reply.header("Access-Control-Allow-Origin", reqOrigin);
+  reply.header("Vary", "Origin");
+  reply.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  
+  if (req.headers["access-control-request-private-network"] === "true") {
+    reply.header("Access-Control-Allow-Private-Network", "true");
+  }
+  return true;
 }

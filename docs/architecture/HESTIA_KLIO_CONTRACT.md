@@ -27,13 +27,16 @@ Este documento define a especificação técnica e as premissas de arquitetura p
 ## 3. Classificação e Automação de Endpoints
 
 ### 3.1 Endpoints Permitidos para Integração
+
 - **Diagnósticos**: APIs de leitura (`/api/health`, `/api/server/status`, `/api/storage/status`, `/api/storage/model`, `/api/services/status`, `/api/storage/scan`).
 - **Planejamento (`/api/storage/organizer/plan`)**: É um **dry-run persistido** e não uma leitura pura, visto que ele gera, calcula e persiste o plano temporário de organização no estado interno do servidor.
 - **Configurações (`/api/config`)**: Fornece os parâmetros da instância em modo **sanitizado** (sem expor credenciais ou chaves sensíveis).
 - **Logs (`/api/logs`)**: Retorna logs de forma **limitada** (linhas recentes) e não deve vazar segredos ou informações sensíveis da máquina.
 
 ### 3.2 Endpoints Fora da Automação (Apenas Operação Visual/Humana)
+
 Estes endpoints realizam mutações físicas de arquivos ou alterações profundas e **devem ficar totalmente fora** de qualquer fluxo de automação automática remota da Klio:
+
 - `POST` `/api/local/organizer/apply` (Aplicação de plano de organização).
 - `POST` `/api/local/organizer/runs/:runId/undo` (Desfazer operação física de disco).
 - `POST` `/api/local/organizer/runs/:undoRunId/redo` (Reaplicar operação desfeita).

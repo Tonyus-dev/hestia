@@ -1,14 +1,16 @@
 import { useState } from "react";
 import type React from "react";
 
-export type CardStatus = "ok" | "warn" | "error" | "loading" | "idle";
+export type CardStatus = "ok" | "warn" | "error" | "loading" | "idle" | "unavailable" | "critical";
 
 const STATUS_META: Record<CardStatus, { color: string; label: string; pulse: boolean }> = {
   ok: { color: "#4ade80", label: "operacional", pulse: false },
   warn: { color: "#facc15", label: "atenção", pulse: false },
   error: { color: "#f87171", label: "indisponível", pulse: false },
+  critical: { color: "#ef4444", label: "crítico", pulse: true },
   loading: { color: "#60a5fa", label: "consultando", pulse: true },
   idle: { color: "#60a5fa", label: "informativo", pulse: false },
+  unavailable: { color: "#9ca3af", label: "desconectado", pulse: false },
 };
 
 function StatusLight({ status }: { status: CardStatus }) {
