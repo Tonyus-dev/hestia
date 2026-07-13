@@ -519,6 +519,290 @@ describe("PR #28 - Codice and Organizer Security Contracts", () => {
       });
     });
 
+    it("Teste A - HEAD e GET recusam com 503 se o arquivo for substituído por symlink final", async () => {
+      const app = Fastify();
+      registerCodiceRoutes(app, { storageRoot: workDir });
+
+      const realFilePath = path.join(workDir, "codice/epub/symlink-race-a.epub");
+      await fs.writeFile(realFilePath, "livro original");
+
+      const resLib = await app.inject({
+        method: "GET",
+        url: "/api/codice/library",
+      });
+      const libData = JSON.parse(resLib.payload);
+      const book = libData.books.find((b) => b.name === "symlink-race-a.epub");
+      expect(book).toBeDefined();
+
+      const externalPath = path.join(os.tmpdir(), "symlink-race-a-external.txt");
+      await fs.writeFile(externalPath, "conteudo secreto fora");
+
+      const originalLstat = fs.lstat;
+      const lstatSpy = vi.spyOn(fs, "lstat").mockImplementation(async (filePath) => {
+        if (filePath === realFilePath) {
+          return {
+            isSymbolicLink: () => false,
+            isFile: () => true,
+            size: 14,
+            mtime: new Date(),
+            dev: 1,
+            ino: 100,
+          };
+        }
+        return originalLstat(filePath);
+      });
+
+      const originalRealpath = fs.realpath;
+      const realpathSpy = vi.spyOn(fs, "realpath").mockImplementation(async (filePath) => {
+        if (filePath === realFilePath) return realFilePath;
+        return originalRealpath(filePath);
+      });
+
+      await fs.unlink(realFilePath);
+      await fs.symlink(externalPath, realFilePath);
+
+      try {
+        const resHead = await app.inject({
+          method: "HEAD",
+          url: `/api/codice/books/${book.id}`,
+        });
+        expect(resHead.statusCode).toBe(503);
+        const headPayload = JSON.parse(resHead.payload);
+        expect(headPayload.ok).toBe(false);
+        expect(headPayload.code).toBe("CODICE_BOOK_UNAVAILABLE");
+
+        const resGet = await app.inject({
+          method: "GET",
+          url: `/api/codice/books/${book.id}`,
+        });
+        expect(resGet.statusCode).toBe(503);
+        const payload = JSON.parse(resGet.payload);
+        expect(payload.ok).toBe(false);
+        expect(payload.code).toBe("CODICE_BOOK_UNAVAILABLE");
+        expect(resGet.payload).not.toContain("conteudo secreto fora");
+        expect(resGet.payload).not.toContain(workDir);
+      } finally {
+        lstatSpy.mockRestore();
+        realpathSpy.mockRestore();
+        await fs.unlink(realFilePath).catch(() => {});
+        await fs.unlink(externalPath).catch(() => {});
+      }
+    });
+
+    it("Teste B - HEAD e GET recusam com 503 se o arquivo for substituído por outro arquivo regular com inode diferente", async () => {
+      const app = Fastify();
+      registerCodiceRoutes(app, { storageRoot: workDir });
+
+      const fileAPath = path.join(workDir, "codice/epub/file-a.epub");
+      const fileBPath = path.join(workDir, "codice/epub/file-b.epub");
+
+      await fs.writeFile(fileAPath, "conteudo original A");
+      await fs.writeFile(fileBPath, "outro conteudo B totalmente diferente");
+
+      const resLib = await app.inject({
+        method: "GET",
+        url: "/api/codice/library",
+      });
+      const libData = JSON.parse(resLib.payload);
+      const book = libData.books.find((b) => b.name === "file-a.epub");
+      expect(book).toBeDefined();
+
+      const originalStat = await fs.stat(fileAPath);
+      const oldIno = originalStat.ino;
+      const oldDev = originalStat.dev;
+
+      // Substitui A por B usando rename (sobrescreve mantendo o inode de B)
+      await fs.rename(fileBPath, fileAPath);
+
+      const originalLstat = fs.lstat;
+      const lstatSpy = vi.spyOn(fs, "lstat").mockImplementation(async (filePath) => {
+        if (filePath === fileAPath) {
+          return {
+            isSymbolicLink: () => false,
+            isFile: () => true,
+            size: 19,
+            mtime: new Date(),
+            dev: oldDev,
+            ino: oldIno,
+          };
+        }
+        return originalLstat(filePath);
+      });
+
+      const originalRealpath = fs.realpath;
+      const realpathSpy = vi.spyOn(fs, "realpath").mockImplementation(async (filePath) => {
+        if (filePath === fileAPath) return fileAPath;
+        return originalRealpath(filePath);
+      });
+
+      try {
+        const resHead = await app.inject({
+          method: "HEAD",
+          url: `/api/codice/books/${book.id}`,
+        });
+        expect(resHead.statusCode).toBe(503);
+
+        const resGet = await app.inject({
+          method: "GET",
+          url: `/api/codice/books/${book.id}`,
+        });
+        expect(resGet.statusCode).toBe(503);
+        const payload = JSON.parse(resGet.payload);
+        expect(payload.ok).toBe(false);
+        expect(payload.code).toBe("CODICE_BOOK_UNAVAILABLE");
+        expect(resGet.payload).not.toContain("outro conteudo B totalmente diferente");
+      } finally {
+        lstatSpy.mockRestore();
+        realpathSpy.mockRestore();
+        await fs.unlink(fileAPath).catch(() => {});
+      }
+    });
+
+    it("Teste C - HEAD e GET recusam se o diretório intermediário for trocado", async () => {
+      const app = Fastify();
+      registerCodiceRoutes(app, { storageRoot: workDir });
+
+      const subDir = path.join(workDir, "codice/epub/race-dir");
+      await fs.mkdir(subDir, { recursive: true });
+      const bookPath = path.join(subDir, "book.epub");
+      await fs.writeFile(bookPath, "conteudo original no subdir");
+
+      const resLib = await app.inject({
+        method: "GET",
+        url: "/api/codice/library",
+      });
+      const libData = JSON.parse(resLib.payload);
+      const book = libData.books.find((b) => b.name === "book.epub");
+      expect(book).toBeDefined();
+
+      await fs.rm(bookPath).catch(() => {});
+      await fs.rmdir(subDir).catch(() => {});
+
+      const externalDir = path.join(os.tmpdir(), "external-race-dir");
+      await fs.mkdir(externalDir, { recursive: true }).catch(() => {});
+      const externalBook = path.join(externalDir, "book.epub");
+      await fs.writeFile(externalBook, "conteudo ultra secreto externo");
+
+      await fs.symlink(externalDir, subDir);
+
+      try {
+        const resGet = await app.inject({
+          method: "GET",
+          url: `/api/codice/books/${book.id}`,
+        });
+        expect([404, 503]).toContain(resGet.statusCode);
+        expect(resGet.payload).not.toContain("conteudo ultra secreto externo");
+      } finally {
+        await fs.unlink(subDir).catch(() => {});
+        await fs.rm(externalDir, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+
+    it("Teste D - Paridade de headers entre HEAD e GET", async () => {
+      const app = Fastify();
+      registerCodiceRoutes(app, { storageRoot: workDir });
+
+      const bookPath = path.join(workDir, "codice/epub/stable.epub");
+      await fs.writeFile(bookPath, "livro estavel de teste");
+
+      const resLib = await app.inject({
+        method: "GET",
+        url: "/api/codice/library",
+      });
+      const libData = JSON.parse(resLib.payload);
+      const book = libData.books.find((b) => b.name === "stable.epub");
+      expect(book).toBeDefined();
+
+      const resHead = await app.inject({
+        method: "HEAD",
+        url: `/api/codice/books/${book.id}`,
+      });
+      expect(resHead.statusCode).toBe(200);
+
+      const resGet = await app.inject({
+        method: "GET",
+        url: `/api/codice/books/${book.id}`,
+      });
+      expect(resGet.statusCode).toBe(200);
+
+      const relevantHeaders = [
+        "content-type",
+        "content-length",
+        "last-modified",
+        "etag",
+        "content-disposition",
+        "cache-control",
+        "x-content-type-options",
+      ];
+
+      relevantHeaders.forEach((h) => {
+        expect(resHead.headers[h]).toBe(resGet.headers[h]);
+      });
+
+      await fs.unlink(bookPath).catch(() => {});
+    });
+
+    describe("TXT opcional e robustez de formatos", () => {
+      it("health e library funcionam com 200 e formats epub/pdf se codice/txt estiver ausente", async () => {
+        const testDir = await fs.mkdtemp(path.join(os.tmpdir(), "hestia-txt-missing-"));
+        try {
+          await fs.mkdir(path.join(testDir, "codice/epub"), { recursive: true });
+          await fs.mkdir(path.join(testDir, "codice/pdf"), { recursive: true });
+
+          const health = await getCodiceHealth(testDir);
+          expect(health.ok).toBe(true);
+          expect(health.formats).toEqual(["epub", "pdf"]);
+
+          const library = await getCodiceLibrary(testDir);
+          expect(library.books).toBeDefined();
+        } finally {
+          await fs.rm(testDir, { recursive: true, force: true });
+        }
+      });
+
+      it("health e library funcionam com 200 e formats epub/pdf se codice/txt estiver ilegível (EACCES)", async () => {
+        const testDir = await fs.mkdtemp(path.join(os.tmpdir(), "hestia-txt-inaccessible-"));
+        try {
+          await fs.mkdir(path.join(testDir, "codice/epub"), { recursive: true });
+          await fs.mkdir(path.join(testDir, "codice/pdf"), { recursive: true });
+          await fs.mkdir(path.join(testDir, "codice/txt"), { recursive: true });
+
+          const originalAccess = fs.access;
+          const accessSpy = vi.spyOn(fs, "access").mockImplementation(async (pathStr, mode) => {
+            if (pathStr.endsWith("codice/txt")) {
+              throw Object.assign(new Error("Permission denied"), { code: "EACCES" });
+            }
+            return originalAccess(pathStr, mode);
+          });
+
+          try {
+            const health = await getCodiceHealth(testDir);
+            expect(health.ok).toBe(true);
+            expect(health.formats).toEqual(["epub", "pdf"]);
+
+            const library = await getCodiceLibrary(testDir);
+            expect(library.books).toBeDefined();
+          } finally {
+            accessSpy.mockRestore();
+          }
+        } finally {
+          await fs.rm(testDir, { recursive: true, force: true });
+        }
+      });
+
+      it("health e library falham com 503 se codice/epub ou codice/pdf estiverem ilegíveis ou ausentes", async () => {
+        const testDir = await fs.mkdtemp(path.join(os.tmpdir(), "hestia-essential-missing-"));
+        try {
+          await fs.mkdir(path.join(testDir, "codice/epub"), { recursive: true });
+
+          await expect(getCodiceHealth(testDir)).rejects.toMatchObject({ code: "ECODICELIBRARY" });
+          await expect(getCodiceLibrary(testDir)).rejects.toMatchObject({ code: "ECODICELIBRARY" });
+        } finally {
+          await fs.rm(testDir, { recursive: true, force: true });
+        }
+      });
+    });
+
     it("exporta limite de plano grande coerente com o limiar", () => {
       expect(LARGE_PLAN_THRESHOLD).toBe(5000);
     });

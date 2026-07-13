@@ -37,31 +37,50 @@ export function isCodiceLibraryUnavailableError(error) {
   return codes.includes(code);
 }
 
-export async function assertCodiceLibraryAvailable(storageRoot) {
-  const essentialFolders = ["codice/epub", "codice/pdf"];
-  for (const folder of essentialFolders) {
-    try {
-      const fullPath = path.join(storageRoot, folder);
-      await fs.access(fullPath, constants.R_OK);
-    } catch (err) {
-      const error = new Error("CODICE_LIBRARY_UNAVAILABLE");
-      error.code = "ECODICELIBRARY";
-      throw error;
-    }
+export async function getAvailableCodiceFolders(storageRoot) {
+  const folders = [];
+
+  // EPUB é obrigatório
+  try {
+    const epubPath = path.join(storageRoot, "codice/epub");
+    await fs.access(epubPath, constants.R_OK);
+    folders.push("codice/epub");
+  } catch (err) {
+    const error = new Error("CODICE_LIBRARY_UNAVAILABLE");
+    error.code = "ECODICELIBRARY";
+    throw error;
   }
+
+  // PDF é obrigatório
+  try {
+    const pdfPath = path.join(storageRoot, "codice/pdf");
+    await fs.access(pdfPath, constants.R_OK);
+    folders.push("codice/pdf");
+  } catch (err) {
+    const error = new Error("CODICE_LIBRARY_UNAVAILABLE");
+    error.code = "ECODICELIBRARY";
+    throw error;
+  }
+
+  // TXT é opcional
+  try {
+    const txtPath = path.join(storageRoot, "codice/txt");
+    await fs.access(txtPath, constants.R_OK);
+    folders.push("codice/txt");
+  } catch {
+    // Silenciosamente ignorado se ausente ou ilegível
+  }
+
+  return folders;
+}
+
+export async function assertCodiceLibraryAvailable(storageRoot) {
+  await getAvailableCodiceFolders(storageRoot);
 }
 
 export async function getCodiceHealth(storagePathBase) {
-  await assertCodiceLibraryAvailable(storagePathBase);
-
-  const formats = ["epub", "pdf"];
-  try {
-    const txtPath = path.join(storagePathBase, "codice/txt");
-    await fs.access(txtPath, constants.R_OK);
-    formats.push("txt");
-  } catch {
-    // txt opcional ausente ou inacessível
-  }
+  const folders = await getAvailableCodiceFolders(storagePathBase);
+  const formats = folders.map((f) => path.basename(f));
 
   return {
     ok: true,
@@ -83,10 +102,12 @@ async function indexLibrary(storagePathBase) {
     };
   }
 
+  const availableFolders = await getAvailableCodiceFolders(storagePathBase);
+
   const books = [];
   let truncated = false;
 
-  for (const folder of ALLOWED_FOLDERS) {
+  for (const folder of availableFolders) {
     if (books.length >= MAX_BOOKS) {
       truncated = true;
       break;
@@ -257,6 +278,30 @@ export async function resolveCodiceBook(storagePathBase, bookId) {
   } catch (err) {
     const error = new Error(`Erro ao resolver livro: ${err.code || "EUNKNOWN"}`);
     error.code = err.code || "EUNKNOWN";
+    throw error;
+  }
+}
+
+export async function openVerifiedCodiceBook(resolved) {
+  const fileHandle = await fs.open(resolved.fullPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+
+  try {
+    const openedStat = await fileHandle.stat();
+
+    if (
+      !openedStat.isFile() ||
+      openedStat.dev !== resolved.stat.dev ||
+      openedStat.ino !== resolved.stat.ino
+    ) {
+      throw Object.assign(new Error("CODICE_BOOK_UNAVAILABLE"), { code: "ECODICEBOOKUNAVAILABLE" });
+    }
+
+    return {
+      fileHandle,
+      stat: openedStat,
+    };
+  } catch (error) {
+    await fileHandle.close().catch(() => {});
     throw error;
   }
 }

@@ -1,11 +1,11 @@
 import { constants } from "node:fs";
-import { open } from "node:fs/promises";
 import {
   getCodiceHealth,
   getCodiceLibrary,
   resolveCodiceBook,
   getBookHeaders,
   isCodiceLibraryUnavailableError,
+  openVerifiedCodiceBook,
 } from "./codice.js";
 
 export function registerCodiceRoutes(app, config) {
@@ -65,9 +65,30 @@ export function registerCodiceRoutes(app, config) {
         });
         return;
       }
-      const headers = getBookHeaders(resolved);
-      reply.headers(headers);
-      reply.code(200).send();
+
+      let fileHandle;
+      let stat;
+      try {
+        const opened = await openVerifiedCodiceBook(resolved);
+        fileHandle = opened.fileHandle;
+        stat = opened.stat;
+      } catch (err) {
+        reply.code(503).send({
+          ok: false,
+          error: "Não foi possível transmitir o livro.",
+          code: "CODICE_BOOK_UNAVAILABLE",
+          at: new Date().toISOString(),
+        });
+        return;
+      }
+
+      try {
+        const headers = getBookHeaders({ ...resolved, stat });
+        reply.headers(headers);
+        reply.code(200).send();
+      } finally {
+        await fileHandle.close().catch(() => {});
+      }
     } catch (err) {
       reply.code(500).send({
         ok: false,
@@ -92,8 +113,11 @@ export function registerCodiceRoutes(app, config) {
         return;
       }
 
+      let stat;
       try {
-        fileHandle = await open(resolved.fullPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const opened = await openVerifiedCodiceBook(resolved);
+        fileHandle = opened.fileHandle;
+        stat = opened.stat;
       } catch (err) {
         reply.code(503).send({
           ok: false,
@@ -104,19 +128,7 @@ export function registerCodiceRoutes(app, config) {
         return;
       }
 
-      const openedStat = await fileHandle.stat();
-      if (!openedStat.isFile()) {
-        await fileHandle.close().catch(() => {});
-        reply.code(503).send({
-          ok: false,
-          error: "Não foi possível transmitir o livro.",
-          code: "CODICE_BOOK_UNAVAILABLE",
-          at: new Date().toISOString(),
-        });
-        return;
-      }
-
-      const headers = getBookHeaders({ ...resolved, stat: openedStat });
+      const headers = getBookHeaders({ ...resolved, stat });
       reply.headers(headers);
 
       const stream = fileHandle.createReadStream();
