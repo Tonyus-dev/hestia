@@ -52,15 +52,8 @@ export const config = {
   // Diretório de dados persistentes (identidade, eventos, snapshots). Só
   // vem de env/systemd — nunca do whitelist de ~/.chama/config.json.
   dataDir: resolveDataDir(),
-  get storageRoot() {
-    return process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE";
-  },
-  get storagePaths() {
-    return ["/", this.storageRoot];
-  },
-  storageSources: [],
   services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
-  stationBaseUrl: process.env.HESTIA_STATION_BASE_URL || "https://station.example.ts.net",
+  stationBaseUrl: process.env.HESTIA_STATION_BASE_URL?.trim() || null,
   // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
   // whitelist de ~/.chama/config.json.
   retention: resolveRetention(),

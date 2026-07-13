@@ -39,14 +39,14 @@ function Servicos() {
           />
         )}
       </DataCard>
-      <DataCard title="Vínculos" eyebrow="storage" status={b.state.status === "ok" ? "ok" : "idle"}>
+      <DataCard
+        title="Vínculos"
+        eyebrow="serviços"
+        status={b.state.status === "ok" ? "ok" : "idle"}
+      >
         {b.state.status === "ok" &&
           b.state.data.map((x) => (
-            <Row
-              key={x.id}
-              k={x.label}
-              v={`${x.serviceName} · ${x.role} · ${x.relatedStorage.join(", ")}`}
-            />
+            <Row key={x.id} k={x.label} v={`${x.serviceName} · ${x.role}`} />
           ))}
       </DataCard>
     </div>

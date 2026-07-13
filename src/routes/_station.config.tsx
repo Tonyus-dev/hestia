@@ -80,7 +80,7 @@ function ConfigPage() {
             <div>
               <p className="kaline-eyebrow">stationBaseUrl</p>
               <p className="mt-2 font-mono text-[13px] text-[color:var(--kaline-muted)]">
-                {state.data.stationBaseUrl}
+                {state.data.stationBaseUrl ?? "Estação não configurada."}
               </p>
             </div>
             <div>

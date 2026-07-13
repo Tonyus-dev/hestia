@@ -82,7 +82,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Console local modo protegido da Héstia, com Chama Local embutida para medir saúde, storage e serviços do servidor.",
+          "Console local modo protegido da Héstia, com Chama Local embutida para medir saúde, hardware, logs, configuração e serviços do notebook.",
       },
       { name: "author", content: "Estação Kaline" },
       { property: "og:title", content: "Héstia Console — Interface local da Héstia" },

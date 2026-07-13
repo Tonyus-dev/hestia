@@ -29,7 +29,7 @@ export const HESTIA = {
   footer: "Héstia é a Estação. Chama pulsa. Console mostra. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
-  stationBaseUrl: "https://station.example.ts.net",
+  stationBaseUrl: null,
   services: ["jellyfin", "smbd", "tailscaled"],
   endpoints: [
     {

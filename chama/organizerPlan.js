@@ -7,13 +7,13 @@ import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getStorageModel } from "./storageModel.js";
 import { listFiles, DEFAULT_INDEX_LIMITS } from "./storageScanner.js";
-import { config } from "./config.js";
 import { isValidOrganizerId } from "./organizerIds.js";
+import { config } from "./config.js";
 
 import { LARGE_PLAN_THRESHOLD } from "./organizerApply.js";
 
 function getRoot() {
-  return config.storageRoot || "/KALINE";
+  return process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE";
 }
 
 const RECENTLY_MODIFIED_MS = 60_000;

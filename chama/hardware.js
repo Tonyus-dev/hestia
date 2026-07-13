@@ -28,10 +28,6 @@ export function classifyMemory(usedPercent) {
 export function classifySwap(usedPercent) {
   return usedPercent == null ? "ok" : classifyPercent(usedPercent, 50, 80);
 }
-export function classifyDisk(path, exists, percentUsed) {
-  if (!exists) return path === "/KALINE" ? "critical" : "warn";
-  return percentUsed == null ? "unavailable" : classifyPercent(percentUsed, 80, 92);
-}
 export function classifyTemperature(tempC) {
   return tempC > 85 ? "critical" : tempC > 70 ? "warn" : "ok";
 }

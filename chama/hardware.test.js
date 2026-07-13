@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyCpu,
-  classifyDisk,
   classifyMemory,
   classifySwap,
   getHardwareConfig,
@@ -15,7 +14,6 @@ describe("hardware diagnostics", () => {
     expect(classifyCpu(1.51)).toBe("critical");
     expect(classifyMemory(91)).toBe("critical");
     expect(classifySwap(null)).toBe("ok");
-    expect(classifyDisk("/KALINE", false, null)).toBe("critical");
   });
 
   it("getHardwareStatus returns schema even without requiring temperature", async () => {

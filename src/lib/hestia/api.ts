@@ -136,7 +136,7 @@ export type HardwareConfig = {
     port: number;
     mode: string;
     lanEnabled: boolean;
-    stationBaseUrl: string;
+    stationBaseUrl: string | null;
     services: string[];
   };
 };
@@ -148,7 +148,6 @@ export type ServiceBinding = {
   serviceName: string;
   label: string;
   role: string;
-  relatedStorage: string[];
 };
 export type ServiceBindings = ServiceBinding[];
 
@@ -189,7 +188,7 @@ export type Config = {
   mode: string;
   readonly: boolean;
   lanEnabled: boolean;
-  stationBaseUrl: string;
+  stationBaseUrl: string | null;
   services: string[];
 };
 

@@ -24,7 +24,7 @@ const IGNORED_DIR_NAMES = new Set([
   "System Volume Information",
 ]);
 function getIgnoredKalineDirs() {
-  const root = config.storageRoot || "/KALINE";
+  const root = process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE";
   return new Set([
     join(root, "ash"),
     join(root, "codice"),
