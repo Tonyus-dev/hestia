@@ -74,7 +74,7 @@ export function OrganizarPage() {
     if (!plan) return;
     setApplying(true);
     setApplyError(null);
-    const result = await hestiaApi.organizerApply(plan.planId, (plan.summary.planned ?? 0) > 5000);
+    const result = await hestiaApi.organizerApply(plan.planId, !!plan.requiresExtraConfirmation);
     setApplying(false);
     if (result.status === "ok") {
       setApplyResult(result.data);
@@ -190,10 +190,10 @@ export function OrganizarPage() {
                   exibindo os primeiros 100 de {plan.items.length} itens
                 </p>
               )}
-              {(plan.summary.planned ?? 0) > 1000 && (
+              {plan.requiresExtraConfirmation && (
                 <label className="block text-[11px] text-[color:var(--kaline-muted)]">
                   Confirmação extra: digite exatamente “Estou ciente que este plano afetará{" "}
-                  {plan.summary.planned} arquivos.”
+                  {plan.planned} arquivos.”
                   <input
                     value={largeConfirm}
                     onChange={(event) => setLargeConfirm(event.target.value)}
@@ -231,9 +231,9 @@ export function OrganizarPage() {
                 disabled={
                   applying ||
                   plan.items.length === 0 ||
-                  ((plan.summary.planned ?? 0) > 1000 &&
+                  (plan.requiresExtraConfirmation &&
                     largeConfirm !==
-                      `Estou ciente que este plano afetará ${plan.summary.planned} arquivos.`)
+                      `Estou ciente que este plano afetará ${plan.planned} arquivos.`)
                 }
                 className="mt-2 text-[11px] px-3 py-1.5 rounded border border-[color:var(--kaline-copper)] text-[color:var(--kaline-copper)] bg-[color:var(--kaline-copper)]/10 hover:bg-[color:var(--kaline-copper)]/20 transition disabled:opacity-50"
               >

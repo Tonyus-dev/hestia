@@ -26,8 +26,8 @@ export function getHealth() {
     frontendBuilt:
       existsSync(join(process.cwd(), "dist", "client")) ||
       existsSync(join(process.cwd(), ".output", "public")),
-    kalineMounted: existsSync("/KALINE"),
-    kalineWritable: canWrite("/KALINE"),
+    kalineMounted: existsSync(config.storageRoot),
+    kalineWritable: canWrite(config.storageRoot),
     serviceUser: userInfo().username,
     dataDirWritable: existsSync(config.dataDir)
       ? canWrite(config.dataDir)

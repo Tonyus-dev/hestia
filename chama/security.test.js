@@ -6,6 +6,7 @@ import {
   RateLimiter,
   resolvePresenceCorsOrigins,
   isOriginAllowed,
+  applyCodiceCors,
 } from "./security.js";
 
 describe("isLoopbackHost", () => {
@@ -49,6 +50,13 @@ describe("buildAllowedHosts / isAllowedHostHeader", () => {
     const allowed = buildAllowedHosts("127.0.0.1", 4517);
     expect(isAllowedHostHeader(undefined, allowed)).toBe(false);
     expect(isAllowedHostHeader("127.0.0.1:9999", allowed)).toBe(false);
+  });
+
+  it("rejeita wildcards extras no allowed hosts", () => {
+    const allowed = buildAllowedHosts("127.0.0.1", 4517, "extra.ts.net, *.ts.net, *.example.com");
+    expect(allowed.has("extra.ts.net")).toBe(true);
+    expect(allowed.has("*.ts.net")).toBe(false);
+    expect(allowed.has("*.example.com")).toBe(false);
   });
 });
 
@@ -117,5 +125,46 @@ describe("isOriginAllowed", () => {
   it("rejeita origin ausente/vazio mesmo com '*' configurado", () => {
     expect(isOriginAllowed(undefined, ["*"])).toBe(false);
     expect(isOriginAllowed("", ["*"])).toBe(false);
+  });
+});
+
+describe("applyCodiceCors", () => {
+  it("permite origem permitida e aplica headers de credentials/PNA", () => {
+    const req = {
+      headers: {
+        origin: "https://codice.example.com",
+        "access-control-request-private-network": "true",
+      },
+    };
+    const headers = {};
+    const reply = {
+      header: (name, val) => {
+        headers[name] = val;
+      },
+    };
+
+    const allowed = applyCodiceCors(req, reply, "https://codice.example.com, https://outro.com");
+    expect(allowed).toBe(true);
+    expect(headers["Access-Control-Allow-Origin"]).toBe("https://codice.example.com");
+    expect(headers["Access-Control-Allow-Credentials"]).toBe("true");
+    expect(headers["Access-Control-Allow-Private-Network"]).toBe("true");
+  });
+
+  it("rejeita wildcard '*' no CORS e retorna false", () => {
+    const req = {
+      headers: {
+        origin: "https://codice.example.com",
+      },
+    };
+    const headers = {};
+    const reply = {
+      header: (name, val) => {
+        headers[name] = val;
+      },
+    };
+
+    const allowed = applyCodiceCors(req, reply, "*");
+    expect(allowed).toBe(false);
+    expect(headers["Access-Control-Allow-Origin"]).toBeUndefined();
   });
 });

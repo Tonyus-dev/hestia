@@ -7,14 +7,19 @@ A API do Códice é uma extensão de leitura (read-only) embutida na Héstia que
 Todas as rotas requerem que o request passe pela validação de Host Header da Héstia.
 
 ### 1. `GET /api/codice/health`
-Retorna o status da biblioteca. 
+
+Retorna o status da biblioteca.
+
 - **Sucesso (200)**: `{"ok":true,"schemaVersion":1,"generatedAt":"...","libraryAvailable":true,"formats":["epub","pdf","txt"]}`
 - **Falha (503)**: Retorna se a biblioteca principal (`codice/epub` ou `codice/pdf`) não estiver montada no sistema de arquivos local.
 
 ### 2. `GET /api/codice/library`
+
 Varre e indexa a biblioteca em tempo real.
+
 - **Retorno (200)**: Array de livros com metadata, sem expor paths absolutos ou caminhos de diretório.
 - **Formato**:
+
 ```json
 {
   "schemaVersion": 1,
@@ -35,14 +40,18 @@ Varre e indexa a biblioteca em tempo real.
 ```
 
 ### 3. `GET /api/codice/books/:bookId`
+
 Lê e transfere o livro (Stream).
+
 - **Validação**: Verifica se o hash de `bookId` confere com o arquivo listado na indexação e resolve o Path usando `realpath` rígido.
 - **Resposta**: Mime-Type definido com base na extensão e arquivo anexado no corpo da resposta com `Content-Disposition`.
 
 ### 4. `HEAD /api/codice/books/:bookId`
+
 Verifica a presença e o tamanho do livro sem baixá-lo.
 
 ## Segurança
+
 - Não expõe árvores de diretórios (ignora sub-pastas vazias e caminhos complexos).
 - CORS bloqueado por padrão; habilitado de forma customizada apontando para `HESTIA_CODICE_CORS_ORIGIN`.
 - Nega qualquer tentativa de symlink fora dos domínios da pasta canônica `/KALINE/codice`.

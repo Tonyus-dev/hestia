@@ -5,6 +5,7 @@ Este guia detalha como o seu frontend do Códice deve se comunicar com a API da 
 ## 1. Configurações de Ambiente
 
 A URL da Héstia não deve ser hardcoded e deve permitir sobreposição local. A precedência é:
+
 1. Configuração local (`localStorage["codice.hestia.baseUrl"]`)
 2. Variável de ambiente (`VITE_HESTIA_BASE_URL`)
 3. Vazio (desativado)
@@ -15,6 +16,7 @@ VITE_HESTIA_BASE_URL=https://sua-maquina.tailnet-exemplo.ts.net
 ```
 
 No servidor da **Héstia** (backend), as seguintes variáveis devem estar presentes:
+
 ```bash
 export HESTIA_ALLOWED_HOSTS="sua-maquina.tailnet-exemplo.ts.net"
 export HESTIA_CODICE_CORS_ORIGIN="https://seu-codice.app" # URL do seu frontend
@@ -31,9 +33,7 @@ Todos os livros (EPUB, PDF, TXT) devem ser trafegados via `ArrayBuffer` a partir
 ```javascript
 export const getHestiaBaseUrl = () => {
   const configured =
-    localStorage.getItem("codice.hestia.baseUrl") ||
-    import.meta.env.VITE_HESTIA_BASE_URL ||
-    "";
+    localStorage.getItem("codice.hestia.baseUrl") || import.meta.env.VITE_HESTIA_BASE_URL || "";
 
   return configured.trim().replace(/\/+$/, "");
 };
@@ -73,10 +73,7 @@ A Héstia só deve ser testada e consultada quando o usuário interagir com a fo
 export async function fetchHestiaLibrary() {
   const data = await fetchHestiaJson("/api/codice/library");
 
-  if (
-    data?.schemaVersion !== 1 ||
-    !Array.isArray(data.books)
-  ) {
+  if (data?.schemaVersion !== 1 || !Array.isArray(data.books)) {
     throw new Error("HESTIA_LIBRARY_INVALID");
   }
 
@@ -94,10 +91,7 @@ export async function fetchHestiaBook(book) {
   const base = new URL(`${baseUrl}/`);
   const url = new URL(book.url, base);
 
-  if (
-    url.origin !== base.origin ||
-    !url.pathname.startsWith("/api/codice/books/")
-  ) {
+  if (url.origin !== base.origin || !url.pathname.startsWith("/api/codice/books/")) {
     throw new Error("HESTIA_BOOK_URL_INVALID");
   }
 
@@ -147,23 +141,23 @@ if (book.format === "epub") {
 
 ## 3. Topologia e PWA (Regras Rigorosas)
 
-1. **Service Worker**: 
+1. **Service Worker**:
    O service worker do Códice **não deve cachear** nenhuma URL remota da Héstia (`/api/codice/*`, `*.ts.net`, arquivos transferidos). O acesso à Héstia deve ser operado em esquema estrito de `network-only`.
-2. **Resiliência Local**: 
+2. **Resiliência Local**:
    Quando a Héstia estiver inacessível, exiba: `"Biblioteca da Estação indisponível. Verifique se este aparelho está conectado ao Tailscale e se a Héstia está ativa."`. A biblioteca local e os livros em cache do app-shell devem continuar funcionando perfeitamente (Local-First).
-3. **Tailscale Serve**: 
+3. **Tailscale Serve**:
    No servidor da Héstia, inicie o túnel apenas via Serve com persistência em background.
    ```bash
    sudo tailscale serve --bg http://127.0.0.1:4517
    ```
    Verifique o status com `tailscale serve status`. Não utilize o Funnel, o serviço é restrito à sua Tailnet.
-4. **CORS e Autenticação**: 
+4. **CORS e Autenticação**:
    CORS autoriza apenas o Frontend web originário. A segurança de identidade provém da ACL da Tailnet, impedindo fisicamente acessos externos aos seus livros. O Tailscale realiza o tunneling HTTPS transparente.
 
 ### Resumo do Fluxo
 
-*Cloudflare entrega o Códice.*  
-*O celular entra na tailnet.*  
-*O navegador consulta a Héstia.*  
-*A Héstia transmite o arquivo.*  
-*O Códice lê o ArrayBuffer com seu leitor existente.*
+_Cloudflare entrega o Códice._  
+_O celular entra na tailnet._  
+_O navegador consulta a Héstia._  
+_A Héstia transmite o arquivo._  
+_O Códice lê o ArrayBuffer com seu leitor existente._

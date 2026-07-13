@@ -21,7 +21,7 @@ export function StationShell({ children }: { children: ReactNode }) {
             <SidebarNav />
           </div>
           <div className="p-4 border-t border-[color:var(--kaline-border-copper)] text-[10px] uppercase tracking-[0.28em] text-[color:var(--kaline-faint)]">
-            sem shell · sem delete · sem upload
+            leitura por padrão · escrita local aprovada
           </div>
         </aside>
 

@@ -13,14 +13,10 @@ LogsDirectory=hestia-console
 Environment=HESTIA_HOST=127.0.0.1
 Environment=HESTIA_PORT=4517
 Environment=NODE_ENV=production
+EnvironmentFile=-/etc/default/hestia-console
 
-# Roda sem privilégio de root: UID/GID efêmeros alocados pelo systemd, persistentes entre
-# restarts por causa de StateDirectory=/LogsDirectory= (mapeamento fica salvo por unit name).
-# O organizer precisa escrever de verdade em /KALINE — ProtectSystem=strict deixa o resto do
-# filesystem somente leitura, então isso é liberado explicitamente via ReadWritePaths.
-# Se você usa storageSources (fontes externas do HD), cada path lá também precisa estar
-# acessível ao grupo "hestia-console" (mesmo nome do serviço) — ver README, seção Segurança.
-DynamicUser=yes
+User=hestia-console
+Group=hestia-console
 NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=-/KALINE

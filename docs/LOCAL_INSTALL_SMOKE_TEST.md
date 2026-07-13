@@ -34,10 +34,10 @@ http://127.0.0.1:4517/endpoints
 
 ## Estados esperados
 
-* Se `/KALINE` não existir, mostrar aviso honesto.
-* Se Ollama não estiver ativo, `/api/llm/health` deve retornar indisponível.
-* Se Hermes root não existir, deve retornar erro estruturado.
-* Nenhuma dessas situações deve quebrar o Console.
+- Se `/KALINE` não existir, mostrar aviso honesto.
+- Se Ollama não estiver ativo, `/api/llm/health` deve retornar indisponível.
+- Se Hermes root não existir, deve retornar erro estruturado.
+- Nenhuma dessas situações deve quebrar o Console.
 
 ## Remoção
 

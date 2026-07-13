@@ -22,10 +22,10 @@ export async function targetExists(targetPath) {
 }
 
 function kalineRoot() {
-  return process.env.HESTIA_KALINE_ROOT || "/KALINE";
+  return config.storageRoot;
 }
 const PLAN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const LARGE_PLAN_THRESHOLD = 5000;
+export const LARGE_PLAN_THRESHOLD = 5000;
 
 function isInside(child, parent) {
   const c = resolve(child);
@@ -33,10 +33,21 @@ function isInside(child, parent) {
   return c === p || c.startsWith(`${p}/`);
 }
 
-async function realInside(path, root) {
-  const realRoot = await fs.realpath(root);
-  const realPath = await fs.realpath(path);
-  return isInside(realPath, realRoot);
+async function getNearestExistingAncestor(targetPath) {
+  let current = resolve(targetPath);
+  while (true) {
+    try {
+      const stat = await fs.stat(current);
+      return { path: current, stat };
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      throw new Error(`Nenhum ancestral existente para o caminho: ${targetPath}`);
+    }
+    current = parent;
+  }
 }
 
 function allowedSourceRoots() {
@@ -48,17 +59,54 @@ async function validateItem(item) {
   if (!allowedSourceRoots().some((root) => isInside(item.sourcePath, root))) {
     return "sourcePath fora das fontes permitidas";
   }
-  if (!isInside(item.targetPath, kalineRoot())) return "targetPath fora de /KALINE";
-  if (resolve(item.sourcePath) === resolve(item.targetPath)) return "sourcePath igual a targetPath";
+
+  // 1. Validação lexical básica contra travessia
+  const targetAbs = resolve(item.targetPath);
+  const rootAbs = resolve(kalineRoot());
+  if (!isInside(targetAbs, rootAbs)) {
+    return "targetPath fora de /KALINE";
+  }
+
+  if (resolve(item.sourcePath) === targetAbs) {
+    return "sourcePath igual a targetPath";
+  }
+
+  // 2. Localizar o primeiro ancestral existente de targetPath
+  let ancestor;
   try {
-    await fs.mkdir(dirname(item.targetPath), { recursive: true });
-    if (!(await realInside(dirname(item.targetPath), kalineRoot()))) {
+    ancestor = await getNearestExistingAncestor(targetAbs);
+  } catch (err) {
+    return err.message;
+  }
+
+  // 3. Resolver realpath do ancestral
+  let realAncestor;
+  try {
+    realAncestor = await fs.realpath(ancestor.path);
+  } catch (err) {
+    return `erro ao obter realpath do ancestral: ${err.code || err.message}`;
+  }
+
+  // 4. Validar se o realpath do ancestral está contido em /KALINE
+  const realRoot = await fs.realpath(rootAbs);
+  if (!isInside(realAncestor, realRoot)) {
+    return "targetPath ancestral escapa de /KALINE";
+  }
+
+  // 5. Criar os diretórios e validar o targetPath final
+  try {
+    await fs.mkdir(dirname(targetAbs), { recursive: true });
+    const realTargetDir = await fs.realpath(dirname(targetAbs));
+    if (!isInside(realTargetDir, realRoot)) {
       return "targetPath escapa de /KALINE via symlink/realpath";
     }
   } catch (err) {
     return err.code || err.message;
   }
-  if (await targetExists(item.targetPath)) return "target já existe (conflito)";
+
+  if (await targetExists(targetAbs)) {
+    return "target já existe (conflito)";
+  }
   return null;
 }
 
@@ -84,21 +132,38 @@ function assertLargePlanConfirmed(plan, confirmedPlanId) {
 }
 
 export async function moveWithExdevFallback(sourcePath, targetPath) {
+  let linked = false;
   try {
-    await fs.rename(sourcePath, targetPath);
+    await fs.link(sourcePath, targetPath);
+    linked = true;
+    await fs.unlink(sourcePath);
     return;
   } catch (err) {
-    if (err.code !== "EXDEV") throw err;
+    if (linked) {
+      await fs.unlink(targetPath).catch(() => {});
+      throw err;
+    }
+    const fallbackCodes = ["EXDEV", "EPERM", "EOPNOTSUPP", "ENOSYS"];
+    if (!fallbackCodes.includes(err.code)) {
+      throw err;
+    }
   }
-  // rename entre filesystems diferentes (comum ao mover de um HD externo para /KALINE):
-  // copia, verifica o tamanho e só então apaga a origem.
-  await fs.copyFile(sourcePath, targetPath);
-  const [srcStat, dstStat] = await Promise.all([fs.stat(sourcePath), fs.stat(targetPath)]);
-  if (srcStat.size !== dstStat.size) {
-    await fs.unlink(targetPath).catch(() => {});
-    throw new Error("verificação de tamanho falhou após cópia cross-device");
+
+  let copied = false;
+  try {
+    await fs.copyFile(sourcePath, targetPath, fs.constants.COPYFILE_EXCL);
+    copied = true;
+    const [srcStat, dstStat] = await Promise.all([fs.stat(sourcePath), fs.stat(targetPath)]);
+    if (srcStat.size !== dstStat.size) {
+      throw new Error("verificação de tamanho falhou após cópia cross-device");
+    }
+    await fs.unlink(sourcePath);
+  } catch (err) {
+    if (copied) {
+      await fs.unlink(targetPath).catch(() => {});
+    }
+    throw err;
   }
-  await fs.unlink(sourcePath);
 }
 
 async function applyItem(item) {
@@ -114,14 +179,14 @@ async function applyItem(item) {
     if (item.action === "move") {
       await moveWithExdevFallback(item.sourcePath, item.targetPath);
     } else {
-      await fs.copyFile(item.sourcePath, item.targetPath);
+      await fs.copyFile(item.sourcePath, item.targetPath, fs.constants.COPYFILE_EXCL);
     }
     const targetStat = await fs.stat(item.targetPath);
     return {
       ...item,
       status: "ok",
       targetSize: targetStat.size,
-      targetMtimeMs: targetStat.mtimeMs,
+      targetMtimeMs: targetStat.mtime.getTime(),
     };
   } catch (err) {
     return { ...item, status: "failed", error: err.code || err.message };
@@ -251,5 +316,64 @@ export async function getOrganizerRun(runId, dataDir) {
     return JSON.parse(raw);
   } catch {
     return null;
+  }
+}
+
+export async function claimAndApplyOrganizerPlan(planId, dataDir, options = {}) {
+  if (!isValidOrganizerId(planId)) {
+    throw Object.assign(new Error("Plan ID inválido"), { code: "EPLANNOTFOUND" });
+  }
+
+  const plansDir = join(dataDir, "organizer", "plans");
+  const origPath = join(plansDir, `${planId}.json`);
+  const claimPath = join(plansDir, `${planId}.claimed.json`);
+  const consumedPath = join(plansDir, `${planId}.consumed.json`);
+
+  if (await targetExists(consumedPath)) {
+    throw Object.assign(new Error("Plano já aplicado"), {
+      code: "PLAN_ALREADY_APPLIED",
+    });
+  }
+
+  try {
+    await fs.rename(origPath, claimPath);
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      if (await targetExists(claimPath)) {
+        throw Object.assign(new Error("Plano já em execução ou reclamado"), {
+          code: "PLAN_ALREADY_CLAIMED",
+        });
+      }
+      throw Object.assign(new Error("Plano não encontrado"), {
+        code: "EPLANNOTFOUND",
+      });
+    }
+    throw err;
+  }
+
+  let plan;
+  try {
+    const raw = await fs.readFile(claimPath, "utf8");
+    plan = JSON.parse(raw);
+  } catch (err) {
+    await fs.rename(claimPath, origPath).catch(() => {});
+    throw err;
+  }
+
+  try {
+    assertPlanFresh(plan);
+    assertLargePlanConfirmed(plan, options.largePlanConfirmed);
+  } catch (err) {
+    await fs.rename(claimPath, origPath).catch(() => {});
+    throw err;
+  }
+
+  try {
+    const manifest = await applyOrganizerPlan(plan, dataDir, options);
+    await fs.rename(claimPath, consumedPath).catch(() => {});
+    return manifest;
+  } catch (err) {
+    await fs.rename(claimPath, consumedPath).catch(() => {});
+    throw err;
   }
 }

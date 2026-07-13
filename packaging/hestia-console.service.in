@@ -13,17 +13,13 @@ LogsDirectory=hestia-console
 Environment=HESTIA_HOST=127.0.0.1
 Environment=HESTIA_PORT=4517
 Environment=NODE_ENV=production
+EnvironmentFile=-/etc/default/hestia-console
 
-# Roda sem privilégio de root — ver comentário equivalente em hestia-console.service.
-# IMPORTANTE pra este caminho (checkout de git, não /opt): __WORKDIR__ precisa ser legível
-# pelo UID efêmero do DynamicUser, o que normalmente NÃO é o caso se o checkout estiver dentro
-# de um $HOME com permissão 700/750 (padrão). scripts/install.sh avisa sobre isso; o jeito mais
-# simples é `chmod o+rX` no diretório do checkout e nos pais até a raiz, ou clonar em um path
-# fora do home (ex.: /srv/hestia-console).
-DynamicUser=yes
+User=hestia-console
+Group=hestia-console
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/KALINE
+ReadWritePaths=-/KALINE
 
 [Install]
 WantedBy=multi-user.target
