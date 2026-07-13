@@ -19,7 +19,6 @@ User=hestia-console
 Group=hestia-console
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=-/KALINE
 
 [Install]
 WantedBy=multi-user.target

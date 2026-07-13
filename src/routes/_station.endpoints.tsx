@@ -24,15 +24,7 @@ function EndpointsPage() {
   useEffect(() => {
     let alive = true;
     HESTIA.endpoints
-      .filter((e) =>
-        [
-          "/api/health",
-          "/api/storage/status",
-          "/api/storage/discover",
-          "/api/storage/organizer/plan",
-          "/api/local/organizer/runs",
-        ].includes(e.path),
-      )
+      .filter((e) => ["/api/health"].includes(e.path))
       .forEach(async (e) => {
         const p = await hestiaApi.ping(e.path);
         if (!alive) return;
@@ -47,10 +39,7 @@ function EndpointsPage() {
     const e = HESTIA.endpoints.find((x) => x.path === path);
     const cmd =
       e?.method === "POST"
-        ? `curl -s -X POST ${hestiaApi.absoluteUrl(path)} \
-  -H "Content-Type: application/json" \
-  -H "X-Hestia-Local-Confirm: organize" \
-  -d '{"planId":"plan_...","mode":"apply"}' | jq`
+        ? `curl -s -X POST ${hestiaApi.absoluteUrl(path)} | jq`
         : `curl -s ${hestiaApi.absoluteUrl(path)} | jq`;
     try {
       await navigator.clipboard.writeText(cmd);
@@ -69,8 +58,8 @@ function EndpointsPage() {
           Contratos da Chama
         </h1>
         <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
-          Endpoints separados por leitura, ações locais e Presence-safe. POST não recebe link nem
-          ping automático.
+          Endpoints de leitura local do notebook. Recursos de Estação serão configurados em etapa
+          posterior.
         </p>
       </header>
 

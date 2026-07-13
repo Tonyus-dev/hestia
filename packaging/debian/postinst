@@ -19,17 +19,11 @@ if [ ! -f /etc/default/hestia-console ]; then
   echo "Criando template de configuração em /etc/default/hestia-console"
   cat << 'EOF' > /etc/default/hestia-console
 # Héstia Console Configuration
-
-# Root path for storage (e.g. /KALINE)
-# IMPORTANTE: A raiz de produção oficial do serviço systemd é fixada em /KALINE.
-# Para alterar para testes locais ou execução manual, use HESTIA_STORAGE_PATH.
-# HESTIA_STORAGE_PATH=/KALINE
+# Future Station URL placeholder. Not used yet.
+# HESTIA_STATION_BASE_URL=https://station.example.ts.net
 
 # Allowed Host headers (comma-separated, exact values, no wildcards)
 # HESTIA_ALLOWED_HOSTS=hestia.exemplo.ts.net,hestia.exemplo.ts.net:443
-
-# Allowed origins for Codice CORS requests (comma-separated, exact values, no wildcards)
-# HESTIA_CODICE_CORS_ORIGIN=https://codice.exemplo.com
 EOF
 fi
 
@@ -51,15 +45,6 @@ systemctl restart hestia-console.service
 
 gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 update-desktop-database /usr/share/applications || true
-
-# Diagnóstico e permissões de /KALINE
-if [ -d "/KALINE" ]; then
-  echo "Diagnóstico: /KALINE encontrado. Ajustando ownership para hestia-console:hestia-console..."
-  chown -R hestia-console:hestia-console /KALINE
-  chmod -R 775 /KALINE
-else
-  echo "Aviso: /KALINE ainda não existe. Crie-o e ajuste para hestia-console:hestia-console com chmod 775." >&2
-fi
 
 echo "Héstia Console instalada."
 echo "Abra pelo menu ou acesse http://localhost:4517"

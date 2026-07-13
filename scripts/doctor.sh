@@ -2,8 +2,6 @@
 set -u -o pipefail
 SERVICE_NAME="${HESTIA_SERVICE_NAME:-hestia-console}"
 BASE_URL="${HESTIA_URL:-http://127.0.0.1:4517}"
-KALINE_ROOT="${KALINE_ROOT:-/KALINE}"
-HERMES_ROOT="${HESTIA_HERMES_ROOT:-/KALINE/HESTIA}"
 DESKTOP_FILE="${HESTIA_DESKTOP_FILE:-/usr/share/applications/hestia-console.desktop}"
 fail=0
 ok(){ echo "ok: $*"; }
@@ -59,7 +57,6 @@ fi
 if command -v curl >/dev/null 2>&1; then
   if curl -fsS "$BASE_URL/api/health" >/dev/null 2>&1; then
     ok "$BASE_URL/api/health responde"
-    curl -fsS "$BASE_URL/api/storage/status" >/dev/null && ok "$BASE_URL/api/storage/status responde" || bad "$BASE_URL/api/storage/status não respondeu"
     curl -fsS "$BASE_URL/api/llm/health" >/dev/null && ok "$BASE_URL/api/llm/health responde" || warn "$BASE_URL/api/llm/health não respondeu"
     curl -fsS "$BASE_URL/api/hermes/status" >/dev/null && ok "$BASE_URL/api/hermes/status responde" || warn "$BASE_URL/api/hermes/status não respondeu"
   elif [ "${active:-0}" -eq 1 ]; then

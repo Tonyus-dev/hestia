@@ -57,21 +57,6 @@ has_build() {
   [ -d "$ROOT_DIR/dist/client" ] && { [ -f "$ROOT_DIR/dist/server/index.mjs" ] || [ -f "$ROOT_DIR/dist/server/server.js" ] || [ -f "$ROOT_DIR/.output/server/index.mjs" ]; }
 }
 
-diagnose_kaline() {
-  [ -e /KALINE ] || { log "aviso: /KALINE não existe ainda."; return 0; }
-  if command -v findmnt >/dev/null 2>&1 && findmnt -n -T /KALINE >/dev/null 2>&1; then
-    local fs owner
-    fs="$(findmnt -n -T /KALINE -o FSTYPE | head -n1)"
-    owner="$(stat -c %U /KALINE 2>/dev/null || true)"
-    case "$fs" in
-      fuseblk|ntfs|ntfs-3g)
-        log "aviso: /KALINE está em $fs. Permissões são controladas pelas opções de montagem; chown/chgrp/chmod podem não funcionar."
-        log "para organizer/write, use: HESTIA_SERVICE_USER=${owner:-seu_usuario} sudo -E npm run install:local"
-        ;;
-    esac
-  fi
-}
-
 install_service() {
   [ "$(id -u)" = "0" ] || { log "sem root: build pronto, mas serviço não instalado. Use: sudo npm run install:service"; return 0; }
   command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] || { log "systemd indisponível: serviço não instalado."; return 0; }
@@ -81,17 +66,11 @@ install_service() {
     log "criando template de configuração em /etc/default/hestia-console"
     cat << 'EOF' > /etc/default/hestia-console
 # Héstia Console Configuration
-
-# Root path for storage (e.g. /KALINE)
-# IMPORTANTE: A raiz de produção oficial do serviço systemd é fixada em /KALINE.
-# Para alterar para testes locais ou execução manual, use HESTIA_STORAGE_PATH.
-# HESTIA_STORAGE_PATH=/KALINE
+# Future Station URL placeholder. Not used by this PR.
+# HESTIA_STATION_BASE_URL=https://station.example.ts.net
 
 # Allowed Host headers (comma-separated, exact values, no wildcards)
 # HESTIA_ALLOWED_HOSTS=hestia.exemplo.ts.net,hestia.exemplo.ts.net:443
-
-# Allowed origins for Codice CORS requests (comma-separated, exact values, no wildcards)
-# HESTIA_CODICE_CORS_ORIGIN=https://codice.exemplo.com
 EOF
   fi
 
@@ -105,9 +84,8 @@ EOF
 DynamicUser=no
 User=$HESTIA_SERVICE_USER
 Group=$HESTIA_SERVICE_USER
-ReadWritePaths=-/KALINE
 OVERRIDE
-    log "modo organizer/write: serviço rodará como $HESTIA_SERVICE_USER"
+    log "serviço rodará como $HESTIA_SERVICE_USER"
   else
     rm -f "/etc/systemd/system/${SERVICE_NAME}.service.d/10-user.conf"
     log "modo protegido padrão: DynamicUser=yes. Para NTFS, use HESTIA_SERVICE_USER=<usuario> sudo -E npm run install:local"
@@ -118,7 +96,6 @@ OVERRIDE
   log "serviço instalado em http://127.0.0.1:4517"
 }
 
-diagnose_kaline
 if [ "$SERVICE_ONLY" = "0" ]; then
   install_deps_and_build
   has_build || err "build não encontrado após npm run build. Caminhos esperados: dist/client + dist/server/index.mjs|server.js ou .output/server/index.mjs"

@@ -36,8 +36,6 @@ export type Health = {
   processUptime: number;
   readonly: boolean;
   frontendBuilt?: boolean;
-  kalineMounted?: boolean;
-  kalineWritable?: boolean;
   serviceUser?: string;
   dataDirWritable?: boolean;
 };
@@ -108,7 +106,6 @@ export type HardwareStatus = {
     maxC: number | null;
     sensors: { label: string; tempC: number; status: HardwareSeverity }[];
   };
-  storage: { status: HardwareSeverity; items: StoragePath[] };
   services: { status: HardwareSeverity; active: number; total: number; items: ServiceStatus[] };
 };
 export type HardwareConfig = {
@@ -139,7 +136,7 @@ export type HardwareConfig = {
     port: number;
     mode: string;
     lanEnabled: boolean;
-    storagePaths: string[];
+    stationBaseUrl: string;
     services: string[];
   };
 };
@@ -192,7 +189,7 @@ export type Config = {
   mode: string;
   readonly: boolean;
   lanEnabled: boolean;
-  storagePaths: string[];
+  stationBaseUrl: string;
   services: string[];
 };
 
@@ -489,22 +486,22 @@ async function safePost<T>(
 
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
+  storage: () => safeFetch<StorageStatus>("/api/storage/status"),
+  storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
+  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
+  storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
+  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 60000),
   llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
   hermesStatus: () => safeFetch<HermesStatus>("/api/hermes/status"),
   server: () => safeFetch<ServerStatus>("/api/server/status"),
   hardwareStatus: () => safeFetch<HardwareStatus>("/api/hardware/status"),
   hardwareConfig: () => safeFetch<HardwareConfig>("/api/hardware/config"),
-  storage: () => safeFetch<StorageStatus>("/api/storage/status"),
   services: () => safeFetch<ServicesStatus>("/api/services/status"),
   serviceBindings: () => safeFetch<ServiceBindings>("/api/services/bindings"),
   logs: (tail?: number) =>
     safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
-  storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
-  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
-  storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
   /** Gera um plano novo a cada chamada (persiste arquivo) — só sob ação explícita do usuário. */
-  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 60000),
   /** Aplica um plano já gerado. Único POST da Héstia — exige o header de confirmação. */
   organizerApply: (planId: string, largePlanConfirm = false) =>
     safePost<OrganizerRunManifest>(

@@ -283,6 +283,9 @@ export async function resolveCodiceBook(storagePathBase, bookId) {
 }
 
 export async function openVerifiedCodiceBook(resolved) {
+  if ((resolved.stat.mode & 0o444) === 0) {
+    throw Object.assign(new Error("CODICE_BOOK_UNAVAILABLE"), { code: "ECODICEBOOKUNAVAILABLE" });
+  }
   const fileHandle = await fs.open(resolved.fullPath, constants.O_RDONLY | constants.O_NOFOLLOW);
 
   try {

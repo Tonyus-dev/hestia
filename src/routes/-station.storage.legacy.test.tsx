@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StoragePage } from "./_station.storage";
-import { OrganizarPage } from "./_station.organizar";
+import { StoragePage } from "./-station.storage.legacy";
+import { OrganizarPage } from "./-station.organizar.legacy";
 import { hestiaApi } from "@/lib/hestia/api";
 
 vi.mock("@/lib/hestia/api", async (importOriginal) => {

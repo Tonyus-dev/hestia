@@ -1,7 +1,5 @@
 // Héstia Console — servidor local Fastify que embute a Chama Local
-// e serve o frontend buildado. Majoritariamente modo protegido — a única exceção é
-// POST /api/local/organizer/apply, que move/copia arquivos dentro de um plano gerado pela
-// própria Héstia e só roda com confirmação explícita (ver chama/organizerApply.js).
+// e serve o frontend buildado como console puro do notebook.
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { fileURLToPath } from "node:url";
@@ -11,18 +9,6 @@ import { existsSync } from "node:fs";
 import { config } from "./chama/config.js";
 import { getHealth } from "./chama/health.js";
 import { getServerStatus } from "./chama/system.js";
-import { getStorageStatus } from "./chama/storage.js";
-import { discoverVolumes } from "./chama/storageDiscovery.js";
-import { getStorageModel } from "./chama/storageModel.js";
-import { scanStorageModel, scanConfiguredSources } from "./chama/storageScanner.js";
-import { generateOrganizerPlan, writePlan, getPlan, getPlanState } from "./chama/organizerPlan.js";
-import {
-  claimAndApplyOrganizerPlan,
-  getOrganizerRuns,
-  getOrganizerRun,
-} from "./chama/organizerApply.js";
-import { undoOrganizerRun } from "./chama/organizerUndo.js";
-import { redoOrganizerRun } from "./chama/organizerRedo.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getHardwareStatus, getHardwareConfig } from "./chama/hardware.js";
 import { getServiceBindings } from "./chama/serviceBindings.js";
@@ -32,7 +18,6 @@ import {
   buildAllowedHosts,
   isAllowedHostHeader,
   isOriginAllowed,
-  applyCodiceCors,
   RateLimiter,
 } from "./chama/security.js";
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
@@ -54,7 +39,6 @@ import {
   validateChatInput,
 } from "./chama/llm.js";
 import { getHermesStatus, processHermesOnce } from "./chama/hermes.js";
-import { registerCodiceRoutes } from "./chama/codiceRoutes.js";
 import { createReadStream } from "node:fs";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
@@ -95,7 +79,7 @@ if (!isLoopbackHost(config.host) && process.env.HESTIA_ALLOW_LAN !== "1") {
 }
 
 // Diretório de dados persistentes (identidade, eventos, snapshots) — se não
-// conseguir criar (ex.: permissão), segue no ar: saúde/storage/services
+// conseguir criar (ex.: permissão), segue no ar: saúde/services
 // continuam funcionando, só as rotas de presence que dependem de disco
 // degradam graciosamente (ver chama/presence.js).
 try {
@@ -129,7 +113,7 @@ app.setErrorHandler((err, req, reply) => {
     route: `${req.method} ${req.url}`,
     hint:
       code === "ENOENT"
-        ? "Caminho/binário ausente no host (ex.: df, systemctl, storagePath)."
+        ? "Caminho/binário ausente no host (ex.: df, systemctl)."
         : code === "EACCES" || code === "EPERM"
           ? "Permissão negada — verifique se o usuário tem acesso ao recurso."
           : code === "ETIMEDOUT"
@@ -182,21 +166,6 @@ app.addHook("onRequest", async (req, reply) => {
   });
 });
 
-// --- Confirmação explícita para a única rota de escrita local. --------------
-// Sem CORS habilitado, um POST cross-origin com header customizado dispara preflight e falha
-// sem esse header (não existe forma de "esquecer" e disparar por acidente via <form>/<img>).
-app.addHook("onRequest", async (req, reply) => {
-  if (req.method !== "POST" || !req.url.startsWith("/api/local/")) return;
-  if (req.headers["x-hestia-local-confirm"] === "organize") return;
-  reply.code(403).send({
-    ok: false,
-    error: "Confirmação ausente",
-    code: "EMISSINGCONFIRM",
-    detail: 'Rotas de escrita local exigem o header "X-Hestia-Local-Confirm: organize".',
-    at: new Date().toISOString(),
-  });
-});
-
 app.addHook("onRequest", async (req, reply) => {
   if (req.method !== "POST" || !req.url.startsWith("/api/hermes/process-once")) return;
   if (req.headers["x-hestia-local-confirm"] === "hermes") return;
@@ -220,13 +189,6 @@ function applyKalineLlmCors(req, reply) {
 app.addHook("onRequest", async (req, reply) => {
   if (!req.url.startsWith("/api/llm/")) return;
   applyKalineLlmCors(req, reply);
-  if (req.method === "OPTIONS") return reply.code(204).send();
-});
-
-// --- CORS opt-in só para /api/codice/* (Códice Web App). --------
-app.addHook("onRequest", async (req, reply) => {
-  if (!req.url.startsWith("/api/codice/")) return;
-  applyCodiceCors(req, reply, config.codiceCorsOrigin);
   if (req.method === "OPTIONS") return reply.code(204).send();
 });
 
@@ -265,9 +227,6 @@ app.addHook("onSend", async (req, reply, payload) => {
   reply.header("Content-Security-Policy", CSP);
   if (req.url.startsWith("/api/llm/")) {
     applyKalineLlmCors(req, reply);
-  }
-  if (req.url.startsWith("/api/codice/")) {
-    applyCodiceCors(req, reply, config.codiceCorsOrigin);
   }
   if (req.url.startsWith("/api/presence/")) {
     const origin = req.headers.origin;
@@ -333,19 +292,6 @@ app.post("/api/hermes/process-once", async () => processHermesOnce(config));
 app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/hardware/status", async () => await getHardwareStatus());
 app.get("/api/hardware/config", async () => await getHardwareConfig());
-app.get("/api/storage/status", async () => await getStorageStatus());
-app.get("/api/storage/discover", async () => await discoverVolumes());
-app.get("/api/storage/model", async () => getStorageModel());
-app.get("/api/storage/sources", async () => ({ items: config.storageSources }));
-app.get("/api/storage/scan", async () => ({
-  kaline: await scanStorageModel(),
-  sources: await scanConfiguredSources(),
-}));
-app.get("/api/storage/organizer/plan", async () => {
-  const plan = await generateOrganizerPlan();
-  await writePlan(plan, config.dataDir);
-  return plan;
-});
 app.get("/api/services/status", async () => await getServicesStatus());
 app.get("/api/services/bindings", async () => getServiceBindings());
 app.get("/api/logs", async (req) => {
@@ -363,157 +309,9 @@ app.get("/api/config", async () => ({
   mode: config.mode,
   readonly: config.readonly,
   lanEnabled: config.lanEnabled,
-  storagePaths: config.storagePaths,
+  stationBaseUrl: config.stationBaseUrl,
   services: config.services,
 }));
-
-// --- Rotas do Códice (Leitura restrita) -------------------------------------
-registerCodiceRoutes(app, config);
-
-// --- Rotas locais de escrita controlada (organizer) -------------------------
-// Só aplica plano já gerado por GET /api/storage/organizer/plan (planId). Nunca aceita path,
-// lista de arquivos ou targetPath do corpo da requisição — ver chama/organizerApply.js.
-app.post("/api/local/organizer/apply", async (req, reply) => {
-  const body = req.body || {};
-  if (typeof body.planId !== "string" || !body.planId) {
-    reply.code(400).send({
-      ok: false,
-      error: "planId obrigatório",
-      code: "EBADREQUEST",
-      detail: 'Body deve conter { planId, mode: "apply" }, com planId de um plano já gerado.',
-      at: new Date().toISOString(),
-    });
-    return;
-  }
-  if (body.mode !== "apply") {
-    reply.code(400).send({
-      ok: false,
-      error: 'mode deve ser "apply"',
-      code: "EBADREQUEST",
-      at: new Date().toISOString(),
-    });
-    return;
-  }
-
-  try {
-    return await claimAndApplyOrganizerPlan(body.planId, config.dataDir, {
-      largePlanConfirmed: req.headers["x-hestia-large-plan-confirm"],
-    });
-  } catch (err) {
-    if (err.code === "EPLANNOTFOUND") {
-      reply.code(404).send({
-        ok: false,
-        error: err.message,
-        code: "EPLANNOTFOUND",
-        detail: "planId inválido, expirado ou nunca gerado por GET /api/storage/organizer/plan.",
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-    if (
-      err.code === "PLAN_ALREADY_CLAIMED" ||
-      err.code === "PLAN_ALREADY_APPLIED" ||
-      err.code === "EPLANEXPIRED" ||
-      err.code === "ELARGEPLANCONFIRM"
-    ) {
-      reply.code(409).send({
-        ok: false,
-        error: err.message,
-        code: err.code,
-        detail: err.detail || "",
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-    throw err;
-  }
-});
-app.get("/api/local/organizer/runs", async () => ({
-  items: await getOrganizerRuns(config.dataDir),
-}));
-app.get("/api/local/organizer/runs/:runId", async (req, reply) => {
-  const run = await getOrganizerRun(req.params.runId, config.dataDir);
-  if (!run) {
-    reply.code(404).send({
-      ok: false,
-      error: "Execução não encontrada",
-      code: "ERUNNOTFOUND",
-      at: new Date().toISOString(),
-    });
-    return;
-  }
-  return run;
-});
-app.post("/api/local/organizer/runs/:runId/undo", async (req, reply) => {
-  try {
-    const undoManifest = await undoOrganizerRun(req.params.runId, config.dataDir);
-    if (!undoManifest) {
-      reply.code(404).send({
-        ok: false,
-        error: "Execução não encontrada",
-        code: "ERUNNOTFOUND",
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-    return undoManifest;
-  } catch (err) {
-    if (err.code === "EALREADYUNDONE") {
-      reply.code(409).send({
-        ok: false,
-        error: "Execução já foi desfeita",
-        code: "EALREADYUNDONE",
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-    throw err;
-  }
-});
-app.post("/api/local/organizer/runs/:runId/redo", async (req, reply) => {
-  try {
-    const redoManifest = await redoOrganizerRun(req.params.runId, config.dataDir);
-    if (!redoManifest) {
-      reply.code(404).send({
-        ok: false,
-        error: "Execução não encontrada",
-        code: "ERUNNOTFOUND",
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-    return redoManifest;
-  } catch (err) {
-    if (err.code === "ENOTUNDORUN") {
-      reply.code(400).send({
-        ok: false,
-        error: "Execução não é um undo — nada para refazer",
-        code: "ENOTUNDORUN",
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-    if (err.code === "EALREADYREDONE") {
-      reply.code(409).send({
-        ok: false,
-        error: "Undo já foi refeito",
-        code: "EALREADYREDONE",
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-    if (err.code === "EORIGINALNOTFOUND") {
-      reply.code(404).send({
-        ok: false,
-        error: "Execução original não encontrada (pode ter expirado)",
-        code: "EORIGINALNOTFOUND",
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-    throw err;
-  }
-});
 
 // --- Rotas de Presence (read-only): consulta same-origin/local --------
 app.get(
@@ -544,10 +342,6 @@ app.get(
 app.get(
   "/api/presence/services",
   presenceRoute(async () => await getServicesStatus()),
-);
-app.get(
-  "/api/presence/storage",
-  presenceRoute(async () => await getStorageStatus()),
 );
 app.get(
   "/api/presence/backups",

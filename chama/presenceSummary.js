@@ -1,4 +1,4 @@
-// Chama Local — sumário de presence agregando identidade + services + storage.
+// Chama Local — sumário de presence agregando identidade + services.
 import { getIdentity } from "./identity.js";
 import { getServicesStatus } from "./services.js";
 import { getStorageStatus } from "./storage.js";
@@ -13,7 +13,6 @@ export async function getPresenceSummary(dataDir) {
 
   const activeServices = services.items.filter((s) => s.active).length;
   const okStorage = storage.items.filter((s) => s.status === "ok").length;
-
   return {
     timestamp: new Date().toISOString(),
     identity: {

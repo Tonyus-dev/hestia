@@ -4,7 +4,6 @@ import { promisify } from "node:util";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "./config.js";
-import { getStorageStatus } from "./storage.js";
 import { getServicesStatus } from "./services.js";
 
 const pExecFile = promisify(execFile);
@@ -116,16 +115,11 @@ export async function getHardwareStatus() {
   const usedPercent = mem.total > 0 ? Math.round((used / mem.total) * 100) : 0;
   const swapUsed = mem.swapTotal - mem.swapFree;
   const swapPercent = mem.swapTotal > 0 ? Math.round((swapUsed / mem.swapTotal) * 100) : null;
-  const [temperature, storage, services, usagePercent] = await Promise.all([
+  const [temperature, services, usagePercent] = await Promise.all([
     readTemperature(),
-    getStorageStatus(),
     getServicesStatus(),
     readProcStat(),
   ]);
-  const storageItems = storage.items.map((it) => ({
-    ...it,
-    status: classifyDisk(it.path, it.exists, it.percentUsed),
-  }));
   const serviceActive = services.items.filter((s) => s.active).length;
   const serviceStatus =
     services.items.length === 0 || serviceActive === 0
@@ -135,24 +129,18 @@ export async function getHardwareStatus() {
         : "warn";
   const cpuStatus = classifyCpu(loadRatio1m),
     memoryStatus = classifyMemory(usedPercent),
-    swapStatus = classifySwap(swapPercent),
-    storageStatus = worstSeverity(storageItems.map((s) => s.status));
+    swapStatus = classifySwap(swapPercent);
   const reasons = [];
   if (cpuStatus !== "ok")
     reasons.push(loadRatio1m > 1.5 ? "load médio crítico" : "load médio alto");
   if (memoryStatus !== "ok")
     reasons.push(usedPercent > 90 ? "memória acima de 90%" : "memória acima de 75%");
-  for (const it of storageItems)
-    if (it.status !== "ok" && it.status !== "unavailable")
-      reasons.push(
-        !it.exists ? `${it.path} não montado` : `disco ${it.path} acima de ${it.percentUsed}%`,
-      );
   if (serviceStatus !== "ok")
     reasons.push(`${serviceActive}/${services.items.length} serviços ativos`);
   return {
     generatedAt: new Date().toISOString(),
     overall: {
-      status: worstSeverity([cpuStatus, memoryStatus, swapStatus, storageStatus, serviceStatus]),
+      status: worstSeverity([cpuStatus, memoryStatus, swapStatus, serviceStatus]),
       reasons,
     },
     cpu: {
@@ -173,7 +161,6 @@ export async function getHardwareStatus() {
       usedPercent: swapPercent,
     },
     temperature,
-    storage: { status: storageStatus, items: storageItems },
     services: {
       status: serviceStatus,
       active: serviceActive,
@@ -241,7 +228,7 @@ export async function getHardwareConfig(execFileImpl = pExecFile) {
       port: config.port,
       mode: config.mode,
       lanEnabled: config.lanEnabled,
-      storagePaths: config.storagePaths,
+      stationBaseUrl: config.stationBaseUrl,
       services: config.services,
     },
   };
