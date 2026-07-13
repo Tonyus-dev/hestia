@@ -16,8 +16,8 @@ const MAX_DEPTH = 5;
 // Cache em memória associado à raiz
 let cache = {
   storageRoot: null,
-  generatedAt: null,      // ISO String da indexação real
-  generatedAtTime: 0,     // timestamp de controle do TTL
+  generatedAt: null, // ISO String da indexação real
+  generatedAtTime: 0, // timestamp de controle do TTL
   result: null,
 };
 
@@ -264,7 +264,7 @@ export async function resolveCodiceBook(storagePathBase, bookId) {
 function encodeRFC5987ValueChars(value) {
   return encodeURIComponent(value).replace(
     /['()*]/g,
-    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }
 

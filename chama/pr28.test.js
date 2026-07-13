@@ -448,14 +448,24 @@ describe("PR #28 - Codice and Organizer Security Contracts", () => {
         clearCodiceCache();
       });
 
-      const unavailabilityCodes = ["EACCES", "EPERM", "EIO", "EMFILE", "ENFILE", "ESTALE", "ENODEV"];
+      const unavailabilityCodes = [
+        "EACCES",
+        "EPERM",
+        "EIO",
+        "EMFILE",
+        "ENFILE",
+        "ESTALE",
+        "ENODEV",
+      ];
 
       unavailabilityCodes.forEach((code) => {
         it(`retorna HTTP 503 com CODICE_LIBRARY_UNAVAILABLE para erro de disco ${code}`, async () => {
           const app = Fastify();
           registerCodiceRoutes(app, { storageRoot: workDir });
 
-          const spy = vi.spyOn(fs, "readdir").mockRejectedValue(Object.assign(new Error(code), { code }));
+          const spy = vi
+            .spyOn(fs, "readdir")
+            .mockRejectedValue(Object.assign(new Error(code), { code }));
 
           const res = await app.inject({
             method: "GET",
@@ -473,7 +483,9 @@ describe("PR #28 - Codice and Organizer Security Contracts", () => {
         const app = Fastify();
         registerCodiceRoutes(app, { storageRoot: workDir });
 
-        const spy = vi.spyOn(fs, "access").mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+        const spy = vi
+          .spyOn(fs, "access")
+          .mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
 
         const res = await app.inject({
           method: "GET",
@@ -490,7 +502,9 @@ describe("PR #28 - Codice and Organizer Security Contracts", () => {
         const app = Fastify();
         registerCodiceRoutes(app, { storageRoot: workDir });
 
-        const spy = vi.spyOn(fs, "readdir").mockRejectedValue(new Error("unknown unexpected error"));
+        const spy = vi
+          .spyOn(fs, "readdir")
+          .mockRejectedValue(new Error("unknown unexpected error"));
 
         const res = await app.inject({
           method: "GET",
