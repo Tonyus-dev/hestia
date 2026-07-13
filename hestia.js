@@ -28,6 +28,7 @@ import {
   buildAllowedHosts,
   isAllowedHostHeader,
   isOriginAllowed,
+  applyCodiceCors,
   RateLimiter,
 } from "./chama/security.js";
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
@@ -49,6 +50,8 @@ import {
   validateChatInput,
 } from "./chama/llm.js";
 import { getHermesStatus, processHermesOnce } from "./chama/hermes.js";
+import { getCodiceHealth, getCodiceLibrary, resolveCodiceBook } from "./chama/codice.js";
+import { createReadStream } from "node:fs";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
 function parseCliArgs(argv) {
@@ -133,7 +136,7 @@ app.setErrorHandler((err, req, reply) => {
 });
 
 // --- Anti DNS-rebinding: só aceita Host headers que apontem para este bind. -
-const allowedHosts = buildAllowedHosts(config.host, config.port);
+const allowedHosts = buildAllowedHosts(config.host, config.port, config.allowedHosts);
 app.addHook("onRequest", async (req, reply) => {
   if (isAllowedHostHeader(req.headers.host, allowedHosts)) return;
   log("warn", `Host não permitido: "${req.headers.host ?? ""}" — ${req.method} ${req.url}`);
@@ -205,6 +208,13 @@ app.addHook("onRequest", async (req, reply) => {
   if (req.method === "OPTIONS") return reply.code(204).send();
 });
 
+// --- CORS opt-in só para /api/codice/* (Códice Web App). --------
+app.addHook("onRequest", async (req, reply) => {
+  if (!req.url.startsWith("/api/codice/")) return;
+  applyCodiceCors(req, reply, config.codiceCorsOrigin);
+  if (req.method === "OPTIONS") return reply.code(204).send();
+});
+
 // --- CORS opt-in só para /api/presence/* (Presence pública, outra origem). --
 // Nunca cobre /api/local/* nem o resto de /api/* — a proteção do header de confirmação de
 // escrita depende justamente de não ter CORS habilitado ali (ver hook acima). Desligado por
@@ -240,6 +250,9 @@ app.addHook("onSend", async (req, reply, payload) => {
   reply.header("Content-Security-Policy", CSP);
   if (req.url.startsWith("/api/llm/")) {
     applyKalineLlmCors(req, reply);
+  }
+  if (req.url.startsWith("/api/codice/")) {
+    applyCodiceCors(req, reply, config.codiceCorsOrigin);
   }
   if (req.url.startsWith("/api/presence/")) {
     const origin = req.headers.origin;
@@ -338,6 +351,59 @@ app.get("/api/config", async () => ({
   storagePaths: config.storagePaths,
   services: config.services,
 }));
+
+// --- Rotas do Códice (Leitura restrita) -------------------------------------
+app.get("/api/codice/health", async (req, reply) => {
+  try {
+    return await getCodiceHealth(config.storagePathBase);
+  } catch (err) {
+    if (err.code === "ECODICELIBRARY") {
+      reply.code(503).send({
+        ok: false,
+        error: "Biblioteca do Códice indisponível",
+        code: "ECODICELIBRARY"
+      });
+      return;
+    }
+    throw err;
+  }
+});
+
+app.get("/api/codice/library", async (req, reply) => {
+  return await getCodiceLibrary(config.storagePathBase);
+});
+
+app.head("/api/codice/books/:bookId", async (req, reply) => {
+  const resolved = await resolveCodiceBook(config.storagePathBase, req.params.bookId);
+  if (!resolved) {
+    reply.code(404).send();
+    return;
+  }
+  
+  reply.header("Content-Type", resolved.mimeType);
+  reply.header("Content-Length", resolved.stat.size);
+  reply.header("Last-Modified", resolved.stat.mtime.toUTCString());
+  reply.code(200).send();
+});
+
+app.get("/api/codice/books/:bookId", async (req, reply) => {
+  const resolved = await resolveCodiceBook(config.storagePathBase, req.params.bookId);
+  if (!resolved) {
+    reply.code(404).send({
+      ok: false,
+      error: "Livro não encontrado",
+      code: "ENOTFOUND"
+    });
+    return;
+  }
+  
+  reply.header("Content-Type", resolved.mimeType);
+  reply.header("Content-Length", resolved.stat.size);
+  reply.header("Last-Modified", resolved.stat.mtime.toUTCString());
+  reply.header("Content-Disposition", `inline; filename="${encodeURIComponent(resolved.filename)}"`);
+  
+  return reply.send(createReadStream(resolved.fullPath));
+});
 
 // --- Rotas locais de escrita controlada (organizer) -------------------------
 // Só aplica plano já gerado por GET /api/storage/organizer/plan (planId). Nunca aceita path,

@@ -1,12 +1,12 @@
-
-# Refinamento estético — puxar Kaline Central para a família visual de *totalidade* (Kalisto)
+# Refinamento estético — puxar Kaline Central para a família visual de _totalidade_ (Kalisto)
 
 Mantém tudo que já está de pé (14 rotas, `/tv` com 4 modos, Mapa, Onboarding, Verdade, Códice, estados honestos, sem backend). Só re-afina tokens, tipografia, motion e microinterações para entrar na mesma família visual do projeto irmão.
 
-## O que a Kaline herda de *totalidade*
+## O que a Kaline herda de _totalidade_
 
 **Paleta em oklch, com vinho/borgonha como profundidade**
 Substitui os tokens atuais em `src/styles.css`:
+
 ```
 --obsidian:  oklch(0.11 0.012 30)
 --burgundy:  oklch(0.25 0.09 15)   ← nova camada de fundo, atrás do cobre
@@ -18,20 +18,24 @@ Substitui os tokens atuais em `src/styles.css`:
 --ivory:     oklch(0.94 0.025 75)  ← substitui #F4EDE4
 --ivory-dim: oklch(0.78 0.035 75)  ← substitui --kaline-muted
 ```
+
 Fundo do `body` ganha 3 radiais em vinho/borgonha + 1 em dourado bem baixo (mesma receita do totalidade), sobre obsidian. Textura de ruído fino continua.
 
 **Tipografia clássica**
+
 - `--font-serif: "Cormorant Garamond"` (substitui Fraunces nos títulos e no wordmark K∧LINE — fica mais editorial, menos "SaaS moderno").
 - `--font-sans: "Inter"` (substitui Inter Tight — mesma família do totalidade).
 - Trocar o `<link>` de fontes no `__root.tsx`.
 
 **Motion tokens (novos em `:root`)**
+
 ```
 --ease-spring, --ease-snap, --ease-out-soft
 --dur-instant 90ms · --dur-fast 160ms · --dur-med 260ms · --dur-slow 420ms
 ```
 
 **Utilitários adotados**
+
 - `.serif`, `.gold-glow`, `.copper-glow` (versão Kaline do apple-glow, respirando 4.5s no wordmark do Hero e da TV).
 - `.lift-card` — substitui `kaline-glass-hover` atual, com curva `--ease-out-soft` e sombra tintada de cobre/dourado.
 - `.press-scale` — feedback tátil `scale(0.97)` em todos os botões e cards clicáveis.
@@ -39,6 +43,7 @@ Fundo do `body` ganha 3 radiais em vinho/borgonha + 1 em dourado bem baixo (mesm
 - `.shimmer` — reservado para skeletons futuros (não usado agora, só definido).
 
 **Foco e mobile**
+
 - `:focus-visible` com halo dourado 2px, offset 2px (substitui azul default).
 - `@media (pointer: coarse)`: mínimo 44×44 em `button/[role]/a[role]` — importante para a TV Box e para celular.
 - Safe-area helpers (`.safe-bottom`, `.safe-top`, `.pb-safe`).
@@ -70,7 +75,7 @@ Todas cirúrgicas, sem reescrever arquitetura:
 ## O que NÃO muda
 
 - Nenhuma nova rota, nenhuma alteração de conteúdo, nenhum backend, nenhum ícone novo, nenhum gráfico, nenhuma métrica.
-- Vocabulário proibido continua proibido (*online, ativo, sincronizado, concluído*).
+- Vocabulário proibido continua proibido (_online, ativo, sincronizado, concluído_).
 - `/tv` continua pública, sem shell, com relógio rotulado "hora local deste dispositivo".
 - Botão "Conectar Station Agent" continua desabilitado, sem modal.
 - Ordem mobile continua Home · TV · Central · Dispositivos.

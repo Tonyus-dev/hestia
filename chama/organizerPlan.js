@@ -45,6 +45,13 @@ const EXTENSION_RULES = [
     relativePath: "design/projetos",
   },
   { extensions: [".jpg", ".jpeg", ".png", ".webp", ".heic"], relativePath: "midia/imagens" },
+  { extensions: [".mobi", ".azw3"], relativePath: "codice/kindle" },
+  { extensions: [".cbz", ".cbr"], relativePath: "codice/quadrinhos" },
+  { extensions: [".xml"], relativePath: "documentos/notas_fiscais" },
+  { extensions: [".ttf", ".otf", ".woff", ".woff2"], relativePath: "design/fontes" },
+  { extensions: [".raw", ".cr2", ".nef", ".arw", ".dng"], relativePath: "midia/fotografia_raw" },
+  { extensions: [".obj", ".fbx", ".stl", ".blend", ".gltf"], relativePath: "design/3d" },
+  { extensions: [".sqlite", ".db", ".sql", ".dump"], relativePath: "arquivos/bancos_de_dados" },
   { extensions: [".zip", ".rar", ".7z", ".tar", ".gz"], relativePath: "arquivos/compactados" },
   {
     extensions: [".exe", ".msi", ".bat", ".cmd", ".scr", ".apk", ".deb", ".sh"],
@@ -227,6 +234,7 @@ export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
     quarantined: items.filter((i) => i.targetPath.includes("/ash/quarentena/")).length,
     byExtension,
     byTargetArea,
+    rules: { extensionRules: EXTENSION_RULES, fallback: FALLBACK_RELATIVE_PATH },
   };
 
   return {

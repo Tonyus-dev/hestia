@@ -164,6 +164,27 @@ export function OrganizarPage() {
                     .join(" · ") || "—"}
                 </p>
               )}
+              {plan.summary.rules && (
+                <details className="text-[11px] text-[color:var(--kaline-faint)] mt-2 mb-2 border border-[color:var(--kaline-border-copper)]/40 p-2 rounded">
+                  <summary className="cursor-pointer text-[color:var(--kaline-copper)] hover:opacity-80">
+                    Regras de organização aplicadas
+                  </summary>
+                  <ul className="mt-2 space-y-1 ml-4 list-disc">
+                    {plan.summary.rules.extensionRules.map((r, i) => (
+                      <li key={i}>
+                        <span className="font-mono text-[color:var(--kaline-text)]">
+                          {r.extensions.join(", ")}
+                        </span>
+                        {" → "}
+                        {r.relativePath}
+                      </li>
+                    ))}
+                    <li className="text-[color:var(--kaline-muted)]">
+                      <em>Outros (desconhecidos)</em> → {plan.summary.rules.fallback}
+                    </li>
+                  </ul>
+                </details>
+              )}
               {plan.items.length > 100 && (
                 <p className="text-[11px] text-[color:var(--kaline-amber)]">
                   exibindo os primeiros 100 de {plan.items.length} itens

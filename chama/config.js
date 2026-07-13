@@ -102,4 +102,10 @@ export const config = {
     90_000,
   // Raiz interna da Caixa Hermes. Nunca vem de body/query.
   hermesRoot: process.env.HESTIA_HERMES_ROOT || "/KALINE/HESTIA",
+  // Base do Storage (Códice API usará essa raiz)
+  storagePathBase: process.env.HESTIA_STORAGE_PATH || "/KALINE",
+  // Origem permitida para o Códice acessar via CORS (Tailscale/Cloudflare)
+  codiceCorsOrigin: process.env.HESTIA_CODICE_CORS_ORIGIN || "",
+  // Hosts extras permitidos (útil para o Tailscale Serve passar o Hostname)
+  allowedHosts: process.env.HESTIA_ALLOWED_HOSTS || "",
 };

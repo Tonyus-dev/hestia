@@ -147,7 +147,7 @@ export function StoragePage() {
                 .map((f) => (
                   <Row
                     key={f.id}
-                    k={f.relativePath ?? f.id}
+                    k={f.path ?? f.id}
                     v={`${f.files} arquivos · ${formatBytes(f.bytes)}`}
                   />
                 ))}
