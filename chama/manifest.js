@@ -27,13 +27,11 @@ export function getManifest() {
       ],
     },
     services: getPresenceServiceBindings(),
-    // readonly:false desde que a Héstia ganhou uma única capacidade de escrita local (mover/copiar
-    // dentro de um plano aprovado — ver chama/capabilities.js). Presence nunca vê o plano em si.
     capabilities: {
       readonly: true,
       readonlyByDefault: true,
-      controlledWrites: true,
-      writeCapabilities: ["organizer.apply", "organizer.undo", "organizer.redo", "hermes"],
+      controlledWrites: false,
+      writeCapabilities: [],
       metrics: true,
       events: true,
       snapshots: true,

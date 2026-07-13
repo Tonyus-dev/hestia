@@ -450,11 +450,7 @@ async function safeFetch<T>(path: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promi
   }
 }
 
-/**
- * POST com header customizado — só usado pelo organizer (a única mutação da Héstia).
- * Nunca usado sem `X-Hestia-Local-Confirm`; a confirmação é sempre passada explicitamente
- * pelo chamador (ver hestiaApi.organizerApply/organizerUndo), nunca implícita aqui.
- */
+/** POST legado para telas excluídas do runtime ativo do Console. */
 async function safePost<T>(
   path: string,
   body: unknown,
@@ -485,11 +481,6 @@ async function safePost<T>(
 
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
-  storage: () => safeFetch<StorageStatus>("/api/storage/status"),
-  storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
-  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
-  storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
-  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 60000),
   llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
   hermesStatus: () => safeFetch<HermesStatus>("/api/hermes/status"),
   server: () => safeFetch<ServerStatus>("/api/server/status"),
@@ -500,35 +491,6 @@ export const hestiaApi = {
   logs: (tail?: number) =>
     safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
-  /** Gera um plano novo a cada chamada (persiste arquivo) — só sob ação explícita do usuário. */
-  /** Aplica um plano já gerado. Único POST da Héstia — exige o header de confirmação. */
-  organizerApply: (planId: string, largePlanConfirm = false) =>
-    safePost<OrganizerRunManifest>(
-      "/api/local/organizer/apply",
-      { planId, mode: "apply" },
-      {
-        "x-hestia-local-confirm": "organize",
-        ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
-      },
-      60000,
-    ),
-  organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
-  organizerRun: (runId: string) =>
-    safeFetch<OrganizerRunManifest>(`/api/local/organizer/runs/${runId}`),
-  organizerUndo: (runId: string) =>
-    safePost<OrganizerRunManifest>(
-      `/api/local/organizer/runs/${runId}/undo`,
-      {},
-      { "x-hestia-local-confirm": "organize" },
-      60000,
-    ),
-  organizerRedo: (undoRunId: string) =>
-    safePost<OrganizerRunManifest>(
-      `/api/local/organizer/runs/${undoRunId}/redo`,
-      {},
-      { "x-hestia-local-confirm": "organize" },
-      60000,
-    ),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
@@ -557,6 +519,41 @@ export const hestiaApi = {
       };
     }
   },
+};
+
+export const hestiaLegacyApi = {
+  storage: () => safeFetch<StorageStatus>("/api/storage/status"),
+  storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
+  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
+  storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
+  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 60000),
+  organizerApply: (planId: string, largePlanConfirm = false) =>
+    safePost<OrganizerRunManifest>(
+      "/api/local/organizer/apply",
+      { planId, mode: "apply" },
+      {
+        "x-hestia-local-confirm": "organize",
+        ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
+      },
+      60000,
+    ),
+  organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
+  organizerRun: (runId: string) =>
+    safeFetch<OrganizerRunManifest>(`/api/local/organizer/runs/${runId}`),
+  organizerUndo: (runId: string) =>
+    safePost<OrganizerRunManifest>(
+      `/api/local/organizer/runs/${runId}/undo`,
+      {},
+      { "x-hestia-local-confirm": "organize" },
+      60000,
+    ),
+  organizerRedo: (undoRunId: string) =>
+    safePost<OrganizerRunManifest>(
+      `/api/local/organizer/runs/${undoRunId}/redo`,
+      {},
+      { "x-hestia-local-confirm": "organize" },
+      60000,
+    ),
 };
 
 export function formatBytes(bytes: number | null | undefined): string {

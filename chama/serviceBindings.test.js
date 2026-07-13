@@ -2,20 +2,16 @@ import { describe, it, expect } from "vitest";
 import { getServiceBindings, getPresenceServiceBindings } from "./serviceBindings.js";
 
 describe("getServiceBindings", () => {
-  it("retorna exatamente os 3 serviços já existentes reconhecidos", () => {
+  it("retorna apenas serviços padrão do notebook", () => {
     const bindings = getServiceBindings();
-    expect(bindings).toHaveLength(3);
-    expect(bindings.map((b) => b.id)).toEqual(["samba", "tailscale", "jellyfin"]);
+    expect(bindings).toHaveLength(1);
+    expect(bindings.map((b) => b.id)).toEqual(["tailscale"]);
   });
 
-  it("usa os mesmos serviceName da allowlist existente (smbd/tailscaled/jellyfin)", () => {
+  it("usa serviceName da allowlist do notebook", () => {
     const bindings = getServiceBindings();
     const byId = Object.fromEntries(bindings.map((b) => [b.id, b.serviceName]));
-    expect(byId).toEqual({
-      samba: "smbd",
-      tailscale: "tailscaled",
-      jellyfin: "jellyfin",
-    });
+    expect(byId).toEqual({ tailscale: "tailscaled" });
   });
 
   it("nunca inclui campos de comando/escrita", () => {
@@ -32,7 +28,7 @@ describe("getServiceBindings", () => {
 describe("getPresenceServiceBindings", () => {
   it("retorna só id/label/role, sem relatedStorage nem serviceName", () => {
     const bindings = getPresenceServiceBindings();
-    expect(bindings).toHaveLength(3);
+    expect(bindings).toHaveLength(1);
     for (const binding of bindings) {
       expect(Object.keys(binding).sort()).toEqual(["id", "label", "role"]);
     }

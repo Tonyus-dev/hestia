@@ -3,6 +3,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
+import { legacyStoragePaths } from "./legacyStorageConfig.js";
 
 const pExecFile = promisify(execFile);
 
@@ -48,10 +49,6 @@ async function readOne(path) {
       error: "df indisponível",
     };
   }
-}
-
-function legacyStoragePaths() {
-  return ["/", process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE"];
 }
 
 export async function getStorageStatus(paths = legacyStoragePaths()) {

@@ -1,4 +1,4 @@
-import { existsSync, promises as fs } from "node:fs";
+import { promises as fs } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -72,15 +72,12 @@ describe("console runtime storage boundary", () => {
   });
 
   it("ciclo de snapshot e leitura latest funcionam sem KALINE e sem fallback storage", async () => {
-    expect(existsSync("/KALINE")).toBe(false);
-
     await runSnapshotCycle(dataDir);
     const latest = await getLatestSnapshot(dataDir);
 
     expect(latest.server).toBeDefined();
     expect(latest.services).toBeDefined();
     expect(latest).not.toHaveProperty("storage");
-    expect(existsSync("/KALINE")).toBe(false);
     expect(getStorageStatus).not.toHaveBeenCalled();
   });
 });

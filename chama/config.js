@@ -29,7 +29,7 @@ function loadUserConfig() {
   }
 }
 
-const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
+const ALLOWED_SERVICES = ["tailscaled"];
 const userCfg = loadUserConfig();
 
 const host = process.env.HESTIA_HOST || userCfg.host || "127.0.0.1";
@@ -42,12 +42,10 @@ export const config = {
   version: pkg.version || "0.1.0",
   host,
   port,
-  // Sobre exposição de rede (bind local vs LAN), não sobre capacidade de escrita — essa
-  // vive em chama/capabilities.js (fonte única de verdade: writing.modifyStorage).
-  mode: "Modo protegido: leitura por padrão; escrita local somente por ações explícitas, allowlisted e auditáveis.",
+  mode: "Console do notebook: leitura local para saúde, hardware, logs, configuração e serviços.",
   readonly: true,
   readonlyByDefault: true,
-  controlledWrites: true,
+  controlledWrites: false,
   lanEnabled: !isLoopbackHost(host),
   // Diretório de dados persistentes (identidade, eventos, snapshots). Só
   // vem de env/systemd — nunca do whitelist de ~/.chama/config.json.

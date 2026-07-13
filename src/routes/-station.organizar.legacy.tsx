@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { hestiaApi } from "@/lib/hestia/api";
+import { hestiaLegacyApi } from "@/lib/hestia/api";
 import type { OrganizerPlan, OrganizerRunManifest } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
@@ -26,9 +26,9 @@ function downloadJson(filename: string, value: unknown) {
 export const Route = createFileRoute("/_station/organizar")({
   head: () => ({
     meta: [
-      { title: "Héstia Station — Organizar" },
+      { title: "Héstia Console — Organizar" },
       { name: "description", content: "Planos aprovados, apply, undo, redo e runs anteriores." },
-      { property: "og:title", content: "Héstia Station — Organizar" },
+      { property: "og:title", content: "Héstia Console — Organizar" },
       {
         property: "og:description",
         content: "Ações locais em modo protegido, sempre por plano aprovado.",
@@ -39,7 +39,7 @@ export const Route = createFileRoute("/_station/organizar")({
 });
 
 export function OrganizarPage() {
-  const runs = useApi(hestiaApi.organizerRuns);
+  const runs = useApi(hestiaLegacyApi.organizerRuns);
 
   const [plan, setPlan] = useState<OrganizerPlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -61,7 +61,7 @@ export function OrganizarPage() {
     setPlanError(null);
     setApplyResult(null);
     setApplyError(null);
-    const result = await hestiaApi.organizerPlan();
+    const result = await hestiaLegacyApi.organizerPlan();
     setPlanLoading(false);
     if (result.status === "ok") {
       setPlan(result.data);
@@ -74,7 +74,10 @@ export function OrganizarPage() {
     if (!plan) return;
     setApplying(true);
     setApplyError(null);
-    const result = await hestiaApi.organizerApply(plan.planId, !!plan.requiresExtraConfirmation);
+    const result = await hestiaLegacyApi.organizerApply(
+      plan.planId,
+      !!plan.requiresExtraConfirmation,
+    );
     setApplying(false);
     if (result.status === "ok") {
       setApplyResult(result.data);
@@ -88,7 +91,7 @@ export function OrganizarPage() {
   async function handleUndo(runId: string) {
     setUndoingRunId(runId);
     setUndoError(null);
-    const result = await hestiaApi.organizerUndo(runId);
+    const result = await hestiaLegacyApi.organizerUndo(runId);
     setUndoingRunId(null);
     if (result.status === "ok") {
       runs.retry();
@@ -100,7 +103,7 @@ export function OrganizarPage() {
   async function handleRedo(undoRunId: string) {
     setRedoingRunId(undoRunId);
     setRedoError(null);
-    const result = await hestiaApi.organizerRedo(undoRunId);
+    const result = await hestiaLegacyApi.organizerRedo(undoRunId);
     setRedoingRunId(null);
     if (result.status === "ok") {
       runs.retry();

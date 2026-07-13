@@ -14,9 +14,9 @@ export function getCapabilities() {
       executeCommands: false,
       configureServices: false,
       manageBackups: false,
-      modifyStorage: true,
+      modifyStorage: false,
       manageUsers: false,
     },
-    mode: "local-write-with-approval",
+    mode: "notebook-console",
   };
 }

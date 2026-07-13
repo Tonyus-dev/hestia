@@ -23,16 +23,9 @@ describe("getServicesStatus", () => {
   });
 
   it("maps systemctl show output without shell", async () => {
-    execFile
-      .mockImplementationOnce((command, args, options, callback) => {
-        callback(null, "not-found\ninactive\n", "");
-      })
-      .mockImplementationOnce((command, args, options, callback) => {
-        callback(null, "loaded\ninactive\n", "");
-      })
-      .mockImplementationOnce((command, args, options, callback) => {
-        callback(null, "loaded\nactive\n", "");
-      });
+    execFile.mockImplementationOnce((command, args, options, callback) => {
+      callback(null, "loaded\nactive\n", "");
+    });
 
     const { items } = await getServicesStatus();
 
@@ -43,8 +36,6 @@ describe("getServicesStatus", () => {
       expect.any(Function),
     );
     expect(items.map(({ name, active, status }) => ({ name, active, status }))).toEqual([
-      { name: "jellyfin", active: false, status: "not-installed" },
-      { name: "smbd", active: false, status: "inactive" },
       { name: "tailscaled", active: true, status: "active" },
     ]);
   });
@@ -58,7 +49,7 @@ describe("getServicesStatus", () => {
 
     const { items } = await getServicesStatus();
 
-    expect(items).toHaveLength(3);
+    expect(items).toHaveLength(1);
     expect(items.every((item) => item.active === false && item.status === "unavailable")).toBe(
       true,
     );

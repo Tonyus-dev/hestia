@@ -4,21 +4,9 @@
 export function getServiceBindings() {
   return [
     {
-      id: "samba",
-      serviceName: "smbd",
-      label: "Samba",
-      role: "Serviço local observado",
-    },
-    {
       id: "tailscale",
       serviceName: "tailscaled",
       label: "Tailscale",
-      role: "Serviço local observado",
-    },
-    {
-      id: "jellyfin",
-      serviceName: "jellyfin",
-      label: "Jellyfin",
       role: "Serviço local observado",
     },
   ];

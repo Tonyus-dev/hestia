@@ -9,6 +9,7 @@ import { readdir, stat, lstat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { getStorageModel } from "./storageModel.js";
 import { config } from "./config.js";
+import { legacyStorageRoot } from "./legacyStorageConfig.js";
 
 export const DEFAULT_INDEX_LIMITS = {
   maxDepth: 12,
@@ -24,7 +25,7 @@ const IGNORED_DIR_NAMES = new Set([
   "System Volume Information",
 ]);
 function getIgnoredKalineDirs() {
-  const root = process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE";
+  const root = legacyStorageRoot();
   return new Set([
     join(root, "ash"),
     join(root, "codice"),

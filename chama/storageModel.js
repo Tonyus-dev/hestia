@@ -1,4 +1,5 @@
 import path from "node:path";
+import { legacyStorageRoot } from "./legacyStorageConfig.js";
 
 function folder({
   id,
@@ -273,7 +274,7 @@ const FOLDERS = [
 ];
 
 export function getStorageModel() {
-  const root = process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE";
+  const root = legacyStorageRoot();
   const mappedFolders = FOLDERS.map((f) => ({
     ...f,
     absolutePath: path.join(root, f.relativePath),

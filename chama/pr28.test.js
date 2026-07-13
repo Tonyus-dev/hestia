@@ -353,8 +353,15 @@ describe("PR #28 - Codice and Organizer Security Contracts", () => {
       const book = libData.books.find((b) => b.name === "removido.epub");
       expect(book).toBeDefined();
 
-      // Torna o arquivo ilegível para simular falha de abertura/leitura física
-      await fs.chmod(bookPath, 0o000);
+      const realOpen = fs.open.bind(fs);
+      const openSpy = vi.spyOn(fs, "open").mockImplementation(async (file, flags, mode) => {
+        if (file === bookPath) {
+          const err = new Error("simulated open failure");
+          err.code = "EACCES";
+          throw err;
+        }
+        return await realOpen(file, flags, mode);
+      });
 
       try {
         const resGet = await app.inject({
@@ -373,8 +380,7 @@ describe("PR #28 - Codice and Organizer Security Contracts", () => {
         expect(strPayload).not.toContain("/KALINE");
         expect(strPayload).not.toContain("tonyus-dev");
       } finally {
-        // Restaura permissão para permitir remoção limpa
-        await fs.chmod(bookPath, 0o644).catch(() => {});
+        openSpy.mockRestore();
       }
     });
 

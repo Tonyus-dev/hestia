@@ -1,4 +1,4 @@
-// Héstia Station — small static content shared by the shell.
+// Héstia Console — small static content shared by the shell.
 // No mocked metrics. All live data comes from /api/* via src/lib/hestia/api.ts.
 
 export type NavItem = {
@@ -17,10 +17,10 @@ export const nav: NavItem[] = [
 ];
 
 export const HESTIA = {
-  appName: "Héstia Station",
-  serverName: "Héstia Station",
+  appName: "Héstia Console",
+  serverName: "Héstia Console",
   agentName: "Chama Local",
-  subtitle: "Console visual da Héstia Station com Chama Local embutida",
+  subtitle: "Console visual da Héstia Console com Chama Local embutida",
   motto:
     "Héstia é a Estação. A Chama é o pulso. O Console é a face. Presence consulta. Kaline decide.",
   waiting: "Aguardando Chama Local",
@@ -30,7 +30,7 @@ export const HESTIA = {
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
   stationBaseUrl: null,
-  services: ["jellyfin", "smbd", "tailscaled"],
+  services: ["tailscaled"],
   endpoints: [
     {
       method: "GET",

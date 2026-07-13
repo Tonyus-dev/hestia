@@ -22,8 +22,8 @@ describe("getManifest", () => {
     const manifest = getManifest();
     expect(manifest.capabilities.readonly).toBe(true);
     expect(manifest.capabilities.readonlyByDefault).toBe(true);
-    expect(manifest.capabilities.controlledWrites).toBe(true);
-    expect(manifest.capabilities.writeCapabilities).toContain("organizer.apply");
+    expect(manifest.capabilities.controlledWrites).toBe(false);
+    expect(manifest.capabilities.writeCapabilities).toEqual([]);
   });
 
   it("sempre retorna o mesmo objeto (sem mutação)", () => {
