@@ -2,7 +2,7 @@
 // No mocked metrics. All live data comes from /api/* via src/lib/hestia/api.ts.
 
 export type NavItem = {
-  to: "/" | "/sistema" | "/servicos" | "/historico" | "/config" | "/endpoints";
+  to: "/" | "/sistema" | "/storage" | "/organizar" | "/servicos" | "/historico" | "/config" | "/endpoints";
   label: string;
   hint?: string;
 };
@@ -10,6 +10,8 @@ export type NavItem = {
 export const nav: NavItem[] = [
   { to: "/", label: "Painel", hint: "cockpit" },
   { to: "/sistema", label: "Sistema", hint: "hardware real" },
+  { to: "/storage", label: "Storage", hint: "/KALINE" },
+  { to: "/organizar", label: "Organizar", hint: "plano aprovado" },
   { to: "/servicos", label: "Serviços", hint: "status real" },
   { to: "/historico", label: "Histórico", hint: "runs e eventos" },
   { to: "/config", label: "Configuração", hint: "modo protegido" },
