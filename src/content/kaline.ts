@@ -2,7 +2,15 @@
 // No mocked metrics. All live data comes from /api/* via src/lib/hestia/api.ts.
 
 export type NavItem = {
-  to: "/" | "/sistema" | "/storage" | "/organizar" | "/servicos" | "/historico" | "/config" | "/endpoints";
+  to:
+    | "/"
+    | "/sistema"
+    | "/storage"
+    | "/organizar"
+    | "/servicos"
+    | "/historico"
+    | "/config"
+    | "/endpoints";
   label: string;
   hint?: string;
 };

@@ -32,7 +32,7 @@ function SambaIndicator() {
             ? "bg-[color:var(--kaline-faint)]/50"
             : isActive
               ? "bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.6)]"
-              : "bg-[#ef4444] shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+              : "bg-[#ef4444] shadow-[0_0_8px_rgba(239,68,68,0.6)]",
         )}
       />
     </div>
@@ -104,4 +104,3 @@ export function TopBar() {
     </header>
   );
 }
-

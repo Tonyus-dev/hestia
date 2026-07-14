@@ -423,8 +423,12 @@ app.get("/api/local/organizer/runs/:runId", async (req, reply) => {
   }
   return run;
 });
-app.post("/api/local/organizer/undo", async (req) => undoOrganizerRun(req.body.runId, config.dataDir));
-app.post("/api/local/organizer/redo", async (req) => redoOrganizerRun(req.body.undoRunId, config.dataDir));
+app.post("/api/local/organizer/undo", async (req) =>
+  undoOrganizerRun(req.body.runId, config.dataDir),
+);
+app.post("/api/local/organizer/redo", async (req) =>
+  redoOrganizerRun(req.body.undoRunId, config.dataDir),
+);
 
 // --- Rotas de Presence (read-only): consulta same-origin/local --------
 app.get(
