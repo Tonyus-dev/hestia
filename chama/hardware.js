@@ -5,6 +5,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "./config.js";
 import { getServicesStatus } from "./services.js";
+import { publicStationConfig } from "./stationClient.js";
 
 const pExecFile = promisify(execFile);
 const rank = { ok: 0, warn: 1, critical: 2, unavailable: -1 };
@@ -224,7 +225,7 @@ export async function getHardwareConfig(execFileImpl = pExecFile) {
       port: config.port,
       mode: config.mode,
       lanEnabled: config.lanEnabled,
-      stationBaseUrl: config.stationBaseUrl,
+      ...publicStationConfig(),
       services: config.services,
     },
   };

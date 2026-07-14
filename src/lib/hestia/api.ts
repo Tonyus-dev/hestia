@@ -136,7 +136,9 @@ export type HardwareConfig = {
     port: number;
     mode: string;
     lanEnabled: boolean;
-    stationBaseUrl: string | null;
+    stationConfigured: boolean;
+    stationAuthConfigured: boolean;
+    stationTimeoutMs: number;
     services: string[];
   };
 };
@@ -178,6 +180,32 @@ export type HermesStatus = {
   checkedAt: string;
 };
 
+export type StationState =
+  | "not_configured"
+  | "misconfigured"
+  | "available"
+  | "unavailable"
+  | "unauthorized"
+  | "incompatible";
+
+export type StationHealth = {
+  ok: true;
+  schemaVersion: 1;
+  service: "hestia-station-agent";
+  version: string;
+  checkedAt: string;
+};
+
+export type StationConnection = {
+  ok: true;
+  configured: boolean;
+  state: StationState;
+  checkedAt: string;
+  latencyMs: number | null;
+  station: null | { service: "hestia-station-agent"; schemaVersion: 1; version: string };
+  code?: string;
+};
+
 export type Config = {
   appName: string;
   serverName: string;
@@ -189,7 +217,9 @@ export type Config = {
   readonly: boolean;
   controlledWrites: boolean;
   lanEnabled: boolean;
-  stationBaseUrl: string | null;
+  stationConfigured: boolean;
+  stationAuthConfigured: boolean;
+  stationTimeoutMs: number;
   services: string[];
 };
 
@@ -492,6 +522,8 @@ export const hestiaApi = {
   logs: (tail?: number) =>
     safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
+  stationConnection: () => safeFetch<StationConnection>("/api/station/connection"),
+  stationHealth: () => safeFetch<StationHealth>("/api/station/health"),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;

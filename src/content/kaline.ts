@@ -28,7 +28,9 @@ export const HESTIA = {
   footer: "Héstia é o Console. Chama pulsa. Console mostra. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
-  stationBaseUrl: null,
+  stationConfigured: false,
+  stationAuthConfigured: false,
+  stationTimeoutMs: 5000,
   services: ["tailscaled"],
   endpoints: [
     {
@@ -95,7 +97,17 @@ export const HESTIA = {
       group: "Leitura / diagnóstico",
       path: "/api/config",
       purpose: "configuração modo protegido",
-      fields: ["appName", "host", "port", "mode", "readonly", "stationBaseUrl", "services"],
+      fields: [
+        "appName",
+        "host",
+        "port",
+        "mode",
+        "readonly",
+        "stationConfigured",
+        "stationAuthConfigured",
+        "stationTimeoutMs",
+        "services",
+      ],
     },
   ] as const,
 };

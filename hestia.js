@@ -7,6 +7,12 @@ import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
 
 import { config } from "./chama/config.js";
+import {
+  fetchStationHealth,
+  getStationConnectionStatus,
+  publicStationConfig,
+  stationHealthHttpStatus,
+} from "./chama/stationClient.js";
 import { getHealth } from "./chama/health.js";
 import { getServerStatus } from "./chama/system.js";
 import { getServicesStatus } from "./chama/services.js";
@@ -299,6 +305,21 @@ app.get("/api/logs", async (req) => {
   const tail = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 200) : 100;
   return getLogs(tail);
 });
+
+app.get("/api/station/connection", async () => getStationConnectionStatus());
+app.get("/api/station/health", async (req, reply) => {
+  const result = await fetchStationHealth();
+  if (result.ok) return result.station;
+  reply.code(stationHealthHttpStatus(result.code));
+  return {
+    ok: false,
+    code: result.code,
+    state: result.state,
+    error: "Station health indisponível",
+    checkedAt: result.checkedAt,
+  };
+});
+
 app.get("/api/config", async () => ({
   appName: config.appName,
   serverName: config.serverName,
@@ -310,7 +331,7 @@ app.get("/api/config", async () => ({
   readonly: config.readonly,
   controlledWrites: config.controlledWrites,
   lanEnabled: config.lanEnabled,
-  stationBaseUrl: config.stationBaseUrl,
+  ...publicStationConfig(),
   services: config.services,
 }));
 

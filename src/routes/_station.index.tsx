@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { hestiaApi } from "@/lib/hestia/api";
+import { hestiaApi, type StationConnection } from "@/lib/hestia/api";
 import { usePollingApi } from "@/lib/hestia/usePollingApi";
 import { useApi } from "@/lib/hestia/useApi";
 import { MetricCard } from "@/components/hestia/shared/MetricCard";
@@ -13,6 +13,7 @@ function Painel() {
   const hw = usePollingApi(hestiaApi.hardwareStatus, 5000);
   const logs = useApi(() => hestiaApi.logs(20));
   const config = useApi(hestiaApi.config);
+  const station = useApi(hestiaApi.stationConnection);
   const d = hw.state.status === "ok" ? hw.state.data : null;
 
   return (
@@ -113,13 +114,83 @@ function Painel() {
           />
         </DataCard>
 
-        <DataCard title="Estação" eyebrow="futuro" status="idle" defaultOpen>
-          <p className="text-sm text-[color:var(--kaline-muted)]">Não configurada.</p>
-          <p className="mt-2 text-sm text-[color:var(--kaline-muted)]">
-            A Estação será configurada em uma etapa posterior.
-          </p>
+        <DataCard
+          title="Estação"
+          eyebrow="cliente server-side"
+          status={station.state.status === "ok" ? station.state.data.state : "idle"}
+          defaultOpen
+        >
+          {station.state.status === "loading" && (
+            <p className="text-sm text-[color:var(--kaline-muted)]">Verificando Estação…</p>
+          )}
+          {station.state.status === "unavailable" && (
+            <UnavailableNote
+              message={station.state.message}
+              details={station.state.details}
+              onRetry={station.retry}
+              refreshing={station.refreshing}
+            />
+          )}
+          {station.state.status === "ok" && <StationConnectionBody data={station.state.data} />}
+          <button
+            onClick={station.retry}
+            disabled={station.refreshing}
+            className="mt-4 rounded border border-[color:var(--kaline-border-copper)] px-3 py-2 text-xs text-[color:var(--kaline-copper)] disabled:opacity-60"
+          >
+            {station.refreshing ? "Verificando…" : "Verificar novamente"}
+          </button>
         </DataCard>
       </section>
     </div>
+  );
+}
+
+function StationConnectionBody({ data }: { data: StationConnection }) {
+  if (data.state === "not_configured") {
+    return (
+      <>
+        <p className="text-sm text-[color:var(--kaline-muted)]">Estação não configurada.</p>
+        <p className="mt-2 text-sm text-[color:var(--kaline-muted)]">
+          Defina a conexão no ambiente do serviço.
+        </p>
+      </>
+    );
+  }
+  if (data.state === "misconfigured") {
+    return (
+      <p className="text-sm text-[color:var(--kaline-muted)]">Configuração da Estação inválida.</p>
+    );
+  }
+  if (data.state === "available") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm text-[color:var(--kaline-muted)]">Estação disponível.</p>
+        <Row k="Agent" v={data.station?.service ?? "—"} />
+        <Row k="Versão" v={data.station?.version ?? "—"} />
+        <Row k="Latência" v={data.latencyMs == null ? "—" : `${data.latencyMs} ms`} />
+      </div>
+    );
+  }
+  if (data.state === "unauthorized") {
+    return (
+      <p className="text-sm text-[color:var(--kaline-muted)]">
+        A Estação recusou a credencial configurada.
+      </p>
+    );
+  }
+  if (data.state === "incompatible") {
+    return (
+      <p className="text-sm text-[color:var(--kaline-muted)]">
+        A Estação respondeu com um contrato incompatível.
+      </p>
+    );
+  }
+  return (
+    <>
+      <p className="text-sm text-[color:var(--kaline-muted)]">Estação indisponível.</p>
+      <p className="mt-2 text-sm text-[color:var(--kaline-muted)]">
+        O Console local continua funcionando normalmente.
+      </p>
+    </>
   );
 }
