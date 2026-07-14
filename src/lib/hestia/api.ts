@@ -38,6 +38,7 @@ export type Health = {
   frontendBuilt?: boolean;
   serviceUser?: string;
   dataDirWritable?: boolean;
+  sambaActive?: boolean;
 };
 
 export type ServerStatus = {
