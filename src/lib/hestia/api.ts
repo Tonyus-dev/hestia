@@ -585,7 +585,7 @@ export const hestiaLegacyApi = {
   storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
   storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
-  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 60000),
+  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 3600000),
   organizerApply: (planId: string, largePlanConfirm = false) =>
     safePost<OrganizerRunManifest>(
       "/api/local/organizer/apply",
@@ -594,7 +594,7 @@ export const hestiaLegacyApi = {
         "x-hestia-local-confirm": "organize",
         ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
       },
-      60000,
+      3600000,
     ),
   organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
   organizerRun: (runId: string) =>
@@ -604,21 +604,21 @@ export const hestiaLegacyApi = {
       `/api/local/organizer/runs/${runId}/undo`,
       {},
       { "x-hestia-local-confirm": "organize" },
-      60000,
+      3600000,
     ),
   organizerRedo: (undoRunId: string) =>
     safePost<OrganizerRunManifest>(
       `/api/local/organizer/runs/${undoRunId}/redo`,
       {},
       { "x-hestia-local-confirm": "organize" },
-      60000,
+      3600000,
     ),
   codiceLibrary: () => safeFetch<CodiceLibrary>("/api/codice/library"),
   codiceImport: async (file: File, name: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
     const url = `${base}/api/codice/import?name=${encodeURIComponent(name)}`;
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 60000);
+    const t = setTimeout(() => controller.abort(), 3600000);
     try {
       const res = await fetch(url, {
         method: "POST",
@@ -633,7 +633,7 @@ export const hestiaLegacyApi = {
       const data = (await res.json()) as CodiceImportResult;
       return { status: "ok", data, fetchedAt: new Date().toISOString() };
     } catch (err) {
-      return handleFetchException<CodiceImportResult>(err, "POST", "/api/codice/import", 60000);
+      return handleFetchException<CodiceImportResult>(err, "POST", "/api/codice/import", 3600000);
     } finally {
       clearTimeout(t);
     }
