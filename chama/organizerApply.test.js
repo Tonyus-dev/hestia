@@ -145,16 +145,10 @@ describe("applyOrganizerPlan", () => {
     expect(manifest.operations[0].status).toBe("skipped");
   });
 
-  it("faz fallback copy+verify+unlink quando rename lança EXDEV (cross-device)", async () => {
+  it("move por cópia verificada a partir da origem aberta e remove a origem", async () => {
     const sourcePath = join(workDir, "cross-device.mp4");
     const targetPath = join(workDir, "destino", "cross-device.mp4");
     await fs.writeFile(sourcePath, "conteudo-video-grande");
-
-    const linkSpy = vi.spyOn(fs, "link").mockImplementationOnce(() => {
-      const err = new Error("cross-device link");
-      err.code = "EXDEV";
-      return Promise.reject(err);
-    });
 
     const plan = {
       planId: "plan_exdev",
@@ -167,7 +161,6 @@ describe("applyOrganizerPlan", () => {
     await expect(fs.access(sourcePath)).rejects.toThrow();
     const content = await fs.readFile(targetPath, "utf8");
     expect(content).toBe("conteudo-video-grande");
-    expect(linkSpy).toHaveBeenCalled();
   });
 
   it("continua em falha parcial: um item falha, outro é aplicado com sucesso", async () => {
@@ -231,6 +224,41 @@ describe("applyOrganizerPlan safety gates", () => {
       dataDir,
     );
     expect(manifest.status).toBe("applied");
+  });
+
+  it("recusa se sourcePath for trocado depois da abertura verificada", async () => {
+    const sourcePath = join(workDir, "troca.txt");
+    const originalPath = join(workDir, "troca-original.txt");
+    const targetPath = join(workDir, "destino", "troca.txt");
+    await fs.writeFile(sourcePath, "original");
+
+    const originalOpen = fs.open;
+    const openSpy = vi.spyOn(fs, "open").mockImplementation(async (pathValue, flags, mode) => {
+      const handle = await originalOpen(pathValue, flags, mode);
+      if (pathValue === sourcePath) {
+        await fs.rename(sourcePath, originalPath);
+        await fs.writeFile(sourcePath, "trocado");
+      }
+      return handle;
+    });
+
+    const manifest = await applyOrganizerPlan(
+      {
+        planId: "plan_source_swap",
+        generatedAt: new Date().toISOString(),
+        items: [{ id: "i1", sourcePath, targetPath, action: "copy", status: "planned" }],
+      },
+      dataDir,
+    );
+
+    expect(manifest.operations[0]).toMatchObject({
+      status: "skipped",
+      error: "sourcePath mudou após abertura",
+    });
+    await expect(fs.readFile(originalPath, "utf8")).resolves.toBe("original");
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("trocado");
+    await expect(fs.access(targetPath)).rejects.toThrow();
+    openSpy.mockRestore();
   });
 
   it("recusa target fora de /KALINE sem derrubar o lote", async () => {
@@ -315,14 +343,10 @@ describe("applyOrganizerPlan safety gates", () => {
     unlinkSpy.mockRestore();
   });
 
-  it("se fallback copyFile deu certo mas unlink da origem falhar, desfaz/remove a copia e falha a operacao", async () => {
+  it("se a cópia verificada deu certo mas unlink da origem falhar, desfaz/remove a copia e falha a operacao", async () => {
     const sourcePath = join(workDir, "origem.pdf");
     const targetPath = join(workDir, "destino", "origem.pdf");
     await fs.writeFile(sourcePath, "conteudo-pdf");
-
-    const linkSpy = vi
-      .spyOn(fs, "link")
-      .mockRejectedValue(Object.assign(new Error("cross-device"), { code: "EXDEV" }));
 
     const originalUnlink = fs.unlink;
     const unlinkSpy = vi.spyOn(fs, "unlink").mockImplementation((path) => {
@@ -351,7 +375,6 @@ describe("applyOrganizerPlan safety gates", () => {
 
     await expect(fs.access(targetPath)).rejects.toThrow();
 
-    linkSpy.mockRestore();
     unlinkSpy.mockRestore();
   });
 });

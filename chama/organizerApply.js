@@ -3,6 +3,7 @@
 // arquivos vindos do cliente). Operações permitidas: move, copy. Nunca sobrescreve um
 // targetPath existente (re-verificado aqui, mesmo que o plano já tenha marcado "conflict").
 // Nunca apaga sem antes verificar que a cópia foi bem-sucedida (fallback de EXDEV).
+import { constants } from "node:fs";
 import { promises as fs } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -62,45 +63,60 @@ function allowedRootFor(sourcePath) {
   return allowedSourceRoots().find((root) => isInside(sourcePath, root.path));
 }
 
+async function openVerifiedSource(sourcePath, sourceRoot) {
+  let sourceHandle;
+  try {
+    sourceHandle = await fs.open(sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch (err) {
+    if (err.code === "ELOOP") return { error: "sourcePath é symlink" };
+    return { error: "sourcePath não existe" };
+  }
+
+  const fail = async (error) => {
+    await sourceHandle.close().catch(() => {});
+    return { error };
+  };
+
+  try {
+    const handleStat = await sourceHandle.stat();
+    if (!handleStat.isFile()) return fail("sourcePath não é arquivo regular");
+
+    const pathStat = await fs.lstat(sourcePath);
+    if (pathStat.isSymbolicLink()) return fail("sourcePath é symlink");
+    if (pathStat.dev !== handleStat.dev || pathStat.ino !== handleStat.ino) {
+      return fail("sourcePath mudou após abertura");
+    }
+
+    const realSource = await fs.realpath(sourcePath);
+    const realSourceRoot = await fs.realpath(sourceRoot.path);
+    if (!isInside(realSource, realSourceRoot)) {
+      return fail("sourcePath escapa da fonte permitida via realpath");
+    }
+
+    return { sourceHandle, sourceStat: handleStat };
+  } catch (err) {
+    return fail(err.code || err.message);
+  }
+}
+
 async function validateItem(item) {
-  if (!["move", "copy"].includes(item.action)) return "action não permitida";
+  if (!["move", "copy"].includes(item.action)) return { error: "action não permitida" };
 
   const sourceRoot = allowedRootFor(item.sourcePath);
-  if (!sourceRoot) return "sourcePath fora das fontes permitidas";
+  if (!sourceRoot) return { error: "sourcePath fora das fontes permitidas" };
   if (sourceRoot.kind === "external" && item.action !== "copy") {
-    return "fonte externa aceita apenas copy";
-  }
-
-  let sourceStat;
-  try {
-    sourceStat = await fs.lstat(item.sourcePath);
-  } catch {
-    return "sourcePath não existe";
-  }
-  if (sourceStat.isSymbolicLink()) return "sourcePath é symlink";
-  if (!sourceStat.isFile()) return "sourcePath não é arquivo regular";
-
-  let realSource;
-  let realSourceRoot;
-  try {
-    realSource = await fs.realpath(item.sourcePath);
-    realSourceRoot = await fs.realpath(sourceRoot.path);
-  } catch (err) {
-    return err.code || err.message;
-  }
-  if (!isInside(realSource, realSourceRoot)) {
-    return "sourcePath escapa da fonte permitida via realpath";
+    return { error: "fonte externa aceita apenas copy" };
   }
 
   // 1. Validação lexical básica contra travessia
   const targetAbs = resolve(item.targetPath);
   const rootAbs = resolve(kalineRoot());
   if (!isInside(targetAbs, rootAbs)) {
-    return "targetPath fora de /KALINE";
+    return { error: "targetPath fora de /KALINE" };
   }
 
   if (resolve(item.sourcePath) === targetAbs) {
-    return "sourcePath igual a targetPath";
+    return { error: "sourcePath igual a targetPath" };
   }
 
   // 2. Localizar o primeiro ancestral existente de targetPath
@@ -108,7 +124,7 @@ async function validateItem(item) {
   try {
     ancestor = await getNearestExistingAncestor(targetAbs);
   } catch (err) {
-    return err.message;
+    return { error: err.message };
   }
 
   // 3. Resolver realpath do ancestral
@@ -116,13 +132,13 @@ async function validateItem(item) {
   try {
     realAncestor = await fs.realpath(ancestor.path);
   } catch (err) {
-    return `erro ao obter realpath do ancestral: ${err.code || err.message}`;
+    return { error: `erro ao obter realpath do ancestral: ${err.code || err.message}` };
   }
 
   // 4. Validar se o realpath do ancestral está contido em /KALINE
   const realRoot = await fs.realpath(rootAbs);
   if (!isInside(realAncestor, realRoot)) {
-    return "targetPath ancestral escapa de /KALINE";
+    return { error: "targetPath ancestral escapa de /KALINE" };
   }
 
   // 5. Criar os diretórios e validar o targetPath final
@@ -130,16 +146,22 @@ async function validateItem(item) {
     await fs.mkdir(dirname(targetAbs), { recursive: true });
     const realTargetDir = await fs.realpath(dirname(targetAbs));
     if (!isInside(realTargetDir, realRoot)) {
-      return "targetPath escapa de /KALINE via symlink/realpath";
+      return { error: "targetPath escapa de /KALINE via symlink/realpath" };
     }
   } catch (err) {
-    return err.code || err.message;
+    return { error: err.code || err.message };
   }
 
   if (await targetExists(targetAbs)) {
-    return "target já existe (conflito)";
+    return { error: "target já existe (conflito)" };
   }
-  return null;
+
+  const source = await openVerifiedSource(item.sourcePath, sourceRoot);
+  if (source.error) {
+    await source.sourceHandle?.close().catch(() => {});
+    return { error: source.error };
+  }
+  return source;
 }
 
 function assertPlanFresh(plan) {
@@ -160,6 +182,49 @@ function assertLargePlanConfirmed(plan, confirmedPlanId) {
       code: "ELARGEPLANCONFIRM",
       detail: `Este plano afeta ${planned} arquivos.`,
     });
+  }
+}
+
+async function copyOpenFileExclusive(sourceHandle, sourceStat, targetPath) {
+  const targetHandle = await fs.open(targetPath, "wx");
+  let written = 0;
+  try {
+    const buffer = Buffer.alloc(1024 * 1024);
+    let position = 0;
+    while (true) {
+      const { bytesRead } = await sourceHandle.read(buffer, 0, buffer.length, position);
+      if (bytesRead === 0) break;
+      let chunkOffset = 0;
+      while (chunkOffset < bytesRead) {
+        const { bytesWritten } = await targetHandle.write(
+          buffer,
+          chunkOffset,
+          bytesRead - chunkOffset,
+        );
+        chunkOffset += bytesWritten;
+      }
+      position += bytesRead;
+      written += bytesRead;
+    }
+  } catch (err) {
+    await fs.unlink(targetPath).catch(() => {});
+    throw err;
+  } finally {
+    await targetHandle.close();
+  }
+
+  if (written !== sourceStat.size) {
+    await fs.unlink(targetPath).catch(() => {});
+    throw new Error("verificação de tamanho falhou após cópia");
+  }
+}
+
+async function sourcePathStillMatchesHandle(sourcePath, sourceStat) {
+  try {
+    const currentStat = await fs.lstat(sourcePath);
+    return currentStat.dev === sourceStat.dev && currentStat.ino === sourceStat.ino;
+  } catch {
+    return false;
   }
 }
 
@@ -205,13 +270,22 @@ export async function applyItem(item) {
   if (item.status === "ignored" || item.sourcePath === item.targetPath) {
     return { ...item, status: "skipped", error: item.ignoredReason || "item ignorado no plano" };
   }
-  const validationError = await validateItem(item);
-  if (validationError) return { ...item, status: "skipped", error: validationError };
+  const validation = await validateItem(item);
+  if (validation.error) return { ...item, status: "skipped", error: validation.error };
+  const { sourceHandle, sourceStat } = validation;
   try {
+    await copyOpenFileExclusive(sourceHandle, sourceStat, item.targetPath);
     if (item.action === "move") {
-      await moveWithExdevFallback(item.sourcePath, item.targetPath);
-    } else {
-      await fs.copyFile(item.sourcePath, item.targetPath, fs.constants.COPYFILE_EXCL);
+      if (!(await sourcePathStillMatchesHandle(item.sourcePath, sourceStat))) {
+        await fs.unlink(item.targetPath).catch(() => {});
+        return { ...item, status: "skipped", error: "sourcePath mudou antes de remover origem" };
+      }
+      try {
+        await fs.unlink(item.sourcePath);
+      } catch (err) {
+        await fs.unlink(item.targetPath).catch(() => {});
+        throw err;
+      }
     }
     const targetStat = await fs.stat(item.targetPath);
     return {
@@ -222,6 +296,8 @@ export async function applyItem(item) {
     };
   } catch (err) {
     return { ...item, status: "failed", error: err.code || err.message };
+  } finally {
+    await sourceHandle.close().catch(() => {});
   }
 }
 
