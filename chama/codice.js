@@ -183,7 +183,7 @@ async function indexLibrary(storagePathBase) {
     await scan(rootPath, 0);
   }
 
-  const generatedAtIso = new Date().toISOString();
+  const generatedAtIso = new Date(now).toISOString();
   cache = {
     storageRoot: normRoot,
     generatedAt: generatedAtIso,
