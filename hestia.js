@@ -33,7 +33,10 @@ import {
   isAllowedHostHeader,
   isOriginAllowed,
   RateLimiter,
+  applyCodiceCors,
 } from "./chama/security.js";
+import { registerCodiceRoutes } from "./chama/codiceRoutes.js";
+
 import { createSsrFetcher, copyResponseHeaders } from "./chama/ssr.js";
 import { ensureDataDir } from "./chama/dataDir.js";
 import { runSnapshotCycle, SNAPSHOT_INTERVAL_MS, getLatestSnapshot } from "./chama/snapshots.js";
@@ -221,6 +224,13 @@ app.addHook("onRequest", async (req, reply) => {
   if (req.method === "OPTIONS") return reply.code(204).send();
 });
 
+// --- CORS opt-in só para /api/codice/* (Códice Web App). --------
+app.addHook("onRequest", async (req, reply) => {
+  if (!req.url.startsWith("/api/codice/")) return;
+  applyCodiceCors(req, reply, config.codiceCorsOrigin);
+  if (req.method === "OPTIONS") return reply.code(204).send();
+});
+
 // --- CORS opt-in só para /api/presence/* (Presence pública, outra origem). --
 // Nunca cobre /api/local/* nem o resto de /api/* — a proteção do header de confirmação de
 // escrita depende justamente de não ter CORS habilitado ali (ver hook acima). Desligado por
@@ -256,6 +266,9 @@ app.addHook("onSend", async (req, reply, payload) => {
   reply.header("Content-Security-Policy", CSP);
   if (req.url.startsWith("/api/llm/")) {
     applyKalineLlmCors(req, reply);
+  }
+  if (req.url.startsWith("/api/codice/")) {
+    applyCodiceCors(req, reply, config.codiceCorsOrigin);
   }
   if (req.url.startsWith("/api/presence/")) {
     const origin = req.headers.origin;
@@ -327,8 +340,12 @@ app.get("/api/storage/scan", async () => ({
   kaline: await scanStorageModel(),
   sources: await scanConfiguredSources(),
 }));
-app.get("/api/storage/organizer/plan", async () => {
-  const plan = await generateOrganizerPlan();
+app.get("/api/storage/organizer/plan", async (req) => {
+  const extParam = req.query?.extensions;
+  const allowedExtensions = extParam
+    ? extParam.split(",").map((e) => e.trim().toLowerCase())
+    : null;
+  const plan = await generateOrganizerPlan(undefined, allowedExtensions);
   await writePlan(plan, config.dataDir);
   return plan;
 });
@@ -367,9 +384,13 @@ app.get("/api/config", async () => ({
   readonly: config.readonly,
   controlledWrites: config.controlledWrites,
   lanEnabled: config.lanEnabled,
+  stationBaseUrl: config.stationBaseUrl,
   ...publicStationConfig(),
   services: config.services,
 }));
+
+// --- Rotas do Códice (Leitura restrita) -------------------------------------
+registerCodiceRoutes(app, config);
 
 // --- Rotas locais de escrita controlada (organizer) -------------------------
 // Só aplica plano já gerado por GET /api/storage/organizer/plan (planId).

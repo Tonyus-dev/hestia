@@ -10,7 +10,9 @@ export type NavItem = {
     | "/servicos"
     | "/historico"
     | "/config"
-    | "/endpoints";
+    | "/endpoints"
+    | "/codice"
+    | "/assistente";
   label: string;
   hint?: string;
 };
@@ -20,6 +22,8 @@ export const nav: NavItem[] = [
   { to: "/sistema", label: "Sistema", hint: "hardware real" },
   { to: "/storage", label: "Storage", hint: "/KALINE" },
   { to: "/organizar", label: "Organizar", hint: "plano aprovado" },
+  { to: "/codice", label: "Códice", hint: "leis e epubs" },
+  { to: "/assistente", label: "Assistente", hint: "chat llm" },
   { to: "/servicos", label: "Serviços", hint: "status real" },
   { to: "/historico", label: "Histórico", hint: "runs e eventos" },
   { to: "/config", label: "Configuração", hint: "modo protegido" },

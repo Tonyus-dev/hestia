@@ -75,7 +75,9 @@ async function readTemperature() {
   try {
     const dirs = await readdir("/sys/class/thermal", { withFileTypes: true });
     const sensors = [];
-    for (const d of dirs.filter((x) => x.isDirectory() && x.name.startsWith("thermal_zone"))) {
+    for (const d of dirs.filter(
+      (x) => (x.isDirectory() || x.isSymbolicLink()) && x.name.startsWith("thermal_zone"),
+    )) {
       try {
         const raw = Number(
           (await readFile(join("/sys/class/thermal", d.name, "temp"), "utf8")).trim(),

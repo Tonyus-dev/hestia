@@ -38,6 +38,31 @@ export const Route = createFileRoute("/_station/organizar")({
   component: OrganizarPage,
 });
 
+const FILTERS = [
+  { label: "Todos os arquivos", value: "" },
+  {
+    label: "Livros & Códice (.pdf, .epub, .mobi, .azw3, .cbz, .cbr, .md, .txt)",
+    value: ".pdf,.epub,.mobi,.azw3,.cbz,.cbr,.md,.txt",
+  },
+  {
+    label: "Apenas Documentos (.doc, .docx, .xls, .xlsx, .ppt, .pptx, .odt, .ods, .odp, .csv)",
+    value: ".doc,.docx,.odt,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp",
+  },
+  {
+    label: "Apenas Mídia (.mp4, .mkv, .avi, .mov, .mp3, .flac, .wav, .jpg, .png, .webp, .heic)",
+    value:
+      ".mp4,.mkv,.avi,.mov,.webm,.mp3,.flac,.wav,.m4a,.jpg,.jpeg,.png,.webp,.heic,.raw,.cr2,.nef,.arw,.dng",
+  },
+  {
+    label: "Design & 3D (.svg, .psd, .fig, .ttf, .blend, .obj, .stl)",
+    value: ".svg,.ai,.eps,.psd,.fig,.ttf,.otf,.obj,.stl,.blend",
+  },
+  {
+    label: "Compactados / Bancos de Dados (.zip, .rar, .7z, .sqlite, .db, .sql)",
+    value: ".zip,.rar,.7z,.tar,.gz,.sqlite,.db,.sql",
+  },
+];
+
 export function OrganizarPage() {
   const runs = useApi(hestiaLegacyApi.organizerRuns);
 
@@ -56,12 +81,53 @@ export function OrganizarPage() {
   const [redoingRunId, setRedoingRunId] = useState<string | null>(null);
   const [redoError, setRedoError] = useState<string | null>(null);
 
+  const [selectedFilter, setSelectedFilter] = useState("");
+
+  // LLM Assistant states
+  const [assistantModel, setAssistantModel] = useState("qwen3.5-0.8b");
+  const [assistantInput, setAssistantInput] = useState("");
+  const [assistantMessages, setAssistantMessages] = useState<
+    { role: "user" | "assistant"; content: string }[]
+  >([]);
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
+
+  async function askAssistant(promptText: string) {
+    if (!plan || assistantLoading) return;
+    setAssistantLoading(true);
+    setAssistantError(null);
+    setAssistantMessages((prev) => [...prev, { role: "user", content: promptText }]);
+
+    const contextBlock = `ID do Plano: ${plan.planId}
+Total Planejado: ${plan.planned} arquivos
+Conflitos detectados: ${plan.summary.conflicts}
+Ignorados: ${plan.summary.ignored}
+Extensões: ${JSON.stringify(plan.summary.byExtension)}
+Destinos: ${JSON.stringify(plan.summary.byTargetArea)}
+Amostra de arquivos do plano (primeiros 20):
+${plan.items
+  .slice(0, 20)
+  .map((i) => `${i.sourcePath} -> ${i.targetPath} (${i.status} - ${i.reason})`)
+  .join("\n")}`;
+
+    const result = await hestiaLegacyApi.llmChat(promptText, assistantModel, contextBlock);
+    setAssistantLoading(false);
+    if (result.status === "ok" && result.data.ok) {
+      setAssistantMessages((prev) => [...prev, { role: "assistant", content: result.data.text }]);
+    } else {
+      setAssistantError(
+        result.status === "unavailable" ? result.message : "Erro ao consultar o assistente.",
+      );
+    }
+  }
+
   async function handleGeneratePlan() {
     setPlanLoading(true);
     setPlanError(null);
     setApplyResult(null);
     setApplyError(null);
-    const result = await hestiaLegacyApi.organizerPlan();
+    setAssistantMessages([]);
+    const result = await hestiaLegacyApi.organizerPlan(selectedFilter || undefined);
     setPlanLoading(false);
     if (result.status === "ok") {
       setPlan(result.data);
@@ -127,14 +193,33 @@ export function OrganizarPage() {
 
       <section className="grid gap-5 md:grid-cols-2">
         <DataCard eyebrow="Organizer" title="Plano de organização" status="idle" defaultOpen>
-          <button
-            type="button"
-            onClick={handleGeneratePlan}
-            disabled={planLoading}
-            className="text-[11px] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper)]/10 transition disabled:opacity-50"
-          >
-            {planLoading ? "gerando…" : "Gerar plano"}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 mb-4 items-start sm:items-center">
+            <div className="flex flex-col gap-1 w-full sm:w-auto">
+              <label className="text-[10px] uppercase tracking-wider text-[color:var(--kaline-muted)]">
+                Filtrar arquivos por tipo:
+              </label>
+              <select
+                value={selectedFilter}
+                onChange={(e) => setSelectedFilter(e.target.value)}
+                className="rounded border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] text-[color:var(--kaline-text)] text-[11px] px-2 py-1 focus:outline-none focus:border-[color:var(--kaline-copper)] w-full"
+              >
+                {FILTERS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGeneratePlan}
+              disabled={planLoading}
+              className="text-[11px] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper)]/10 transition disabled:opacity-50 sm:mt-5"
+            >
+              {planLoading ? "gerando…" : "Gerar plano"}
+            </button>
+          </div>
 
           {planError && (
             <p className="mt-2 text-[12px] text-[color:var(--kaline-ember)]">{planError}</p>
@@ -352,6 +437,138 @@ export function OrganizarPage() {
             <p className="mt-2 text-[12px] text-[color:var(--kaline-ember)]">{redoError}</p>
           )}
         </DataCard>
+
+        {plan && (
+          <div className="md:col-span-2">
+            <DataCard
+              eyebrow="Assistente LLM"
+              title="Auxiliar do Plano de Organização"
+              status="idle"
+              defaultOpen
+            >
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between border-b border-[color:var(--kaline-border-copper)]/30 pb-3">
+                  <p className="text-[12px] text-[color:var(--kaline-muted)]">
+                    Use os modelos locais configurados para analisar ou tirar dúvidas sobre o plano
+                    gerado.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] uppercase tracking-wider text-[color:var(--kaline-faint)]">
+                      Modelo:
+                    </label>
+                    <select
+                      value={assistantModel}
+                      onChange={(e) => setAssistantModel(e.target.value)}
+                      className="rounded border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-surface)] text-[color:var(--kaline-text)] text-[11px] px-2 py-0.5"
+                    >
+                      <option value="qwen3.5-0.8b">qwen3.5-0.8b (Padrão)</option>
+                      <option value="qwen2.5:0.5b">qwen2.5:0.5b</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Botões Rápidos */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      askAssistant(
+                        "Resuma este plano de organização, destacando os caminhos de destino das extensões e o total planejado.",
+                      )
+                    }
+                    disabled={assistantLoading}
+                    className="text-[10px] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)]/40 hover:border-[color:var(--kaline-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-text)] transition disabled:opacity-50"
+                  >
+                    Resumir plano
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      askAssistant(
+                        "Quais são as regras de organização aplicadas a este plano? Explique onde cada tipo de arquivo será colocado.",
+                      )
+                    }
+                    disabled={assistantLoading}
+                    className="text-[10px] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)]/40 hover:border-[color:var(--kaline-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-text)] transition disabled:opacity-50"
+                  >
+                    Explicar regras aplicadas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      askAssistant(
+                        "Existem riscos de conflito ou sobrescrita no plano atual? Explique como os conflitos são calculados e apresentados.",
+                      )
+                    }
+                    disabled={assistantLoading}
+                    className="text-[10px] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)]/40 hover:border-[color:var(--kaline-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-text)] transition disabled:opacity-50"
+                  >
+                    Checar riscos / conflitos
+                  </button>
+                </div>
+
+                {/* Histórico do Assistente */}
+                <div className="space-y-3 max-h-[250px] overflow-y-auto border border-[color:var(--kaline-border-copper)]/20 rounded p-3 bg-black/10">
+                  {assistantMessages.length === 0 && (
+                    <p className="text-[11px] text-[color:var(--kaline-faint)] text-center py-4">
+                      Nenhuma pergunta feita ao assistente ainda. Use um botão rápido acima ou
+                      digite abaixo.
+                    </p>
+                  )}
+                  {assistantMessages.map((msg, index) => (
+                    <div key={index} className="space-y-1">
+                      <p className="font-mono text-[9px] uppercase tracking-wider text-[color:var(--kaline-faint)]">
+                        {msg.role === "user" ? "Você" : `Assistente (${assistantModel})`}
+                      </p>
+                      <p className="text-[12px] whitespace-pre-wrap text-[color:var(--kaline-text)]">
+                        {msg.content}
+                      </p>
+                    </div>
+                  ))}
+                  {assistantLoading && (
+                    <p className="text-[11px] text-[color:var(--kaline-muted)] animate-pulse">
+                      Analisando o plano com a LLM local...
+                    </p>
+                  )}
+                  {assistantError && (
+                    <p className="text-[11px] text-[color:var(--kaline-ember)]">{assistantError}</p>
+                  )}
+                </div>
+
+                {/* Campo de Entrada */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={assistantInput}
+                    onChange={(e) => setAssistantInput(e.target.value)}
+                    placeholder="Pergunte ao assistente sobre o plano de organização..."
+                    disabled={assistantLoading}
+                    className="flex-1 rounded border border-[color:var(--kaline-border-copper)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--kaline-text)] focus:outline-none focus:border-[color:var(--kaline-copper)]"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && assistantInput.trim()) {
+                        askAssistant(assistantInput.trim());
+                        setAssistantInput("");
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (assistantInput.trim()) {
+                        askAssistant(assistantInput.trim());
+                        setAssistantInput("");
+                      }
+                    }}
+                    disabled={assistantLoading || !assistantInput.trim()}
+                    className="px-3 py-1.5 rounded bg-[color:var(--kaline-copper)] text-[color:var(--kaline-surface)] text-[10px] uppercase tracking-wider font-semibold hover:opacity-90 transition disabled:opacity-40"
+                  >
+                    Perguntar
+                  </button>
+                </div>
+              </div>
+            </DataCard>
+          </div>
+        )}
       </section>
     </div>
   );

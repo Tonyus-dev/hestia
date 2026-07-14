@@ -115,9 +115,17 @@ async function targetExists(targetPath) {
   }
 }
 
-async function planItemsForFiles(files, action, source = { kind: "unknown", label: "unknown" }) {
+async function planItemsForFiles(
+  files,
+  action,
+  source = { kind: "unknown", label: "unknown" },
+  allowedExtensions = null,
+) {
   const items = [];
-  for (const file of files) {
+  const filteredFiles = allowedExtensions
+    ? files.filter((f) => allowedExtensions.includes(f.ext?.toLowerCase()))
+    : files;
+  for (const file of filteredFiles) {
     const targetBaseRelativePath = targetRelativePathFor(file.ext);
     const { yyyy, mm } = datePartsFor(file);
     const targetRelativePath = join(targetBaseRelativePath, yyyy, mm);
@@ -165,7 +173,10 @@ async function planItemsForFiles(files, action, source = { kind: "unknown", labe
 
 // entrada já está dentro de /KALINE: reorganizar é um "move" no mesmo volume.
 // Fontes externas (mode: "external-readonly") nunca perdem o arquivo original: é sempre "copy".
-export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
+export async function generateOrganizerPlan(
+  limits = DEFAULT_INDEX_LIMITS,
+  allowedExtensions = null,
+) {
   const model = getStorageModel();
   const inboxFolders = [
     "entrada-uploads",
@@ -185,18 +196,23 @@ export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
     const listing = await listFiles(folder.absolutePath, limits);
     ignoredFromScanner += listing.ignored || 0;
     entradaItems = entradaItems.concat(
-      await planItemsForFiles(listing.files, "move", {
-        kind:
-          folder.id === "entrada-uploads"
-            ? "upload"
-            : folder.id === "entrada-dispositivos"
-              ? "dispositivo"
-              : folder.id === "entrada-manual"
-                ? "manual"
-                : "entrada",
-        label: folder.id === "entrada-dispositivos" ? "dispositivos" : folder.label || folder.id,
-        rootPath: folder.absolutePath,
-      }),
+      await planItemsForFiles(
+        listing.files,
+        "move",
+        {
+          kind:
+            folder.id === "entrada-uploads"
+              ? "upload"
+              : folder.id === "entrada-dispositivos"
+                ? "dispositivo"
+                : folder.id === "entrada-manual"
+                  ? "manual"
+                  : "entrada",
+          label: folder.id === "entrada-dispositivos" ? "dispositivos" : folder.label || folder.id,
+          rootPath: folder.absolutePath,
+        },
+        allowedExtensions,
+      ),
     );
   }
 
@@ -206,10 +222,15 @@ export async function generateOrganizerPlan(limits = DEFAULT_INDEX_LIMITS) {
     const listing = await listFiles(source.path, limits);
     ignoredFromScanner += listing.ignored || 0;
     sourceItems = sourceItems.concat(
-      await planItemsForFiles(listing.files, "copy", {
-        kind: "external",
-        label: source.label || source.id,
-      }),
+      await planItemsForFiles(
+        listing.files,
+        "copy",
+        {
+          kind: "external",
+          label: source.label || source.id,
+        },
+        allowedExtensions,
+      ),
     );
   }
 

@@ -36,9 +36,9 @@ describe("llm local bridge", () => {
   });
 
   it("mantém allowlist dos modelos locais leves aprovados", () => {
-    expect(ALLOWED_MODELS).toContain("qwen2.5:1.5b");
-    expect(ALLOWED_MODELS).toContain("hf.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q8_0");
-    expect(DEFAULT_MODEL).toBe("qwen2.5:1.5b");
+    expect(ALLOWED_MODELS).toContain("qwen2.5:0.5b");
+    expect(ALLOWED_MODELS).toContain("qwen3.5-0.8b");
+    expect(DEFAULT_MODEL).toBe("qwen3.5-0.8b");
   });
 
   it("health usa timeout curto e degrada para ok=false em timeout", async () => {
