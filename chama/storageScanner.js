@@ -1,5 +1,6 @@
-// Chama Local — varredura read-only de /KALINE e fontes externas configuradas.
-// Nunca aceita path vindo de query/body/header; fontes externas vêm só de ~/.chama/config.json.
+// Chama Local — varredura read-only de /KALINE e das fontes externas configuradas.
+// Nunca aceita path vindo de fora (só de storageModel.js ou de config.storageSources, que só
+// vem do whitelist de ~/.chama/config.json — nunca de query/body/header).
 // Nunca segue symlink recursivamente nesta PR. `scanPath`/`scanStorageModel`/`scanConfiguredSources`
 // nunca devolvem lista de arquivos, só resumo agregado (contagem/bytes/extensões) — mesmo em
 // endpoints locais, não só na Presence. `listFiles` é a exceção deliberada: devolve paths reais,

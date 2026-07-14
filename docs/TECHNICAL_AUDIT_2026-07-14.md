@@ -67,10 +67,10 @@ Premissas de segurança operacional:
 | Severidade | Achado | Evidência |
 |---|---|---|
 | Alta, podendo se tornar Crítica conforme implantação | Endpoint de importação do Códice escreve em disco e executa `soffice` via `exec`, mas não exige confirmação dedicada de operação; a rota é consumida pelo frontend como upload real. | `POST /api/codice/import`, `convertDocxToEpub`, `hestiaLegacyApi.codiceImport` |
-| Alta | Contrato divergente: frontend chama undo/redo em `/api/local/organizer/runs/:id/undo|redo`, README também documenta esse formato, mas backend expõe `/api/local/organizer/undo` e `/api/local/organizer/redo`. | Rotas em `hestia.js`; chamadas em `src/lib/hestia/api.ts` |
-| Alta | README lista rotas de undo/redo antigas/inexistentes; isso quebra operação manual documentada. | README vs backend |
-| Alta | `POST /api/storage/organizer/plan` é GET mas persiste plano no filesystem; é uma escrita por método de leitura e não passa pelo hook de confirmação de POST local. | `generateOrganizerPlan` + `writePlan` |
-| Resolvido | `config.storageSources` é populado exclusivamente por `~/.chama/config.json` com validação estrita; fontes externas não vêm de query/body/header. | `config.storageSources` e `/api/storage/sources` |
+| Resolvido | Contrato do Organizer unificado em `/api/local/organizer/*`: plan/apply/undo/redo usam POST com confirmação e runs usam GET. | `registerOrganizerRoutes`; chamadas em `src/lib/hestia/api.ts` |
+| Resolvido | README lista o contrato local do Organizer: plan/apply/runs/undo/redo em `/api/local/organizer/*`. | README vs backend |
+| Resolvido | Geração de plano migrou para `POST /api/local/organizer/plan` com `X-Hestia-Local-Confirm: organize`; rotas antigas de storage não geram nem persistem planos. | `registerOrganizerRoutes`; `generateOrganizerPlan` + `writePlan` |
+| Média | `config.storageSources` existe e é exposto, mas não há mecanismo de configuração populando esse array; portanto fontes externas parecem mortas/inativas no runtime atual. | `config.storageSources: []` e `/api/storage/sources` |
 | Média | Station usa configuração sanitizada no frontend e cliente backend robusto, mas é opcional; sem env fica `not_configured`. | `stationClient.js`, `/api/station/*` |
 | Média | Códice exige `codice/epub` e `codice/pdf`; se qualquer um faltar, health/library falham com 503, embora `txt` seja opcional. | `getAvailableCodiceFolders` |
 | Baixa | `presenceCorsOrigins` aceita `*` por design, enquanto Códice rejeita wildcard; isso é menos restritivo para presença pública. | `isOriginAllowed` |
@@ -221,7 +221,7 @@ hestia.js
 | GET | `/api/storage/model` | `getStorageModel` | Host/rate | — | árvore canônica `/KALINE` | `/storage` |
 | GET | `/api/storage/sources` | inline `{items: config.storageSources}` | Host/rate | — | fontes externas | `/storage` |
 | GET | `/api/storage/scan` | `scanStorageModel`, `scanConfiguredSources` | Host/rate | — | resumo de arquivos | `/storage` |
-| GET | `/api/storage/organizer/plan` | `generateOrganizerPlan` + `writePlan` | Host/rate | query `extensions` opcional | plano persistido | `/organizar` |
+| POST | `/api/local/organizer/plan` | `registerOrganizerRoutes` → `generateOrganizerPlan` + `writePlan` | Host/rate + header organize | query `extensions` opcional | plano persistido | `/organizar` |
 | GET | `/api/hardware/status` | `getHardwareStatus` | Host/rate | — | saúde CPU/RAM/temp/services | `/sistema` |
 | GET | `/api/hardware/config` | `getHardwareConfig` | Host/rate | — | host/lsblk/config | `/sistema` |
 | GET | `/api/services/status` | `getServicesStatus` | Host/rate | — | systemd services | `/servicos`, dashboard, presence |
@@ -239,8 +239,8 @@ hestia.js
 | POST | `/api/local/organizer/apply` | `applyOrganizerPlan` | Host/rate + `X-Hestia-Local-Confirm: organize` | `{planId, mode:"apply"}` | manifesto run | `/organizar` |
 | GET | `/api/local/organizer/runs` | `getOrganizerRuns` | Host/rate | — | lista runs | `/organizar` |
 | GET | `/api/local/organizer/runs/:runId` | `getOrganizerRun` | Host/rate | path param | manifesto | `/organizar` |
-| POST | `/api/local/organizer/undo` | `undoOrganizerRun` | Host/rate + header organize | `{runId}` | manifesto undo | **Não consumido pelo frontend atual** |
-| POST | `/api/local/organizer/redo` | `redoOrganizerRun` | Host/rate + header organize | `{undoRunId}` | manifesto redo | **Não consumido pelo frontend atual** |
+| POST | `/api/local/organizer/runs/:runId/undo` | `registerOrganizerRoutes` → `undoOrganizerRun` | Host/rate + header organize | path param | manifesto undo | `/organizar` |
+| POST | `/api/local/organizer/runs/:undoRunId/redo` | `registerOrganizerRoutes` → `redoOrganizerRun` | Host/rate + header organize | path param | manifesto redo | `/organizar` |
 | GET | `/api/presence/manifest` | `presenceRoute(getManifest)` | Host/rate/CORS opt-in | — | envelope presence | Presence externa |
 | GET | `/api/presence/summary` | `getPresenceSummary` | Host/rate/CORS opt-in | — | resumo seguro | Presence externa |
 | GET | `/api/presence/health` | `getHealth` | Host/rate/CORS opt-in | — | health envelopado | Presence externa |
@@ -301,7 +301,7 @@ CLI (--host/--port)
 
 ## Configuração morta/duplicada/contraditória
 
-- `storageSources` é opcional em `~/.chama/config.json`; quando ausente fica `[]`, quando presente exige `id`, `label`, `path`, `category` e `mode: "external-readonly"`.
+- `storageSources: []` é exposto e escaneado, mas não é populado por env nem por `~/.chama/config.json`. Estado: **configuração aparentemente morta/incompleta**.
 - `HESTIA_STORAGE_PATH` e `HESTIA_KALINE_ROOT` são aliases funcionais; duplicação intencional/legada.
 - `config.readonly: true`, `readonlyByDefault: true` e `controlledWrites: true` coexistem com endpoints que escrevem (`organizer apply`, `organizer plan`, `codice import`, Hermes). Não é contraditório se interpretado como “leitura por padrão”, mas é perigoso se lido como read-only absoluto.
 - `stationBaseUrl` é retornado em `/api/config`, mas não existe como propriedade direta de `config`; o spread de `publicStationConfig()` fornece flags sanitizadas. Campo pode sair `undefined`.
@@ -312,7 +312,7 @@ CLI (--host/--port)
 
 Responsabilidade: varrer entradas de `/KALINE`, gerar plano dry-run, persistir plano, aplicar move/copy, desfazer e refazer execuções com manifests.
 
-Quem chama: `/api/storage/organizer/plan`, `/api/local/organizer/apply`, `/api/local/organizer/*`, rota frontend `/organizar`.
+Quem chama: `/api/local/organizer/plan`, `/api/local/organizer/apply`, `/api/local/organizer/*`, rota frontend `/organizar`.
 
 Dependências: `storageModel`, `storageScanner`, `legacyStorageConfig`, `events`, `organizerIds`, filesystem.
 
@@ -326,9 +326,8 @@ Estado atual:
 
 Pontos frágeis:
 
-- GET `/api/storage/organizer/plan` escreve no disco.
 - Frontend usa endpoints de undo/redo incompatíveis com backend.
-- `allowedSourceRoots()` em apply permite `/KALINE` e paths de `storageSources` validados; fontes externas continuam somente `copy`.
+- `allowedSourceRoots()` em apply permite somente `/KALINE`; fontes externas planejadas como `copy` podem ser invalidadas se algum dia `storageSources` for populado fora de `/KALINE`.
 - Transação é por item; não existe rollback automático total em caso de falha parcial.
 
 ## Storage
@@ -349,7 +348,7 @@ Estado atual:
 Pontos frágeis:
 
 - Sem `df`, endpoints degradam para indisponível.
-- `storageSources` permanece vazio por padrão e só é populado por configuração local válida.
+- `storageSources` permanece vazio.
 
 ## Códice
 
@@ -641,7 +640,7 @@ Stream com headers privados/no-store
 | Alta | `exec` shell em conversor | `convertDocxToEpub` usa `exec(cmd)`; há sanitização de filename e paths temporários, mas shell string é risco desnecessário. |
 | Alta | Sem limite explícito de upload | Body `.docx` pode consumir memória/disco; rate limit por requisição não limita tamanho. |
 | Alta | Undo/redo quebrado no frontend | A operação de recuperação esperada pelo produto não funciona pela rota atual do cliente. |
-| Média | GET com efeito colateral | `/api/storage/organizer/plan` escreve plano em disco via GET. |
+| Resolvido | GET com efeito colateral | `/api/storage/organizer/plan` não existe mais como gerador; plano é `POST /api/local/organizer/plan`. |
 | Média | Sem lock de Organizer | Corridas entre apply/undo/redo podem gerar inconsistência operacional. |
 | Média | Presence CORS wildcard | `*` permitido para endpoints sanitizados, mas ainda expõe estado. |
 | Média | Retorno de path absoluto | Códice import retorna `path` do EPUB no filesystem. |
@@ -666,7 +665,7 @@ Stream com headers privados/no-store
 | Data dir | `HESTIA_DATA_DIR`/`STATE_DIRECTORY`/`~/.chama/data` | diretórios | `ensureDataDir` | módulos vários | permissões |
 | Eventos | `${dataDir}/events/events-YYYY-MM-DD.jsonl` | JSONL append-only | `appendEvent` | presence/events | linhas corrompidas são ignoradas; sem lock multi-processo |
 | Snapshots | `${dataDir}/snapshots/latest.json` | JSON | `writeSnapshot` atomic rename | presence/snapshots | último snapshot apenas |
-| Organizer plans | `${dataDir}/organizer/plans/*.json` | JSON | `writePlan` | apply | GET cria; expira 7 dias |
+| Organizer plans | `${dataDir}/organizer/plans/*.json` | JSON | `writePlan` | apply | POST local cria; expira 7 dias |
 | Organizer runs | `${dataDir}/organizer/runs/*.json` | JSON | apply/undo/redo | UI/API | expira 90 dias; base de undo some |
 | Códice library | `<storageRoot>/codice/*` | arquivos reais | usuário/import | library/stream | upload escreve EPUB |
 | Hermes | `${dataDir}/hermes` ou env | arquivos | Hermes/process | Hermes/status | depende de contrato externo |
@@ -782,11 +781,10 @@ Sem remoção proposta nesta auditoria. Itens a verificar por uso real antes de 
 
 ## Importante
 
-- GET que escreve plano no disco.
 - Sem lock/transação global no Organizer.
 - `exec` shell no conversor.
 - Sem limite explícito de tamanho de upload.
-- `storageSources` implementado como configuração local opcional e validada.
+- `storageSources` incompleto/morto.
 - README e docs divergem de rotas reais.
 - LLM default hardcoded pode não existir no host.
 - Códice import retorna path absoluto.
@@ -803,10 +801,10 @@ Sem remoção proposta nesta auditoria. Itens a verificar por uso real antes de 
 
 | Fluxo | Estado | Evidência |
 |---|---|---|
-| Organizer undo pela UI | Quebrado provável | Frontend chama `/api/local/organizer/runs/:runId/undo`; backend expõe `/api/local/organizer/undo` |
-| Organizer redo pela UI | Quebrado provável | Frontend chama `/api/local/organizer/runs/:undoRunId/redo`; backend expõe `/api/local/organizer/redo` |
+| Organizer undo pela UI | Resolvido | Frontend e backend usam `/api/local/organizer/runs/:runId/undo` |
+| Organizer redo pela UI | Resolvido | Frontend e backend usam `/api/local/organizer/runs/:undoRunId/redo` |
 | README undo/redo manual | Divergente | README documenta URLs parametrizadas inexistentes em seção de Organizer |
-| Storage sources externas | Coerente | `config.storageSources` vem de `~/.chama/config.json` validado ou fica `[]` por padrão |
+| Storage sources externas | Incompleto | `config.storageSources` sempre `[]` no runtime atual |
 | Produto “readonly” | Ambíguo | Há writes controlados e importação Códice |
 | Códice import remoto via CORS | Divergente | Backend aceita POST, mas CORS anuncia GET/HEAD/OPTIONS; browser cross-origin tende a falhar no preflight |
 | App sem build | Quebrado por design | hestia.js retorna “Interface não encontrada” se build SSR/static ausente |
@@ -815,10 +813,9 @@ Sem remoção proposta nesta auditoria. Itens a verificar por uso real antes de 
 
 1. **INCIDENTE — fluxo principal não comprovado manualmente.** Testes automatizados e build não provam que app abre e que Organizer/Códice/LLM funcionam com dados reais.
 2. **INCIDENTE — contrato undo/redo divergente.** Recuperação do Organizer pelo frontend não bate com rotas do backend.
-3. **INCIDENTE — GET que persiste plano.** `POST /api/storage/organizer/plan` tem efeito colateral em disco ao persistir plano.
 4. **INCIDENTE — import do Códice com escrita e execução.** A rota combina upload, escrita local e execução do LibreOffice sem confirmação dedicada de operação.
 5. **INCIDENTE — documentação operacional divergente.** README pode induzir operador a chamar endpoints inexistentes.
-6. **Resolvido — storageSources** agora tem origem configurável ativa em `~/.chama/config.json`, com validação estrita.
+6. **INCIDENTE — storageSources exposto mas sem origem configurável ativa.** UI mostra feature que tende a permanecer vazia.
 
 # Plano de Correção
 
@@ -830,7 +827,6 @@ Inclui:
 
 - corrigir divergência undo/redo;
 - alinhar backend, frontend e README;
-- corrigir GET que persiste plano;
 - revisar import do Códice;
 - remover ou documentar configurações mortas;
 - auditar o registro LLM existente;
@@ -913,9 +909,8 @@ Inclui:
 
 ### Contratos corrigidos
 
-- Organizer plan: `POST /api/storage/organizer/plan` é o único contrato que gera e persiste plano aprovável. `GET /api/storage/organizer/plan` não persiste e responde `405 METHOD_NOT_ALLOWED`, porque geração de `planId` é escrita operacional.
+- Organizer plan: `POST /api/local/organizer/plan` é o único contrato que gera e persiste plano aprovável; rotas antigas em `/api/storage/organizer/plan` não geram nem persistem planos.
 - Organizer undo/redo: frontend, backend e documentação usam somente `POST /api/local/organizer/runs/:runId/undo` e `POST /api/local/organizer/runs/:undoRunId/redo`, ambos com `X-Hestia-Local-Confirm: organize`.
-- Códice import: `POST /api/codice/import` permanece apenas como conversão administrativa local de `.docx` para EPUB. Deve existir enquanto a UI `/codice` consumir importação; não há outra rota equivalente no backend. Não é leitura pública, exige `X-Hestia-Local-Confirm: codice`, CORS continua opt-in e sem wildcard.
 
 ### Configuração auditada
 
@@ -924,7 +919,7 @@ Inclui:
 | `services` | Usada | Mantida: whitelist em `~/.chama/config.json`, consumida por status/config. |
 | `storagePaths` | Usada | Mantida: configura caminhos observados por storage status. |
 | `storageRoot` / `HESTIA_STORAGE_PATH` / `HESTIA_KALINE_ROOT` | Duplicada compatível | Mantida com precedência documentada; `HESTIA_STORAGE_PATH` prevalece. |
-| `storageSources` | Usada | Mantida e implementada via `~/.chama/config.json`; itens inválidos são ignorados e o Organizer usa fontes externas apenas como `copy`. |
+| `storageSources` | Morta | Fora do escopo deste commit; permanece como configuração exposta porém não populada no runtime atual. |
 | defaults de host/porta/retenção/LLM | Usados | Mantidos. |
 | envs LLM | Usados | Mantidos; runtime usa registro oficial em `chama/llm.js`. |
 

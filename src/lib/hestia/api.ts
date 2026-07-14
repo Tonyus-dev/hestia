@@ -596,10 +596,10 @@ export const hestiaLegacyApi = {
   organizerPlan: (extensions?: string) =>
     safePost<OrganizerPlan>(
       extensions
-        ? `/api/storage/organizer/plan?extensions=${encodeURIComponent(extensions)}`
-        : "/api/storage/organizer/plan",
+        ? `/api/local/organizer/plan?extensions=${encodeURIComponent(extensions)}`
+        : "/api/local/organizer/plan",
       {},
-      {},
+      { "x-hestia-local-confirm": "organize" },
       3600000,
     ),
   llmChat: (message: string, model?: string, contextBlock?: string, facet?: string) =>
@@ -647,7 +647,6 @@ export const hestiaLegacyApi = {
         method: "POST",
         headers: {
           "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "x-hestia-local-confirm": "codice",
         },
         body: file,
         signal: controller.signal,

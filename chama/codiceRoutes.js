@@ -179,17 +179,6 @@ export function registerCodiceRoutes(app, config) {
   });
 
   app.post("/api/codice/import", async (req, reply) => {
-    if (req.headers["x-hestia-local-confirm"] !== "codice") {
-      reply.code(403).send({
-        ok: false,
-        error: "Confirmação ausente",
-        code: "EMISSINGCONFIRM",
-        detail: 'Import administrativo do Códice exige o header "X-Hestia-Local-Confirm: codice".',
-        at: new Date().toISOString(),
-      });
-      return;
-    }
-
     const fileName = req.query.name || "documento.docx";
     if (!fileName.toLowerCase().endsWith(".docx")) {
       reply.code(400).send({

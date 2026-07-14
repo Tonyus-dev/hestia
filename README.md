@@ -56,7 +56,7 @@ GET /api/config
 ### Ações locais protegidas
 
 ```http
-POST /api/storage/organizer/plan
+POST /api/local/organizer/plan
 GET  /api/local/organizer/runs
 POST /api/local/organizer/apply
 POST /api/local/organizer/runs/:runId/undo
@@ -232,7 +232,7 @@ GET /api/storage/status
 GET /api/storage/discover  # descobre volumes montados de verdade (ver abaixo)
 GET /api/storage/model     # árvore canônica de /KALINE (ver abaixo)
 GET /api/storage/scan      # varredura read-only de /KALINE e das fontes (ver abaixo)
-POST /api/storage/organizer/plan  # gera um plano dry-run (ver seção Organizer abaixo)
+POST /api/local/organizer/plan  # gera um plano dry-run (ver seção Organizer abaixo)
 GET /api/services/status
 GET /api/services/bindings  # vínculos read-only com serviços existentes (ver abaixo)
 GET /api/logs?tail=100      # 1..200
@@ -294,7 +294,7 @@ um plano seguro; Héstia aplica apenas planos aprovados. Fontes externas configu
 read-only: entram no plano como `copy`, nunca como perda do original.
 
 ```
-POST /api/storage/organizer/plan          # gera e persiste um novo plano dry-run
+POST /api/local/organizer/plan          # gera e persiste um novo plano dry-run
 POST /api/local/organizer/apply           # aplica um plano já gerado (exige confirmação)
 GET  /api/local/organizer/runs            # lista execuções anteriores
 GET  /api/local/organizer/runs/:runId     # manifesto de uma execução
@@ -302,10 +302,11 @@ POST /api/local/organizer/runs/:runId/undo  # desfaz uma execução aplicada (ex
 POST /api/local/organizer/runs/:undoRunId/redo  # refaz uma execução de undo (exige confirmação)
 ```
 
-**1. Gerar o plano** (só cálculo, nenhuma escrita — pode chamar quantas vezes quiser):
+**1. Gerar o plano** (dry-run: não move nem copia arquivos; persiste o plano e o `planId` no dataDir para aprovação posterior):
 
 ```bash
-curl -s -X POST http://localhost:4517/api/storage/organizer/plan | jq
+curl -s -X POST http://localhost:4517/api/local/organizer/plan \
+  -H "X-Hestia-Local-Confirm: organize" | jq
 ```
 
 Cada item do plano tem `sourcePath`/`targetPath`/`action` (`"move"` para `entrada`, `"copy"` para
@@ -644,7 +645,7 @@ traversal agora recebe`404`/plano-não-encontrado, sem tocar o disco fora do esp
 
 ## Organizer / Ash — Segurança
 
-- Gerar plano é sempre **dry-run**: nenhum arquivo é movido, copiado, apagado ou renomeado em `POST /api/storage/organizer/plan`.
+- Gerar plano é sempre **dry-run**: nenhum arquivo é movido, copiado, apagado ou renomeado em `POST /api/local/organizer/plan`.
 - `apply` exige confirmação explícita (`X-Hestia-Local-Confirm: organize`) e planos com mais de 5000 itens exigem confirmação extra do `planId`.
 - Revise o plano antes de aplicar; comece com poucos arquivos e use lotes para legado grande.
 - Planos grandes mostram apenas uma amostra inicial na UI para não travar o navegador.
@@ -755,7 +756,5 @@ curl -X POST http://127.0.0.1:4517/api/hermes/process-once \
 
 ## PR #1 — contratos de housekeeping
 
-- Plano do Organizer é escrita controlada de histórico: use `POST /api/storage/organizer/plan`; `GET /api/storage/organizer/plan` responde 405 e não persiste.
+- Plano do Organizer é escrita controlada de histórico: use somente `POST /api/local/organizer/plan` com `X-Hestia-Local-Confirm: organize`; rotas antigas em `/api/storage/organizer/plan` não geram nem persistem planos.
 - Undo/redo têm um único contrato: `POST /api/local/organizer/runs/:runId/undo` e `POST /api/local/organizer/runs/:undoRunId/redo`, com `X-Hestia-Local-Confirm: organize`.
-- `storageSources` permanece no contrato público somente quando configurado em `~/.chama/config.json`; itens inválidos são ignorados e o Organizer trata fontes externas como cópia read-only.
-- `POST /api/codice/import` é import administrativo local protegido por `X-Hestia-Local-Confirm: codice`; não é rota pública de leitura.

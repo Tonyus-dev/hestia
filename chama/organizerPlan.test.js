@@ -162,7 +162,7 @@ describe("generateOrganizerPlan", () => {
         folders: [{ id: "entrada", label: "Entrada", absolutePath: entradaDir }],
       }),
     }));
-    vi.doMock("./config.js", () => ({ config: {} }));
+    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
 
     const { generateOrganizerPlan } = await import("./organizerPlan.js");
     const plan = await generateOrganizerPlan();
@@ -218,7 +218,7 @@ describe("generateOrganizerPlan", () => {
         ],
       }),
     }));
-    vi.doMock("./config.js", () => ({ config: {} }));
+    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
 
     const { generateOrganizerPlan } = await import("./organizerPlan.js");
     const plan = await generateOrganizerPlan();
@@ -244,7 +244,7 @@ describe("generateOrganizerPlan", () => {
         folders: [{ id: "entrada-uploads", label: "Uploads", absolutePath: uploadsDir }],
       }),
     }));
-    vi.doMock("./config.js", () => ({ config: {} }));
+    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
 
     const { generateOrganizerPlan } = await import("./organizerPlan.js");
     const plan = await generateOrganizerPlan();

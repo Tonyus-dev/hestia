@@ -4,86 +4,98 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { writePlan, getPlan } from "./organizerPlan.js";
-import { applyOrganizerPlan } from "./organizerApply.js";
-import { undoOrganizerRun } from "./organizerUndo.js";
-import { redoOrganizerRun } from "./organizerRedo.js";
+import { registerOrganizerRoutes } from "./organizerRoutes.js";
 
 async function makeTmpDir(prefix) {
   return await fs.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
-function buildApp(dataDir) {
-  const app = Fastify();
-  app.addHook("onRequest", async (req, reply) => {
-    if (req.method !== "POST" || !req.url.startsWith("/api/local/")) return;
-    if (req.headers["x-hestia-local-confirm"] === "organize") return;
-    reply.code(403).send({ ok: false, code: "EMISSINGCONFIRM" });
-  });
-  app.post("/api/local/organizer/apply", async (req, reply) => {
-    const plan = await getPlan(req.body.planId, dataDir);
-    if (!plan) return reply.code(404).send({ ok: false, code: "EPLANNOTFOUND" });
-    return applyOrganizerPlan(plan, dataDir);
-  });
-  app.post("/api/local/organizer/runs/:runId/undo", async (req) =>
-    undoOrganizerRun(req.params.runId, dataDir),
-  );
-  app.post("/api/local/organizer/runs/:undoRunId/redo", async (req) =>
-    redoOrganizerRun(req.params.undoRunId, dataDir),
-  );
-  return app;
+async function countPlanFiles(dataDir) {
+  const dir = path.join(dataDir, "organizer", "plans");
+  try {
+    return (await fs.readdir(dir)).filter((name) => name.endsWith(".json")).length;
+  } catch {
+    return 0;
+  }
 }
 
 describe("Organizer HTTP contract", () => {
   let dataDir;
-  let workDir;
+  let rootDir;
+  let sourcePath;
+  let targetPath;
   let app;
 
   beforeEach(async () => {
     dataDir = await makeTmpDir("hestia-http-data-");
-    workDir = await makeTmpDir("hestia-http-work-");
-    process.env.HESTIA_STORAGE_PATH = workDir;
-    app = buildApp(dataDir);
+    rootDir = await makeTmpDir("hestia-http-root-");
+    process.env.HESTIA_STORAGE_PATH = rootDir;
+
+    sourcePath = path.join(rootDir, "entrada", "manual", "entrada.pdf");
+    targetPath = path.join(rootDir, "codice", "pdf", "2026", "07", "entrada.pdf");
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fs.writeFile(sourcePath, "pdf content");
+    const oldDate = new Date("2026-07-10T00:00:00.000Z");
+    await fs.utimes(sourcePath, oldDate, oldDate);
+
+    app = Fastify();
+    registerOrganizerRoutes(app, { dataDir });
   });
 
   afterEach(async () => {
     delete process.env.HESTIA_STORAGE_PATH;
     await app.close();
     await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
-    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(rootDir, { recursive: true, force: true }).catch(() => {});
   });
 
-  it("cobre o fluxo HTTP apply -> undo -> redo com o contrato parametrizado", async () => {
-    const sourcePath = path.join(workDir, "entrada.pdf");
-    const targetPath = path.join(workDir, "codice", "pdf", "2026", "07", "entrada.pdf");
-    await fs.writeFile(sourcePath, "pdf");
+  it("usa as rotas reais e cobre plan -> apply -> undo -> redo no filesystem", async () => {
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("pdf content");
+    await expect(fs.stat(targetPath)).rejects.toThrow();
 
-    const plan = {
-      planId: "plan_1719876543_abcdef00",
-      generatedAt: new Date().toISOString(),
-      dryRun: true,
-      requiresExtraConfirmation: false,
-      largePlanThreshold: 500,
-      planned: 1,
-      items: [
-        {
-          id: "item_1",
-          sourceKind: "entrada",
-          sourceLabel: "Entrada",
-          sourcePath,
-          targetPath,
-          action: "move",
-          reason: ".pdf → codice/pdf/2026/07",
-          risk: "low",
-          status: "planned",
-          size: 3,
-        },
-      ],
-      summary: { total: 1, planned: 1, conflicts: 0, ignored: 0, quarantined: 0 },
-    };
-    await writePlan(plan, dataDir);
+    const missingHeader = await app.inject({
+      method: "POST",
+      url: "/api/local/organizer/plan",
+    });
+    expect(missingHeader.statusCode).toBe(403);
+    expect(JSON.parse(missingHeader.payload).code).toBe("EMISSINGCONFIRM");
+
+    const wrongHeader = await app.inject({
+      method: "POST",
+      url: "/api/local/organizer/plan",
+      headers: { "x-hestia-local-confirm": "wrong" },
+    });
+    expect(wrongHeader.statusCode).toBe(403);
+    expect(await countPlanFiles(dataDir)).toBe(0);
+
+    const oldGet = await app.inject({ method: "GET", url: "/api/storage/organizer/plan" });
+    expect([404, 405]).toContain(oldGet.statusCode);
+    const oldPost = await app.inject({ method: "POST", url: "/api/storage/organizer/plan" });
+    expect([404, 405]).toContain(oldPost.statusCode);
+    expect(await countPlanFiles(dataDir)).toBe(0);
 
     const headers = { "x-hestia-local-confirm": "organize" };
+    const planResponse = await app.inject({
+      method: "POST",
+      url: "/api/local/organizer/plan",
+      headers,
+    });
+    expect(planResponse.statusCode).toBe(200);
+    const plan = JSON.parse(planResponse.payload);
+    expect(plan.planId).toMatch(/^plan_/);
+    expect(plan.items.some((item) => item.sourcePath === sourcePath)).toBe(true);
+    expect(await countPlanFiles(dataDir)).toBe(1);
+    await expect(
+      fs.stat(path.join(dataDir, "organizer", "plans", `${plan.planId}.json`)),
+    ).resolves.toBeTruthy();
+
+    const applyWithoutHeader = await app.inject({
+      method: "POST",
+      url: "/api/local/organizer/apply",
+      payload: { planId: plan.planId, mode: "apply" },
+    });
+    expect(applyWithoutHeader.statusCode).toBe(403);
+
     const apply = await app.inject({
       method: "POST",
       url: "/api/local/organizer/apply",
@@ -92,8 +104,14 @@ describe("Organizer HTTP contract", () => {
     });
     expect(apply.statusCode).toBe(200);
     const appliedRun = JSON.parse(apply.payload);
-    await expect(fs.readFile(targetPath, "utf8")).resolves.toBe("pdf");
     await expect(fs.stat(sourcePath)).rejects.toThrow();
+    await expect(fs.readFile(targetPath, "utf8")).resolves.toBe("pdf content");
+
+    const undoWithoutHeader = await app.inject({
+      method: "POST",
+      url: `/api/local/organizer/runs/${appliedRun.runId}/undo`,
+    });
+    expect(undoWithoutHeader.statusCode).toBe(403);
 
     const undo = await app.inject({
       method: "POST",
@@ -103,8 +121,14 @@ describe("Organizer HTTP contract", () => {
     expect(undo.statusCode).toBe(200);
     const undoRun = JSON.parse(undo.payload);
     expect(undoRun.undoOf).toBe(appliedRun.runId);
-    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("pdf");
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("pdf content");
     await expect(fs.stat(targetPath)).rejects.toThrow();
+
+    const redoWithoutHeader = await app.inject({
+      method: "POST",
+      url: `/api/local/organizer/runs/${undoRun.runId}/redo`,
+    });
+    expect(redoWithoutHeader.statusCode).toBe(403);
 
     const redo = await app.inject({
       method: "POST",
@@ -114,7 +138,7 @@ describe("Organizer HTTP contract", () => {
     expect(redo.statusCode).toBe(200);
     const redoRun = JSON.parse(redo.payload);
     expect(redoRun.redoOf).toBe(undoRun.runId);
-    await expect(fs.readFile(targetPath, "utf8")).resolves.toBe("pdf");
     await expect(fs.stat(sourcePath)).rejects.toThrow();
+    await expect(fs.readFile(targetPath, "utf8")).resolves.toBe("pdf content");
   });
 });

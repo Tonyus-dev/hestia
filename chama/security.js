@@ -98,8 +98,8 @@ export function applyCodiceCors(req, reply, allowedOrigin) {
 
   reply.header("Access-Control-Allow-Origin", reqOrigin);
   reply.header("Vary", "Origin");
-  reply.header("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
-  reply.header("Access-Control-Allow-Headers", "Content-Type, X-Hestia-Local-Confirm");
+  reply.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  reply.header("Access-Control-Allow-Headers", "Content-Type");
   reply.header("Access-Control-Allow-Credentials", "true");
 
   if (req.headers["access-control-request-private-network"] === "true") {
