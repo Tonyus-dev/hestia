@@ -4,11 +4,12 @@
 // targetPath existente (re-verificado aqui, mesmo que o plano já tenha marcado "conflict").
 // Nunca apaga sem antes verificar que a cópia foi bem-sucedida (fallback de EXDEV).
 import { promises as fs } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { appendEvent } from "./events.js";
 import { isValidOrganizerId } from "./organizerIds.js";
 import { legacyStorageRoot } from "./legacyStorageConfig.js";
+import { config } from "./config.js";
 
 // Exportadas para reaproveitar em chama/organizerUndo.js — mesmo fallback de EXDEV, mesma
 // checagem de "não sobrescrever", sem duplicar a lógica em dois lugares.
@@ -30,7 +31,7 @@ export const LARGE_PLAN_THRESHOLD = 5000;
 function isInside(child, parent) {
   const c = resolve(child);
   const p = resolve(parent);
-  return c === p || c.startsWith(`${p}/`);
+  return c === p || c.startsWith(`${p}${sep}`);
 }
 
 async function getNearestExistingAncestor(targetPath) {
@@ -51,13 +52,44 @@ async function getNearestExistingAncestor(targetPath) {
 }
 
 function allowedSourceRoots() {
-  return [kalineRoot()];
+  return [
+    { kind: "kaline", path: kalineRoot() },
+    ...(config.storageSources || []).map((source) => ({ kind: "external", path: source.path })),
+  ];
+}
+
+function allowedRootFor(sourcePath) {
+  return allowedSourceRoots().find((root) => isInside(sourcePath, root.path));
 }
 
 async function validateItem(item) {
-  if (!(await targetExists(item.sourcePath))) return "sourcePath não existe";
-  if (!allowedSourceRoots().some((root) => isInside(item.sourcePath, root))) {
-    return "sourcePath fora das fontes permitidas";
+  if (!["move", "copy"].includes(item.action)) return "action não permitida";
+
+  const sourceRoot = allowedRootFor(item.sourcePath);
+  if (!sourceRoot) return "sourcePath fora das fontes permitidas";
+  if (sourceRoot.kind === "external" && item.action !== "copy") {
+    return "fonte externa aceita apenas copy";
+  }
+
+  let sourceStat;
+  try {
+    sourceStat = await fs.lstat(item.sourcePath);
+  } catch {
+    return "sourcePath não existe";
+  }
+  if (sourceStat.isSymbolicLink()) return "sourcePath é symlink";
+  if (!sourceStat.isFile()) return "sourcePath não é arquivo regular";
+
+  let realSource;
+  let realSourceRoot;
+  try {
+    realSource = await fs.realpath(item.sourcePath);
+    realSourceRoot = await fs.realpath(sourceRoot.path);
+  } catch (err) {
+    return err.code || err.message;
+  }
+  if (!isInside(realSource, realSourceRoot)) {
+    return "sourcePath escapa da fonte permitida via realpath";
   }
 
   // 1. Validação lexical básica contra travessia
@@ -166,7 +198,7 @@ export async function moveWithExdevFallback(sourcePath, targetPath) {
   }
 }
 
-async function applyItem(item) {
+export async function applyItem(item) {
   if (item.status === "conflict") {
     return { ...item, status: "skipped", error: "conflito detectado no plano" };
   }

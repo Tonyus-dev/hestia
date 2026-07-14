@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { isLoopbackHost, resolvePresenceCorsOrigins } from "./security.js";
 import { resolveDataDir } from "./dataDir.js";
 import { resolveRetention } from "./retention.js";
+import { validateStorageSources } from "./storageSources.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -23,6 +24,7 @@ function loadUserConfig() {
     if (Number.isFinite(raw.port)) out.port = Number(raw.port);
     if (Array.isArray(raw.storagePaths))
       out.storagePaths = raw.storagePaths.filter((s) => typeof s === "string");
+    out.storageSources = validateStorageSources(raw.storageSources);
     if (Array.isArray(raw.services))
       out.services = raw.services.filter((s) => ALLOWED_SERVICES.includes(s));
     return out;
@@ -60,7 +62,7 @@ export const config = {
       ? userCfg.storagePaths
       : ["/", this.storageRoot];
   },
-  storageSources: [],
+  storageSources: userCfg.storageSources || [],
   services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
   // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
   // whitelist de ~/.chama/config.json.

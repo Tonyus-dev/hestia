@@ -7,29 +7,19 @@
 import { promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import {
-  getOrganizerRun,
-  targetExists,
-  moveWithExdevFallback,
-  writeManifest,
-} from "./organizerApply.js";
+import { getOrganizerRun, targetExists, applyItem, writeManifest } from "./organizerApply.js";
 import { appendEvent } from "./events.js";
 
 async function redoOperation(originalOp) {
-  await fs.mkdir(dirname(originalOp.to), { recursive: true });
   if (await targetExists(originalOp.to)) {
     return { ...originalOp, status: "skipped", error: "target já existe (conflito)" };
   }
-  try {
-    if (originalOp.action === "move") {
-      await moveWithExdevFallback(originalOp.from, originalOp.to);
-    } else {
-      await fs.copyFile(originalOp.from, originalOp.to, fs.constants.COPYFILE_EXCL);
-    }
-    return { ...originalOp, status: "ok" };
-  } catch (err) {
-    return { ...originalOp, status: "failed", error: err.code || err.message };
-  }
+  return applyItem({
+    ...originalOp,
+    sourcePath: originalOp.from,
+    targetPath: originalOp.to,
+    status: "planned",
+  });
 }
 
 export async function redoOrganizerRun(undoRunId, dataDir) {

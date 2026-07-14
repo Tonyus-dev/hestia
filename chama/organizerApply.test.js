@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { mkdtemp } from "node:fs";
 import { tmpdir } from "node:os";
 import { applyOrganizerPlan, getOrganizerRuns, getOrganizerRun } from "./organizerApply.js";
+import { undoOrganizerRun } from "./organizerUndo.js";
+import { redoOrganizerRun } from "./organizerRedo.js";
+import { config } from "./config.js";
 
 async function makeTmpDir(prefix) {
   return new Promise((resolve, reject) =>
@@ -24,6 +27,7 @@ describe("applyOrganizerPlan", () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    config.storageSources = [];
     delete process.env.HESTIA_KALINE_ROOT;
     for (const dir of [workDir, dataDir]) {
       try {
@@ -206,6 +210,7 @@ describe("applyOrganizerPlan safety gates", () => {
   });
 
   afterEach(async () => {
+    config.storageSources = [];
     delete process.env.HESTIA_KALINE_ROOT;
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
     await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
@@ -348,5 +353,183 @@ describe("applyOrganizerPlan safety gates", () => {
 
     linkSpy.mockRestore();
     unlinkSpy.mockRestore();
+  });
+});
+
+describe("applyOrganizerPlan external read-only sources", () => {
+  let kalineRoot;
+  let externalRoot;
+  let dataDir;
+
+  beforeEach(async () => {
+    kalineRoot = await makeTmpDir("hestia-apply-kaline-");
+    externalRoot = await makeTmpDir("hestia-apply-external-");
+    dataDir = await makeTmpDir("hestia-apply-external-data-");
+    process.env.HESTIA_KALINE_ROOT = kalineRoot;
+    await fs.mkdir(join(dataDir, "events"), { recursive: true });
+    config.storageSources = [
+      {
+        id: "external",
+        label: "External",
+        path: externalRoot,
+        category: "midia/videos",
+        mode: "external-readonly",
+      },
+    ];
+  });
+
+  afterEach(async () => {
+    config.storageSources = [];
+    delete process.env.HESTIA_KALINE_ROOT;
+    await fs.rm(kalineRoot, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(externalRoot, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it("aplica copy externo, undo remove só a cópia e redo recria a cópia", async () => {
+    const sourcePath = join(externalRoot, "filme.mp4");
+    const targetPath = join(kalineRoot, "midia", "videos", "filme.mp4");
+    await fs.writeFile(sourcePath, "conteudo-video");
+
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("conteudo-video");
+    await expect(fs.access(targetPath)).rejects.toThrow();
+
+    const applyRun = await applyOrganizerPlan(
+      {
+        planId: "plan_external",
+        items: [{ id: "i1", sourcePath, targetPath, action: "copy", status: "planned" }],
+      },
+      dataDir,
+    );
+    expect(applyRun.operations[0].status).toBe("ok");
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("conteudo-video");
+    await expect(fs.readFile(targetPath, "utf8")).resolves.toBe("conteudo-video");
+
+    const undoRun = await undoOrganizerRun(applyRun.runId, dataDir);
+    expect(undoRun.operations[0].status).toBe("ok");
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("conteudo-video");
+    await expect(fs.access(targetPath)).rejects.toThrow();
+
+    const redoRun = await redoOrganizerRun(undoRun.runId, dataDir);
+    expect(redoRun.operations[0].status).toBe("ok");
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("conteudo-video");
+    await expect(fs.readFile(targetPath, "utf8")).resolves.toBe("conteudo-video");
+  });
+
+  it.each([
+    ["recusa move em fonte externa", "move", "fonte externa aceita apenas copy"],
+    ["recusa ação desconhecida", "delete", "action não permitida"],
+  ])("%s", async (_name, action, error) => {
+    const sourcePath = join(externalRoot, "arquivo.txt");
+    const targetPath = join(kalineRoot, "destino", `${action}.txt`);
+    await fs.writeFile(sourcePath, "x");
+
+    const run = await applyOrganizerPlan(
+      {
+        planId: `plan_${action}`,
+        items: [{ id: "i1", sourcePath, targetPath, action, status: "planned" }],
+      },
+      dataDir,
+    );
+
+    expect(run.operations[0]).toMatchObject({ status: "skipped", error });
+    await expect(fs.readFile(sourcePath, "utf8")).resolves.toBe("x");
+    await expect(fs.access(targetPath)).rejects.toThrow();
+  });
+
+  it("recusa arquivo symlink", async () => {
+    const real = join(externalRoot, "real.txt");
+    const sourcePath = join(externalRoot, "link.txt");
+    const targetPath = join(kalineRoot, "destino", "link.txt");
+    await fs.writeFile(real, "x");
+    await fs.symlink(real, sourcePath);
+
+    const run = await applyOrganizerPlan(
+      {
+        planId: "plan_symlink",
+        items: [{ id: "i1", sourcePath, targetPath, action: "copy", status: "planned" }],
+      },
+      dataDir,
+    );
+
+    expect(run.operations[0]).toMatchObject({ status: "skipped", error: "sourcePath é symlink" });
+    await expect(fs.readFile(real, "utf8")).resolves.toBe("x");
+    await expect(fs.access(targetPath)).rejects.toThrow();
+  });
+
+  it("recusa origem real escapando por symlink de diretório", async () => {
+    const outsideDir = await makeTmpDir("hestia-outside-");
+    try {
+      await fs.writeFile(join(outsideDir, "escape.txt"), "x");
+      const linkDir = join(externalRoot, "atalho");
+      await fs.symlink(outsideDir, linkDir, "dir");
+      const sourcePath = join(linkDir, "escape.txt");
+      const targetPath = join(kalineRoot, "destino", "escape.txt");
+
+      const run = await applyOrganizerPlan(
+        {
+          planId: "plan_escape",
+          items: [{ id: "i1", sourcePath, targetPath, action: "copy", status: "planned" }],
+        },
+        dataDir,
+      );
+
+      expect(run.operations[0]).toMatchObject({
+        status: "skipped",
+        error: "sourcePath escapa da fonte permitida via realpath",
+      });
+      await expect(fs.readFile(join(outsideDir, "escape.txt"), "utf8")).resolves.toBe("x");
+      await expect(fs.access(targetPath)).rejects.toThrow();
+    } finally {
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("recusa origem fora das áreas permitidas e destino fora de /KALINE", async () => {
+    const outsideDir = await makeTmpDir("hestia-outside-source-");
+    try {
+      const outsideSource = join(outsideDir, "fora.txt");
+      await fs.writeFile(outsideSource, "x");
+      const externalSource = join(externalRoot, "externo.txt");
+      await fs.writeFile(externalSource, "y");
+
+      const run = await applyOrganizerPlan(
+        {
+          planId: "plan_rejections",
+          items: [
+            {
+              id: "i1",
+              sourcePath: outsideSource,
+              targetPath: join(kalineRoot, "destino", "fora.txt"),
+              action: "copy",
+              status: "planned",
+            },
+            {
+              id: "i2",
+              sourcePath: externalSource,
+              targetPath: join(outsideDir, "destino.txt"),
+              action: "copy",
+              status: "planned",
+            },
+          ],
+        },
+        dataDir,
+      );
+
+      expect(run.operations[0]).toMatchObject({
+        status: "skipped",
+        error: "sourcePath fora das fontes permitidas",
+      });
+      expect(run.operations[1]).toMatchObject({
+        status: "skipped",
+        error: "targetPath fora de /KALINE",
+      });
+      await expect(fs.readFile(outsideSource, "utf8")).resolves.toBe("x");
+      await expect(fs.readFile(externalSource, "utf8")).resolves.toBe("y");
+      await expect(fs.access(join(kalineRoot, "destino", "fora.txt"))).rejects.toThrow();
+      await expect(fs.access(join(outsideDir, "destino.txt"))).rejects.toThrow();
+    } finally {
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    }
   });
 });

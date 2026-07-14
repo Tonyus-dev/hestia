@@ -182,9 +182,48 @@ describe("scanConfiguredSources", () => {
 
     const result = await scanConfiguredSources();
     expect(result.items).toHaveLength(1);
-    expect(result.items[0].id).toBe("filmes-hd");
-    expect(result.items[0].exists).toBe(true);
-    expect(result.items[0].files).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      id: "filmes-hd",
+      label: "Filmes do HD",
+      category: "midia/videos",
+      mode: "external-readonly",
+      exists: true,
+      files: 1,
+      bytes: 1,
+      extensions: { ".mp4": 1 },
+    });
+    expect(result.items[0]).not.toHaveProperty("entries");
+    expect(result.items[0]).not.toHaveProperty("filme.mp4");
+    expect(JSON.stringify(result.items[0])).not.toContain("filme.mp4");
+
+    vi.doUnmock("./config.js");
+  });
+
+  it("mantém fonte desmontada configurada no scan com exists:false", async () => {
+    const missingPath = join(tmpDir, "desmontada");
+    vi.resetModules();
+    vi.doMock("./config.js", () => ({
+      config: {
+        storageSources: [
+          {
+            id: "hd-ausente",
+            label: "HD ausente",
+            path: missingPath,
+            category: "midia/videos",
+            mode: "external-readonly",
+          },
+        ],
+      },
+    }));
+    const { scanConfiguredSources } = await import("./storageScanner.js");
+
+    const result = await scanConfiguredSources();
+    expect(result.items[0]).toMatchObject({
+      id: "hd-ausente",
+      label: "HD ausente",
+      exists: false,
+      files: 0,
+    });
 
     vi.doUnmock("./config.js");
   });
