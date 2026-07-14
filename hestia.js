@@ -335,6 +335,7 @@ app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/storage/status", async () => await getStorageStatus());
 app.get("/api/storage/discover", async () => await discoverVolumes());
 app.get("/api/storage/model", async () => getStorageModel());
+app.get("/api/storage/sources", async () => ({ items: config.storageSources }));
 app.get("/api/storage/scan", async () => ({
   kaline: await scanStorageModel(),
   sources: await scanConfiguredSources(),

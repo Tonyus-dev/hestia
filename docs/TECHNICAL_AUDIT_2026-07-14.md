@@ -70,7 +70,7 @@ Premissas de segurança operacional:
 | Alta | Contrato divergente: frontend chama undo/redo em `/api/local/organizer/runs/:id/undo|redo`, README também documenta esse formato, mas backend expõe `/api/local/organizer/undo` e `/api/local/organizer/redo`. | Rotas em `hestia.js`; chamadas em `src/lib/hestia/api.ts` |
 | Alta | README lista rotas de undo/redo antigas/inexistentes; isso quebra operação manual documentada. | README vs backend |
 | Alta | `POST /api/storage/organizer/plan` é GET mas persiste plano no filesystem; é uma escrita por método de leitura e não passa pelo hook de confirmação de POST local. | `generateOrganizerPlan` + `writePlan` |
-| Média | `config.storageSources` existe e é exposto, mas não há mecanismo de configuração populando esse array; portanto fontes externas parecem mortas/inativas no runtime atual. | `config.storageSources: []` e `/api/storage/sources` |
+| Resolvido | `config.storageSources` é populado exclusivamente por `~/.chama/config.json` com validação estrita; fontes externas não vêm de query/body/header. | `config.storageSources` e `/api/storage/sources` |
 | Média | Station usa configuração sanitizada no frontend e cliente backend robusto, mas é opcional; sem env fica `not_configured`. | `stationClient.js`, `/api/station/*` |
 | Média | Códice exige `codice/epub` e `codice/pdf`; se qualquer um faltar, health/library falham com 503, embora `txt` seja opcional. | `getAvailableCodiceFolders` |
 | Baixa | `presenceCorsOrigins` aceita `*` por design, enquanto Códice rejeita wildcard; isso é menos restritivo para presença pública. | `isOriginAllowed` |
@@ -301,7 +301,7 @@ CLI (--host/--port)
 
 ## Configuração morta/duplicada/contraditória
 
-- `storageSources: []` é exposto e escaneado, mas não é populado por env nem por `~/.chama/config.json`. Estado: **configuração aparentemente morta/incompleta**.
+- `storageSources` é opcional em `~/.chama/config.json`; quando ausente fica `[]`, quando presente exige `id`, `label`, `path`, `category` e `mode: "external-readonly"`.
 - `HESTIA_STORAGE_PATH` e `HESTIA_KALINE_ROOT` são aliases funcionais; duplicação intencional/legada.
 - `config.readonly: true`, `readonlyByDefault: true` e `controlledWrites: true` coexistem com endpoints que escrevem (`organizer apply`, `organizer plan`, `codice import`, Hermes). Não é contraditório se interpretado como “leitura por padrão”, mas é perigoso se lido como read-only absoluto.
 - `stationBaseUrl` é retornado em `/api/config`, mas não existe como propriedade direta de `config`; o spread de `publicStationConfig()` fornece flags sanitizadas. Campo pode sair `undefined`.
@@ -328,7 +328,7 @@ Pontos frágeis:
 
 - GET `/api/storage/organizer/plan` escreve no disco.
 - Frontend usa endpoints de undo/redo incompatíveis com backend.
-- `allowedSourceRoots()` em apply permite somente `/KALINE`; fontes externas planejadas como `copy` podem ser invalidadas se algum dia `storageSources` for populado fora de `/KALINE`.
+- `allowedSourceRoots()` em apply permite `/KALINE` e paths de `storageSources` validados; fontes externas continuam somente `copy`.
 - Transação é por item; não existe rollback automático total em caso de falha parcial.
 
 ## Storage
@@ -349,7 +349,7 @@ Estado atual:
 Pontos frágeis:
 
 - Sem `df`, endpoints degradam para indisponível.
-- `storageSources` permanece vazio.
+- `storageSources` permanece vazio por padrão e só é populado por configuração local válida.
 
 ## Códice
 
@@ -786,7 +786,7 @@ Sem remoção proposta nesta auditoria. Itens a verificar por uso real antes de 
 - Sem lock/transação global no Organizer.
 - `exec` shell no conversor.
 - Sem limite explícito de tamanho de upload.
-- `storageSources` incompleto/morto.
+- `storageSources` implementado como configuração local opcional e validada.
 - README e docs divergem de rotas reais.
 - LLM default hardcoded pode não existir no host.
 - Códice import retorna path absoluto.
@@ -806,7 +806,7 @@ Sem remoção proposta nesta auditoria. Itens a verificar por uso real antes de 
 | Organizer undo pela UI | Quebrado provável | Frontend chama `/api/local/organizer/runs/:runId/undo`; backend expõe `/api/local/organizer/undo` |
 | Organizer redo pela UI | Quebrado provável | Frontend chama `/api/local/organizer/runs/:undoRunId/redo`; backend expõe `/api/local/organizer/redo` |
 | README undo/redo manual | Divergente | README documenta URLs parametrizadas inexistentes em seção de Organizer |
-| Storage sources externas | Incompleto | `config.storageSources` sempre `[]` no runtime atual |
+| Storage sources externas | Coerente | `config.storageSources` vem de `~/.chama/config.json` validado ou fica `[]` por padrão |
 | Produto “readonly” | Ambíguo | Há writes controlados e importação Códice |
 | Códice import remoto via CORS | Divergente | Backend aceita POST, mas CORS anuncia GET/HEAD/OPTIONS; browser cross-origin tende a falhar no preflight |
 | App sem build | Quebrado por design | hestia.js retorna “Interface não encontrada” se build SSR/static ausente |
@@ -818,7 +818,7 @@ Sem remoção proposta nesta auditoria. Itens a verificar por uso real antes de 
 3. **INCIDENTE — GET que persiste plano.** `POST /api/storage/organizer/plan` tem efeito colateral em disco ao persistir plano.
 4. **INCIDENTE — import do Códice com escrita e execução.** A rota combina upload, escrita local e execução do LibreOffice sem confirmação dedicada de operação.
 5. **INCIDENTE — documentação operacional divergente.** README pode induzir operador a chamar endpoints inexistentes.
-6. **INCIDENTE — storageSources exposto mas sem origem configurável ativa.** UI mostra feature que tende a permanecer vazia.
+6. **Resolvido — storageSources** agora tem origem configurável ativa em `~/.chama/config.json`, com validação estrita.
 
 # Plano de Correção
 
@@ -924,7 +924,7 @@ Inclui:
 | `services` | Usada | Mantida: whitelist em `~/.chama/config.json`, consumida por status/config. |
 | `storagePaths` | Usada | Mantida: configura caminhos observados por storage status. |
 | `storageRoot` / `HESTIA_STORAGE_PATH` / `HESTIA_KALINE_ROOT` | Duplicada compatível | Mantida com precedência documentada; `HESTIA_STORAGE_PATH` prevalece. |
-| `storageSources` | Morta | Removida do runtime público; scanner retorna lista vazia explícita e UI não mostra painel de fontes externas. |
+| `storageSources` | Usada | Mantida e implementada via `~/.chama/config.json`; itens inválidos são ignorados e o Organizer usa fontes externas apenas como `copy`. |
 | defaults de host/porta/retenção/LLM | Usados | Mantidos. |
 | envs LLM | Usados | Mantidos; runtime usa registro oficial em `chama/llm.js`. |
 
@@ -933,5 +933,5 @@ Inclui:
 - Console: UI e chamadas ao backend local.
 - Station: integração externa opcional de estação; não substitui Chama Local.
 - Organizer: geração/aplicação/undo/redo de planos locais aprovados.
-- Storage: leitura de disco e modelo canônico `/KALINE`; sem fontes externas fantasma.
+- Storage: leitura de disco, modelo canônico `/KALINE` e fontes externas configuradas explicitamente; sem fontes fantasmas.
 - Códice: leitura da biblioteca e import administrativo protegido; biblioteca dedicada/persistência canônica seguem fora de escopo.

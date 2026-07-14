@@ -25,10 +25,27 @@ function loadUserConfig() {
       out.storagePaths = raw.storagePaths.filter((s) => typeof s === "string");
     if (Array.isArray(raw.services))
       out.services = raw.services.filter((s) => ALLOWED_SERVICES.includes(s));
+    if (Array.isArray(raw.storageSources))
+      out.storageSources = raw.storageSources.map(normalizeStorageSource).filter(Boolean);
     return out;
   } catch {
     return {};
   }
+}
+
+function normalizeStorageSource(source) {
+  if (!source || typeof source !== "object") return null;
+  const { id, label, path, category, mode } = source;
+  if (
+    typeof id !== "string" ||
+    typeof label !== "string" ||
+    typeof path !== "string" ||
+    typeof category !== "string" ||
+    mode !== "external-readonly"
+  ) {
+    return null;
+  }
+  return { id, label, path, category, mode };
 }
 
 const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
@@ -60,6 +77,7 @@ export const config = {
       ? userCfg.storagePaths
       : ["/", this.storageRoot];
   },
+  storageSources: Array.isArray(userCfg.storageSources) ? userCfg.storageSources : [],
   services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
   // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
   // whitelist de ~/.chama/config.json.

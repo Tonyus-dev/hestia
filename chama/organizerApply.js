@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { appendEvent } from "./events.js";
 import { isValidOrganizerId } from "./organizerIds.js";
 import { legacyStorageRoot } from "./legacyStorageConfig.js";
+import { config } from "./config.js";
 
 // Exportadas para reaproveitar em chama/organizerUndo.js — mesmo fallback de EXDEV, mesma
 // checagem de "não sobrescrever", sem duplicar a lógica em dois lugares.
@@ -51,7 +52,7 @@ async function getNearestExistingAncestor(targetPath) {
 }
 
 function allowedSourceRoots() {
-  return [kalineRoot()];
+  return [kalineRoot(), ...(config.storageSources || []).map((source) => source.path)];
 }
 
 async function validateItem(item) {

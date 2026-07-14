@@ -168,6 +168,9 @@ export type HardwareConfig = {
     services: string[];
   };
 };
+export type StorageSources = {
+  items: { id: string; label: string; path: string; category: string; mode: string }[];
+};
 export type ServiceBinding = {
   id: string;
   serviceName: string;
@@ -588,6 +591,7 @@ export const hestiaApi = {
 export const hestiaLegacyApi = {
   storage: () => safeFetch<StorageStatus>("/api/storage/status"),
   storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
+  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
   organizerPlan: (extensions?: string) =>
     safePost<OrganizerPlan>(
