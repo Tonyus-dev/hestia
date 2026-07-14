@@ -594,10 +594,12 @@ export const hestiaLegacyApi = {
   storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
   organizerPlan: (extensions?: string) =>
-    safeFetch<OrganizerPlan>(
+    safePost<OrganizerPlan>(
       extensions
-        ? `/api/storage/organizer/plan?extensions=${encodeURIComponent(extensions)}`
-        : "/api/storage/organizer/plan",
+        ? `/api/local/organizer/plan?extensions=${encodeURIComponent(extensions)}`
+        : "/api/local/organizer/plan",
+      {},
+      { "x-hestia-local-confirm": "organize" },
       3600000,
     ),
   llmChat: (message: string, model?: string, contextBlock?: string, facet?: string) =>
