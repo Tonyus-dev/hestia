@@ -53,6 +53,31 @@ export type ServerStatus = {
   checkedAt: string;
 };
 
+export type CodiceBook = {
+  id: string;
+  name: string;
+  title: string;
+  author: string | null;
+  format: string;
+  size: number;
+  modifiedAt: string;
+  url: string;
+};
+
+export type CodiceLibrary = {
+  schemaVersion: number;
+  generatedAt: string;
+  truncated: boolean;
+  limit: number;
+  books: CodiceBook[];
+};
+
+export type CodiceImportResult = {
+  success: boolean;
+  filename: string;
+  path: string;
+};
+
 export type StoragePath = {
   path: string;
   exists: boolean;
@@ -588,6 +613,31 @@ export const hestiaLegacyApi = {
       { "x-hestia-local-confirm": "organize" },
       60000,
     ),
+  codiceLibrary: () => safeFetch<CodiceLibrary>("/api/codice/library"),
+  codiceImport: async (file: File, name: string) => {
+    const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
+    const url = `${base}/api/codice/import?name=${encodeURIComponent(name)}`;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 60000);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        body: file,
+        signal: controller.signal,
+      });
+      if (!res.ok)
+        return handleErrorResponse<CodiceImportResult>(res, "POST", "/api/codice/import");
+      const data = (await res.json()) as CodiceImportResult;
+      return { status: "ok", data, fetchedAt: new Date().toISOString() };
+    } catch (err) {
+      return handleFetchException<CodiceImportResult>(err, "POST", "/api/codice/import", 60000);
+    } finally {
+      clearTimeout(t);
+    }
+  },
 };
 
 export function formatBytes(bytes: number | null | undefined): string {

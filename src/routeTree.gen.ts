@@ -19,6 +19,7 @@ import { Route as StationLogsRouteImport } from './routes/_station.logs'
 import { Route as StationHistoricoRouteImport } from './routes/_station.historico'
 import { Route as StationEndpointsRouteImport } from './routes/_station.endpoints'
 import { Route as StationConfigRouteImport } from './routes/_station.config'
+import { Route as StationCodiceRouteImport } from './routes/_station.codice'
 
 const StationRoute = StationRouteImport.update({
   id: '/_station',
@@ -69,9 +70,15 @@ const StationConfigRoute = StationConfigRouteImport.update({
   path: '/config',
   getParentRoute: () => StationRoute,
 } as any)
+const StationCodiceRoute = StationCodiceRouteImport.update({
+  id: '/codice',
+  path: '/codice',
+  getParentRoute: () => StationRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof StationIndexRoute
+  '/codice': typeof StationCodiceRoute
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
   '/historico': typeof StationHistoricoRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByFullPath {
   '/storage': typeof StationStorageRoute
 }
 export interface FileRoutesByTo {
+  '/codice': typeof StationCodiceRoute
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
   '/historico': typeof StationHistoricoRoute
@@ -95,6 +103,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_station': typeof StationRouteWithChildren
+  '/_station/codice': typeof StationCodiceRoute
   '/_station/config': typeof StationConfigRoute
   '/_station/endpoints': typeof StationEndpointsRoute
   '/_station/historico': typeof StationHistoricoRoute
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/codice'
     | '/config'
     | '/endpoints'
     | '/historico'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/storage'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/codice'
     | '/config'
     | '/endpoints'
     | '/historico'
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_station'
+    | '/_station/codice'
     | '/_station/config'
     | '/_station/endpoints'
     | '/_station/historico'
@@ -218,10 +230,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationConfigRouteImport
       parentRoute: typeof StationRoute
     }
+    '/_station/codice': {
+      id: '/_station/codice'
+      path: '/codice'
+      fullPath: '/codice'
+      preLoaderRoute: typeof StationCodiceRouteImport
+      parentRoute: typeof StationRoute
+    }
   }
 }
 
 interface StationRouteChildren {
+  StationCodiceRoute: typeof StationCodiceRoute
   StationConfigRoute: typeof StationConfigRoute
   StationEndpointsRoute: typeof StationEndpointsRoute
   StationHistoricoRoute: typeof StationHistoricoRoute
@@ -234,6 +254,7 @@ interface StationRouteChildren {
 }
 
 const StationRouteChildren: StationRouteChildren = {
+  StationCodiceRoute: StationCodiceRoute,
   StationConfigRoute: StationConfigRoute,
   StationEndpointsRoute: StationEndpointsRoute,
   StationHistoricoRoute: StationHistoricoRoute,

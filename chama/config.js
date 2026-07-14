@@ -85,6 +85,8 @@ export const config = {
   get hermesRoot() {
     return process.env.HESTIA_HERMES_ROOT || join(this.dataDir, "hermes");
   },
+  // Origem permitida para o Códice acessar via CORS (Tailscale/Cloudflare)
+  codiceCorsOrigin: process.env.HESTIA_CODICE_CORS_ORIGIN || "",
   // Hosts extras permitidos (útil para o Tailscale Serve passar o Hostname)
   allowedHosts: process.env.HESTIA_ALLOWED_HOSTS || "",
 };
