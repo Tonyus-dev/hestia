@@ -163,29 +163,10 @@ describe("scanConfiguredSources", () => {
     }
   });
 
-  it("varre as fontes configuradas em config.storageSources", async () => {
-    vi.resetModules();
-    vi.doMock("./config.js", () => ({
-      config: {
-        storageSources: [
-          {
-            id: "filmes-hd",
-            label: "Filmes do HD",
-            path: tmpDir,
-            category: "midia/videos",
-            mode: "external-readonly",
-          },
-        ],
-      },
-    }));
+  it("não expõe fontes externas enquanto não existir configuração ativa", async () => {
     const { scanConfiguredSources } = await import("./storageScanner.js");
 
     const result = await scanConfiguredSources();
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0].id).toBe("filmes-hd");
-    expect(result.items[0].exists).toBe(true);
-    expect(result.items[0].files).toBe(1);
-
-    vi.doUnmock("./config.js");
+    expect(result.items).toHaveLength(0);
   });
 });

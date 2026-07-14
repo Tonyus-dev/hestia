@@ -94,7 +94,7 @@ sequenceDiagram
     Note over K,S: 1. Escrita do Arquivo
     K->>S: Escreve arquivo bruto em /KALINE/entrada via rede local
     Note over K,H: 2. Geração e Persistência do Plano
-    K->>H: GET /api/storage/organizer/plan
+    K->>H: POST /api/storage/organizer/plan
     H->>S: Lê arquivos em /KALINE/entrada e simula destinos
     H->>H: Persiste o plano temporário gerado no estado interno
     H-->>K: Retorna o plano gerado (JSON) com os destinos propostos

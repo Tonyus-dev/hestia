@@ -60,7 +60,6 @@ export const config = {
       ? userCfg.storagePaths
       : ["/", this.storageRoot];
   },
-  storageSources: [],
   services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
   // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
   // whitelist de ~/.chama/config.json.

@@ -45,7 +45,6 @@ GET /api/hardware/status
 GET /api/hardware/config
 GET /api/storage/status
 GET /api/storage/model
-GET /api/storage/sources
 GET /api/storage/scan
 GET /api/services/status
 GET /api/services/bindings
@@ -56,7 +55,7 @@ GET /api/config
 ### Ações locais protegidas
 
 ```http
-GET  /api/storage/organizer/plan
+POST /api/storage/organizer/plan
 GET  /api/local/organizer/runs
 POST /api/local/organizer/apply
 POST /api/local/organizer/runs/:runId/undo
@@ -231,9 +230,8 @@ GET /api/server/status
 GET /api/storage/status
 GET /api/storage/discover  # descobre volumes montados de verdade (ver abaixo)
 GET /api/storage/model     # árvore canônica de /KALINE (ver abaixo)
-GET /api/storage/sources   # fontes externas do HD configuradas (ver abaixo)
 GET /api/storage/scan      # varredura read-only de /KALINE e das fontes (ver abaixo)
-GET /api/storage/organizer/plan  # gera um plano dry-run (ver seção Organizer abaixo)
+POST /api/storage/organizer/plan  # gera um plano dry-run (ver seção Organizer abaixo)
 GET /api/services/status
 GET /api/services/bindings  # vínculos read-only com serviços existentes (ver abaixo)
 GET /api/logs?tail=100      # 1..200
@@ -271,19 +269,18 @@ A Héstia Station entende `/KALINE` como uma árvore canônica fixa (`entrada`, 
 própria Chama Local (identidade/eventos/snapshots internos continuam em `~/.chama/data` ou
 `STATE_DIRECTORY`, nunca dentro de `/KALINE`).
 
-`GET /api/storage/scan` varre `/KALINE` e as fontes externas configuradas (abaixo) e devolve só um
+`GET /api/storage/scan` varre `/KALINE` e devolve só um
 **resumo** por pasta — contagem de arquivos, bytes totais, extensões — nunca uma lista de nomes de
 arquivo, nem localmente nem na Presence. A varredura tem limites conservadores
 (`maxDepth: 4`, `maxFiles: 5000` por pasta) e nunca segue symlink recursivamente; se um limite for
 atingido, a pasta volta com `truncated: true` e `reason` (`"maxDepth"` ou `"maxFiles"`).
 
-Fontes externas do HD (opcional, via `~/.chama/config.json`, chave `storageSources` — ver seção
-de Configuração abaixo) entram na mesma varredura, mas o `scan` em si é leitura por padrão: nunca move,
-copia ou apaga nada (isso só acontece via `POST /api/local/organizer/apply`, abaixo).
+Fontes externas foram retiradas do contrato público nesta etapa: não havia configuração ativa
+coerente alimentando essa lista. O `scan` é leitura por padrão e nunca move, copia ou apaga nada
+(isso só acontece via `POST /api/local/organizer/apply`, abaixo).
 
 ```bash
 curl -s http://localhost:4517/api/storage/model | jq
-curl -s http://localhost:4517/api/storage/sources | jq
 curl -s http://localhost:4517/api/storage/scan | jq
 ```
 
@@ -295,7 +292,7 @@ um plano seguro; Héstia aplica apenas planos aprovados. Fontes externas configu
 read-only: entram no plano como `copy`, nunca como perda do original.
 
 ```
-GET  /api/storage/organizer/plan          # gera e persiste um novo plano dry-run
+POST /api/storage/organizer/plan          # gera e persiste um novo plano dry-run
 POST /api/local/organizer/apply           # aplica um plano já gerado (exige confirmação)
 GET  /api/local/organizer/runs            # lista execuções anteriores
 GET  /api/local/organizer/runs/:runId     # manifesto de uma execução
@@ -306,7 +303,7 @@ POST /api/local/organizer/runs/:runId/redo  # refaz uma execução de undo (exig
 **1. Gerar o plano** (só cálculo, nenhuma escrita — pode chamar quantas vezes quiser):
 
 ```bash
-curl -s http://localhost:4517/api/storage/organizer/plan | jq
+curl -s -X POST http://localhost:4517/api/storage/organizer/plan | jq
 ```
 
 Cada item do plano tem `sourcePath`/`targetPath`/`action` (`"move"` para `entrada`, `"copy"` para
@@ -461,23 +458,12 @@ proteja com Tailscale/firewall na frente).
   "host": "127.0.0.1",
   "port": 4517,
   "storagePaths": ["/", "/KALINE", "/mnt/backup"],
-  "services": ["jellyfin", "smbd", "tailscaled"],
-  "storageSources": [
-    {
-      "id": "filmes-hd",
-      "label": "Filmes do HD",
-      "path": "/mnt/hd/Filmes",
-      "category": "midia/videos",
-      "mode": "external-readonly"
-    }
-  ]
+  "services": ["jellyfin", "smbd", "tailscaled"]
 }
 ```
 
 Só os campos acima são lidos. Serviços são intersectados com a lista permitida:
-`jellyfin`, `smbd`, `tailscaled`. Cada item de `storageSources` só é aceito se tiver
-os cinco campos (`id`/`label`/`path`/`category`/`mode`) como string — qualquer outro campo ou
-item incompleto é ignorado. `path` nunca vem de query/body/header, só deste arquivo.
+`jellyfin`, `smbd`, `tailscaled`. Campos desconhecidos são ignorados; não existe `storageSources` ativo neste contrato.
 
 ## Processo de construção
 
@@ -603,10 +589,6 @@ sudo chmod g+rwx /KALINE
 O `.deb` tenta fazer isso automaticamente no `postinst` se `/KALINE` já existir; se não existir
 ainda, ele só avisa — rode o comando acima manualmente depois de criar `/KALINE`.
 
-Se você usa `storageSources` (fontes externas do HD), cada path configurado lá também precisa
-estar acessível ao mesmo grupo (o `ReadWritePaths` do unit não conhece esses paths dinamicamente
-— são definidos em `~/.chama/config.json`, não no unit file).
-
 Pra quem instala via `scripts/install.sh` (checkout de git, não `/opt`): o diretório do checkout
 também precisa ser legível pelo UID efêmero — se estiver dentro de um `$HOME` com permissão
 700/750 (padrão), rode `chmod o+rX` no checkout e nos diretórios pais, ou clone fora do home
@@ -642,8 +624,7 @@ traversal agora recebe`404`/plano-não-encontrado, sem tocar o disco fora do esp
   `rename`/`copyFile` de verdade. Num app local de usuário único (sem outro processo
   concorrente mexendo em `/KALINE` ao mesmo tempo por design), o risco real é baixo — aceito
   como limitação conhecida, não uma vulnerabilidade ativa nesse modelo de ameaça.
-- **`storageSources.mode`**: já restrito a `"external-readonly"` (único valor aceito,
-  `chama/config.js`) — não existe modo que apague a origem de uma fonte externa.
+- **Fontes externas**: removidas do contrato ativo; não há `storageSources.mode` nem cópia de fonte externa nesta base.
 - **Header de confirmação**: `X-Hestia-Local-Confirm` é fricção de intenção, não autenticação —
   já documentado como tal; não é um segredo, é uma barreira contra disparo acidental/CSRF
   simples (formulário/`<img>` não conseguem setar header customizado sem preflight CORS, que
@@ -651,7 +632,7 @@ traversal agora recebe`404`/plano-não-encontrado, sem tocar o disco fora do esp
 
 ## Organizer / Ash — Segurança
 
-- Gerar plano é sempre **dry-run**: nenhum arquivo é movido, copiado, apagado ou renomeado em `GET /api/storage/organizer/plan`.
+- Gerar plano é sempre **dry-run**: nenhum arquivo é movido, copiado, apagado ou renomeado em `POST /api/storage/organizer/plan`.
 - `apply` exige confirmação explícita (`X-Hestia-Local-Confirm: organize`) e planos com mais de 5000 itens exigem confirmação extra do `planId`.
 - Revise o plano antes de aplicar; comece com poucos arquivos e use lotes para legado grande.
 - Planos grandes mostram apenas uma amostra inicial na UI para não travar o navegador.
@@ -759,3 +740,10 @@ Processar uma vez:
 curl -X POST http://127.0.0.1:4517/api/hermes/process-once \
   -H "X-Hestia-Local-Confirm: hermes"
 ```
+
+## PR #1 — contratos de housekeeping
+
+- Plano do Organizer é escrita controlada de histórico: use `POST /api/storage/organizer/plan`; `GET /api/storage/organizer/plan` responde 405 e não persiste.
+- Undo/redo têm um único contrato: `POST /api/local/organizer/runs/:runId/undo` e `POST /api/local/organizer/runs/:undoRunId/redo`, com `X-Hestia-Local-Confirm: organize`.
+- `storageSources` foi removido do contrato público porque não havia origem de configuração ativa; Storage hoje representa `/KALINE` e caminhos monitorados.
+- `POST /api/codice/import` é import administrativo local protegido por `X-Hestia-Local-Confirm: codice`; não é rota pública de leitura.

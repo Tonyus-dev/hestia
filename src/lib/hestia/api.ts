@@ -168,9 +168,6 @@ export type HardwareConfig = {
     services: string[];
   };
 };
-export type StorageSources = {
-  items: { id: string; label: string; path: string; category: string; mode: string }[];
-};
 export type ServiceBinding = {
   id: string;
   serviceName: string;
@@ -591,13 +588,14 @@ export const hestiaApi = {
 export const hestiaLegacyApi = {
   storage: () => safeFetch<StorageStatus>("/api/storage/status"),
   storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
-  storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
   organizerPlan: (extensions?: string) =>
-    safeFetch<OrganizerPlan>(
+    safePost<OrganizerPlan>(
       extensions
         ? `/api/storage/organizer/plan?extensions=${encodeURIComponent(extensions)}`
         : "/api/storage/organizer/plan",
+      {},
+      {},
       3600000,
     ),
   llmChat: (message: string, model?: string, contextBlock?: string, facet?: string) =>
@@ -645,6 +643,7 @@ export const hestiaLegacyApi = {
         method: "POST",
         headers: {
           "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "x-hestia-local-confirm": "codice",
         },
         body: file,
         signal: controller.signal,

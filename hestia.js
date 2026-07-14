@@ -335,12 +335,11 @@ app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/storage/status", async () => await getStorageStatus());
 app.get("/api/storage/discover", async () => await discoverVolumes());
 app.get("/api/storage/model", async () => getStorageModel());
-app.get("/api/storage/sources", async () => ({ items: config.storageSources }));
 app.get("/api/storage/scan", async () => ({
   kaline: await scanStorageModel(),
   sources: await scanConfiguredSources(),
 }));
-app.get("/api/storage/organizer/plan", async (req) => {
+app.post("/api/storage/organizer/plan", async (req) => {
   const extParam = req.query?.extensions;
   const allowedExtensions = extParam
     ? extParam.split(",").map((e) => e.trim().toLowerCase())
@@ -348,6 +347,16 @@ app.get("/api/storage/organizer/plan", async (req) => {
   const plan = await generateOrganizerPlan(undefined, allowedExtensions);
   await writePlan(plan, config.dataDir);
   return plan;
+});
+app.get("/api/storage/organizer/plan", async (_req, reply) => {
+  reply.code(405).send({
+    ok: false,
+    error: "Método não permitido",
+    code: "METHOD_NOT_ALLOWED",
+    detail:
+      "Geração de plano persiste um planId aprovável e deve usar POST /api/storage/organizer/plan.",
+    at: new Date().toISOString(),
+  });
 });
 app.get("/api/hardware/status", async () => await getHardwareStatus());
 app.get("/api/hardware/config", async () => await getHardwareConfig());
@@ -393,7 +402,7 @@ app.get("/api/config", async () => ({
 registerCodiceRoutes(app, config);
 
 // --- Rotas locais de escrita controlada (organizer) -------------------------
-// Só aplica plano já gerado por GET /api/storage/organizer/plan (planId).
+// Só aplica plano já gerado por POST /api/storage/organizer/plan (planId).
 app.post("/api/local/organizer/apply", async (req, reply) => {
   const body = req.body || {};
   if (typeof body.planId !== "string" || !body.planId) {
@@ -444,11 +453,11 @@ app.get("/api/local/organizer/runs/:runId", async (req, reply) => {
   }
   return run;
 });
-app.post("/api/local/organizer/undo", async (req) =>
-  undoOrganizerRun(req.body.runId, config.dataDir),
+app.post("/api/local/organizer/runs/:runId/undo", async (req) =>
+  undoOrganizerRun(req.params.runId, config.dataDir),
 );
-app.post("/api/local/organizer/redo", async (req) =>
-  redoOrganizerRun(req.body.undoRunId, config.dataDir),
+app.post("/api/local/organizer/runs/:undoRunId/redo", async (req) =>
+  redoOrganizerRun(req.params.undoRunId, config.dataDir),
 );
 
 // --- Rotas de Presence (read-only): consulta same-origin/local --------

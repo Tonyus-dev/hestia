@@ -62,7 +62,7 @@ describe("generateOrganizerPlan", () => {
     }
   });
 
-  it("gera plano com items de entrada (action:move) e fontes externas (action:copy)", async () => {
+  it("gera plano com items de entrada (action:move) sem fontes externas fantasma", async () => {
     const entradaDir = join(tmpDir, "entrada");
     const sourceDir = join(tmpDir, "hd-fonte");
     await fs.mkdir(entradaDir, { recursive: true });
@@ -79,25 +79,11 @@ describe("generateOrganizerPlan", () => {
         folders: [{ id: "entrada", label: "Entrada", absolutePath: entradaDir }],
       }),
     }));
-    vi.doMock("./config.js", () => ({
-      config: {
-        storageSources: [
-          {
-            id: "fonte-hd",
-            label: "Fonte HD",
-            path: sourceDir,
-            category: "codice/epub",
-            mode: "external-readonly",
-          },
-        ],
-      },
-    }));
-
     const { generateOrganizerPlan } = await import("./organizerPlan.js");
     const plan = await generateOrganizerPlan();
 
     expect(plan.planId).toMatch(/^plan_/);
-    expect(plan.items).toHaveLength(2);
+    expect(plan.items).toHaveLength(1);
 
     const entradaItem = plan.items.find((i) => i.sourcePath.endsWith("recibo.pdf"));
     expect(entradaItem.action).toBe("move");
@@ -105,18 +91,13 @@ describe("generateOrganizerPlan", () => {
     expect(entradaItem.sourceKind).toBe("entrada");
     expect(entradaItem.status).toBe("planned");
 
-    const sourceItem = plan.items.find((i) => i.sourcePath.endsWith("livro.epub"));
-    expect(sourceItem.action).toBe("copy");
-    expect(sourceItem.targetPath).toBe("/KALINE/codice/epub/2026/07/livro.epub");
-    expect(sourceItem.sourceKind).toBe("external");
-
-    expect(plan.summary.total).toBe(2);
-    expect(plan.summary.planned).toBe(2);
+    expect(plan.summary.total).toBe(1);
+    expect(plan.summary.planned).toBe(1);
     expect(plan.summary.conflicts).toBe(0);
     expect(plan.summary.ignored).toBe(0);
     expect(plan.summary.quarantined).toBe(0);
-    expect(plan.summary.byExtension).toMatchObject({ ".pdf": 1, ".epub": 1 });
-    expect(plan.summary.byTargetArea).toMatchObject({ "codice/pdf": 1, "codice/epub": 1 });
+    expect(plan.summary.byExtension).toMatchObject({ ".pdf": 1 });
+    expect(plan.summary.byTargetArea).toMatchObject({ "codice/pdf": 1 });
     expect(plan.dryRun).toBe(true);
   });
   it("classifica por classe/tipo/ano/mês, quarentena, revisão e ignorados", async () => {
@@ -162,7 +143,7 @@ describe("generateOrganizerPlan", () => {
         folders: [{ id: "entrada", label: "Entrada", absolutePath: entradaDir }],
       }),
     }));
-    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
+    vi.doMock("./config.js", () => ({ config: {} }));
 
     const { generateOrganizerPlan } = await import("./organizerPlan.js");
     const plan = await generateOrganizerPlan();
@@ -218,7 +199,7 @@ describe("generateOrganizerPlan", () => {
         ],
       }),
     }));
-    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
+    vi.doMock("./config.js", () => ({ config: {} }));
 
     const { generateOrganizerPlan } = await import("./organizerPlan.js");
     const plan = await generateOrganizerPlan();
@@ -244,7 +225,7 @@ describe("generateOrganizerPlan", () => {
         folders: [{ id: "entrada-uploads", label: "Uploads", absolutePath: uploadsDir }],
       }),
     }));
-    vi.doMock("./config.js", () => ({ config: { storageSources: [] } }));
+    vi.doMock("./config.js", () => ({ config: {} }));
 
     const { generateOrganizerPlan } = await import("./organizerPlan.js");
     const plan = await generateOrganizerPlan();

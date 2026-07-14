@@ -1,6 +1,5 @@
-// Chama Local — varredura read-only de /KALINE e das fontes externas configuradas.
-// Nunca aceita path vindo de fora (só de storageModel.js ou de config.storageSources, que só
-// vem do whitelist de ~/.chama/config.json — nunca de query/body/header).
+// Chama Local — varredura read-only de /KALINE.
+// Nunca aceita path vindo de fora; o scanner ativo vem do storageModel.js.
 // Nunca segue symlink recursivamente nesta PR. `scanPath`/`scanStorageModel`/`scanConfiguredSources`
 // nunca devolvem lista de arquivos, só resumo agregado (contagem/bytes/extensões) — mesmo em
 // endpoints locais, não só na Presence. `listFiles` é a exceção deliberada: devolve paths reais,
@@ -8,7 +7,6 @@
 import { readdir, stat, lstat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { getStorageModel } from "./storageModel.js";
-import { config } from "./config.js";
 import { legacyStorageRoot } from "./legacyStorageConfig.js";
 
 export const DEFAULT_INDEX_LIMITS = {
@@ -192,19 +190,6 @@ export async function scanStorageModel(limits = DEFAULT_INDEX_LIMITS) {
   return { root: model.root, folders, generatedAt: new Date().toISOString() };
 }
 
-export async function scanConfiguredSources(limits = DEFAULT_INDEX_LIMITS) {
-  const sources = config.storageSources || [];
-  const items = await Promise.all(
-    sources.map(async (source) => {
-      const scan = await scanPath(source.path, limits);
-      return {
-        id: source.id,
-        label: source.label,
-        category: source.category,
-        mode: source.mode,
-        ...scan,
-      };
-    }),
-  );
-  return { items, generatedAt: new Date().toISOString() };
+export async function scanConfiguredSources() {
+  return { items: [], generatedAt: new Date().toISOString() };
 }

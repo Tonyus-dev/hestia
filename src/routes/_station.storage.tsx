@@ -32,7 +32,6 @@ export const Route = createFileRoute("/_station/storage")({
 export function StoragePage() {
   const storage = useApi(hestiaLegacyApi.storage);
   const model = useApi(hestiaLegacyApi.storageModel);
-  const sources = useApi(hestiaLegacyApi.storageSources);
   const scan = useApi(hestiaLegacyApi.storageScan);
 
   return (
@@ -43,8 +42,8 @@ export function StoragePage() {
           Storage da Héstia Console
         </h1>
         <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
-          Volumes, caminhos, fontes externas e estado do /KALINE. Esta rota consulta o scan
-          read-only; organização local fica em /organizar.
+          Volumes, caminhos, estado do /KALINE. Esta rota consulta o scan read-only; organização
+          local fica em /organizar.
         </p>
       </header>
 
@@ -107,30 +106,7 @@ export function StoragePage() {
             ))}
         </DataCard>
 
-        <DataCard eyebrow="Fontes" title="Fontes externas" status={statusOf(sources.state)}>
-          {sources.state.status === "loading" && <p>consultando…</p>}
-          {sources.state.status === "unavailable" && (
-            <UnavailableNote
-              message={sources.state.message}
-              details={sources.state.details}
-              onRetry={sources.retry}
-              refreshing={sources.refreshing}
-            />
-          )}
-          {sources.state.status === "ok" && sources.state.data.items.length === 0 && (
-            <p className="text-[color:var(--kaline-faint)] text-[13px]">Nenhuma fonte externa.</p>
-          )}
-          {sources.state.status === "ok" &&
-            sources.state.data.items.map((s) => (
-              <Row key={s.id} k={s.label} v={`${s.path} · ${s.mode}`} />
-            ))}
-        </DataCard>
-
-        <DataCard
-          eyebrow="Scan"
-          title="Resumo de /KALINE e fontes externas"
-          status={statusOf(scan.state)}
-        >
+        <DataCard eyebrow="Scan" title="Resumo de /KALINE" status={statusOf(scan.state)}>
           {scan.state.status === "loading" && <p>consultando…</p>}
           {scan.state.status === "unavailable" && (
             <UnavailableNote

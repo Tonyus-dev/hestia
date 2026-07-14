@@ -69,7 +69,7 @@ Premissas de segurança operacional:
 | Alta, podendo se tornar Crítica conforme implantação | Endpoint de importação do Códice escreve em disco e executa `soffice` via `exec`, mas não exige confirmação dedicada de operação; a rota é consumida pelo frontend como upload real. | `POST /api/codice/import`, `convertDocxToEpub`, `hestiaLegacyApi.codiceImport` |
 | Alta | Contrato divergente: frontend chama undo/redo em `/api/local/organizer/runs/:id/undo|redo`, README também documenta esse formato, mas backend expõe `/api/local/organizer/undo` e `/api/local/organizer/redo`. | Rotas em `hestia.js`; chamadas em `src/lib/hestia/api.ts` |
 | Alta | README lista rotas de undo/redo antigas/inexistentes; isso quebra operação manual documentada. | README vs backend |
-| Alta | `GET /api/storage/organizer/plan` é GET mas persiste plano no filesystem; é uma escrita por método de leitura e não passa pelo hook de confirmação de POST local. | `generateOrganizerPlan` + `writePlan` |
+| Alta | `POST /api/storage/organizer/plan` é GET mas persiste plano no filesystem; é uma escrita por método de leitura e não passa pelo hook de confirmação de POST local. | `generateOrganizerPlan` + `writePlan` |
 | Média | `config.storageSources` existe e é exposto, mas não há mecanismo de configuração populando esse array; portanto fontes externas parecem mortas/inativas no runtime atual. | `config.storageSources: []` e `/api/storage/sources` |
 | Média | Station usa configuração sanitizada no frontend e cliente backend robusto, mas é opcional; sem env fica `not_configured`. | `stationClient.js`, `/api/station/*` |
 | Média | Códice exige `codice/epub` e `codice/pdf`; se qualquer um faltar, health/library falham com 503, embora `txt` seja opcional. | `getAvailableCodiceFolders` |
@@ -254,7 +254,7 @@ hestia.js
 ## Divergências de rota
 
 - Frontend chama `POST /api/local/organizer/runs/:runId/undo` e `POST /api/local/organizer/runs/:undoRunId/redo`.
-- Backend registra `POST /api/local/organizer/undo` e `POST /api/local/organizer/redo`.
+- Backend registra `POST /api/local/organizer/runs/:runId/undo` e `POST /api/local/organizer/runs/:undoRunId/redo`.
 - README documenta ambos os formatos em pontos diferentes, gerando ambiguidade.
 
 # Configuração
@@ -815,7 +815,7 @@ Sem remoção proposta nesta auditoria. Itens a verificar por uso real antes de 
 
 1. **INCIDENTE — fluxo principal não comprovado manualmente.** Testes automatizados e build não provam que app abre e que Organizer/Códice/LLM funcionam com dados reais.
 2. **INCIDENTE — contrato undo/redo divergente.** Recuperação do Organizer pelo frontend não bate com rotas do backend.
-3. **INCIDENTE — GET que persiste plano.** `GET /api/storage/organizer/plan` tem efeito colateral em disco ao persistir plano.
+3. **INCIDENTE — GET que persiste plano.** `POST /api/storage/organizer/plan` tem efeito colateral em disco ao persistir plano.
 4. **INCIDENTE — import do Códice com escrita e execução.** A rota combina upload, escrita local e execução do LibreOffice sem confirmação dedicada de operação.
 5. **INCIDENTE — documentação operacional divergente.** README pode induzir operador a chamar endpoints inexistentes.
 6. **INCIDENTE — storageSources exposto mas sem origem configurável ativa.** UI mostra feature que tende a permanecer vazia.
@@ -908,3 +908,30 @@ Inclui:
 - tombstones;
 - fila local;
 - restauração após formatação do celular.
+
+## PR #1 — Housekeeping aplicado em 2026-07-14
+
+### Contratos corrigidos
+
+- Organizer plan: `POST /api/storage/organizer/plan` é o único contrato que gera e persiste plano aprovável. `GET /api/storage/organizer/plan` não persiste e responde `405 METHOD_NOT_ALLOWED`, porque geração de `planId` é escrita operacional.
+- Organizer undo/redo: frontend, backend e documentação usam somente `POST /api/local/organizer/runs/:runId/undo` e `POST /api/local/organizer/runs/:undoRunId/redo`, ambos com `X-Hestia-Local-Confirm: organize`.
+- Códice import: `POST /api/codice/import` permanece apenas como conversão administrativa local de `.docx` para EPUB. Deve existir enquanto a UI `/codice` consumir importação; não há outra rota equivalente no backend. Não é leitura pública, exige `X-Hestia-Local-Confirm: codice`, CORS continua opt-in e sem wildcard.
+
+### Configuração auditada
+
+| Configuração | Estado | Decisão |
+| --- | --- | --- |
+| `services` | Usada | Mantida: whitelist em `~/.chama/config.json`, consumida por status/config. |
+| `storagePaths` | Usada | Mantida: configura caminhos observados por storage status. |
+| `storageRoot` / `HESTIA_STORAGE_PATH` / `HESTIA_KALINE_ROOT` | Duplicada compatível | Mantida com precedência documentada; `HESTIA_STORAGE_PATH` prevalece. |
+| `storageSources` | Morta | Removida do runtime público; scanner retorna lista vazia explícita e UI não mostra painel de fontes externas. |
+| defaults de host/porta/retenção/LLM | Usados | Mantidos. |
+| envs LLM | Usados | Mantidos; runtime usa registro oficial em `chama/llm.js`. |
+
+### Responsabilidades consolidadas
+
+- Console: UI e chamadas ao backend local.
+- Station: integração externa opcional de estação; não substitui Chama Local.
+- Organizer: geração/aplicação/undo/redo de planos locais aprovados.
+- Storage: leitura de disco e modelo canônico `/KALINE`; sem fontes externas fantasma.
+- Códice: leitura da biblioteca e import administrativo protegido; biblioteca dedicada/persistência canônica seguem fora de escopo.
