@@ -7,6 +7,7 @@ import { HESTIA } from "@/content/kaline";
 import { useQuery } from "@tanstack/react-query";
 import { hestiaApi } from "@/lib/hestia/api";
 import { cn } from "@/lib/utils";
+import kaApple from "@/assets/ka-apple.png";
 
 function SambaIndicator() {
   const { data } = useQuery({
@@ -79,6 +80,7 @@ export function TopBar() {
             className="inline-flex items-center gap-3 min-w-0 max-w-full rounded-md px-1.5 py-1 -mx-1.5 -my-1 hover:bg-[color:var(--kaline-copper)]/[0.06]"
             aria-label={`${HESTIA.appName} — Início`}
           >
+            <img src={kaApple} alt="Logo" className="w-6 h-6 object-contain" />
             <span className="kaline-serif text-[18px] md:text-[20px] text-[color:var(--kaline-text)] tracking-tight truncate">
               Héstia Console
             </span>

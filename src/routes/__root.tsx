@@ -10,7 +10,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import kaApple from "../assets/ka-apple.png.asset.json";
+import kaApple from "../assets/ka-apple.png";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
@@ -98,14 +98,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       {
         rel: "icon",
-        type: "image/svg+xml",
-        href:
-          "data:image/svg+xml;utf8," +
-          encodeURIComponent(
-            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#0e0a08"/><path d="M32 12c4 6 10 9 10 18a10 10 0 0 1-20 0c0-4 2-6 4-8-1 4 1 6 3 6 0-6-3-10 3-16z" fill="#c8873d"/><path d="M32 22c2 3 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 3-5 0 3 2 3 2 0z" fill="#f4c27a"/></svg>`,
-          ),
+        type: "image/png",
+        href: kaApple,
       },
-      { rel: "apple-touch-icon", href: kaApple.url },
+      { rel: "apple-touch-icon", href: kaApple },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
