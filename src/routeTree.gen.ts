@@ -20,6 +20,7 @@ import { Route as StationHistoricoRouteImport } from './routes/_station.historic
 import { Route as StationEndpointsRouteImport } from './routes/_station.endpoints'
 import { Route as StationConfigRouteImport } from './routes/_station.config'
 import { Route as StationCodiceRouteImport } from './routes/_station.codice'
+import { Route as StationAssistenteRouteImport } from './routes/_station.assistente'
 
 const StationRoute = StationRouteImport.update({
   id: '/_station',
@@ -75,9 +76,15 @@ const StationCodiceRoute = StationCodiceRouteImport.update({
   path: '/codice',
   getParentRoute: () => StationRoute,
 } as any)
+const StationAssistenteRoute = StationAssistenteRouteImport.update({
+  id: '/assistente',
+  path: '/assistente',
+  getParentRoute: () => StationRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof StationIndexRoute
+  '/assistente': typeof StationAssistenteRoute
   '/codice': typeof StationCodiceRoute
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
@@ -89,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/storage': typeof StationStorageRoute
 }
 export interface FileRoutesByTo {
+  '/assistente': typeof StationAssistenteRoute
   '/codice': typeof StationCodiceRoute
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
@@ -103,6 +111,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_station': typeof StationRouteWithChildren
+  '/_station/assistente': typeof StationAssistenteRoute
   '/_station/codice': typeof StationCodiceRoute
   '/_station/config': typeof StationConfigRoute
   '/_station/endpoints': typeof StationEndpointsRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/assistente'
     | '/codice'
     | '/config'
     | '/endpoints'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/storage'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/assistente'
     | '/codice'
     | '/config'
     | '/endpoints'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_station'
+    | '/_station/assistente'
     | '/_station/codice'
     | '/_station/config'
     | '/_station/endpoints'
@@ -237,10 +249,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationCodiceRouteImport
       parentRoute: typeof StationRoute
     }
+    '/_station/assistente': {
+      id: '/_station/assistente'
+      path: '/assistente'
+      fullPath: '/assistente'
+      preLoaderRoute: typeof StationAssistenteRouteImport
+      parentRoute: typeof StationRoute
+    }
   }
 }
 
 interface StationRouteChildren {
+  StationAssistenteRoute: typeof StationAssistenteRoute
   StationCodiceRoute: typeof StationCodiceRoute
   StationConfigRoute: typeof StationConfigRoute
   StationEndpointsRoute: typeof StationEndpointsRoute
@@ -254,6 +274,7 @@ interface StationRouteChildren {
 }
 
 const StationRouteChildren: StationRouteChildren = {
+  StationAssistenteRoute: StationAssistenteRoute,
   StationCodiceRoute: StationCodiceRoute,
   StationConfigRoute: StationConfigRoute,
   StationEndpointsRoute: StationEndpointsRoute,

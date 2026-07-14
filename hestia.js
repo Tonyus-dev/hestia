@@ -340,8 +340,12 @@ app.get("/api/storage/scan", async () => ({
   kaline: await scanStorageModel(),
   sources: await scanConfiguredSources(),
 }));
-app.get("/api/storage/organizer/plan", async () => {
-  const plan = await generateOrganizerPlan();
+app.get("/api/storage/organizer/plan", async (req) => {
+  const extParam = req.query?.extensions;
+  const allowedExtensions = extParam
+    ? extParam.split(",").map((e) => e.trim().toLowerCase())
+    : null;
+  const plan = await generateOrganizerPlan(undefined, allowedExtensions);
   await writePlan(plan, config.dataDir);
   return plan;
 });

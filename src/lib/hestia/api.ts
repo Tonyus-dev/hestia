@@ -194,6 +194,14 @@ export type LlmHealth = {
   checkedAt: string;
 };
 
+export type LlmChatResult = {
+  ok: boolean;
+  text: string;
+  model: string;
+  runtime: string;
+  checkedAt: string;
+};
+
 export type HermesStatus = {
   ok: boolean;
   root: string;
@@ -585,7 +593,20 @@ export const hestiaLegacyApi = {
   storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
   storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
-  organizerPlan: () => safeFetch<OrganizerPlan>("/api/storage/organizer/plan", 3600000),
+  organizerPlan: (extensions?: string) =>
+    safeFetch<OrganizerPlan>(
+      extensions
+        ? `/api/storage/organizer/plan?extensions=${encodeURIComponent(extensions)}`
+        : "/api/storage/organizer/plan",
+      3600000,
+    ),
+  llmChat: (message: string, model?: string, contextBlock?: string, facet?: string) =>
+    safePost<LlmChatResult>(
+      "/api/llm/chat",
+      { message, model, contextBlock, facet: facet || "kaline" },
+      {},
+      90000,
+    ),
   organizerApply: (planId: string, largePlanConfirm = false) =>
     safePost<OrganizerRunManifest>(
       "/api/local/organizer/apply",
