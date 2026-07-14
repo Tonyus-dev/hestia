@@ -15,6 +15,14 @@ import {
 } from "./chama/stationClient.js";
 import { getHealth } from "./chama/health.js";
 import { getServerStatus } from "./chama/system.js";
+import { getStorageStatus } from "./chama/storage.js";
+import { discoverVolumes } from "./chama/storageDiscovery.js";
+import { getStorageModel } from "./chama/storageModel.js";
+import { scanStorageModel, scanConfiguredSources } from "./chama/storageScanner.js";
+import { generateOrganizerPlan, writePlan, getPlan } from "./chama/organizerPlan.js";
+import { applyOrganizerPlan, getOrganizerRuns, getOrganizerRun } from "./chama/organizerApply.js";
+import { undoOrganizerRun } from "./chama/organizerUndo.js";
+import { redoOrganizerRun } from "./chama/organizerRedo.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getHardwareStatus, getHardwareConfig } from "./chama/hardware.js";
 import { getServiceBindings } from "./chama/serviceBindings.js";
@@ -151,6 +159,21 @@ app.addHook("onRequest", async (req, reply) => {
     code: "EBADHOST",
     detail: `Header Host "${req.headers.host ?? ""}" não corresponde a ${config.host}:${config.port}.`,
     hint: "Acesse pela URL local (ex.: http://localhost:4517). Proteção contra DNS rebinding.",
+    at: new Date().toISOString(),
+  });
+});
+
+// --- Confirmação explícita para a única rota de escrita local. --------------
+// Sem CORS habilitado, um POST cross-origin com header customizado dispara preflight e falha
+// sem esse header (não existe forma de "esquecer" e disparar por acidente via <form>/<img>).
+app.addHook("onRequest", async (req, reply) => {
+  if (req.method !== "POST" || !req.url.startsWith("/api/local/")) return;
+  if (req.headers["x-hestia-local-confirm"] === "organize") return;
+  reply.code(403).send({
+    ok: false,
+    error: "Confirmação ausente",
+    code: "EMISSINGCONFIRM",
+    detail: 'Rotas de escrita local exigem o header "X-Hestia-Local-Confirm: organize".',
     at: new Date().toISOString(),
   });
 });
@@ -296,6 +319,19 @@ app.post("/api/llm/chat", async (req, reply) => {
 app.get("/api/hermes/status", async () => getHermesStatus(config));
 app.post("/api/hermes/process-once", async () => processHermesOnce(config));
 app.get("/api/server/status", async () => getServerStatus());
+app.get("/api/storage/status", async () => await getStorageStatus());
+app.get("/api/storage/discover", async () => await discoverVolumes());
+app.get("/api/storage/model", async () => getStorageModel());
+app.get("/api/storage/sources", async () => ({ items: config.storageSources }));
+app.get("/api/storage/scan", async () => ({
+  kaline: await scanStorageModel(),
+  sources: await scanConfiguredSources(),
+}));
+app.get("/api/storage/organizer/plan", async () => {
+  const plan = await generateOrganizerPlan();
+  await writePlan(plan, config.dataDir);
+  return plan;
+});
 app.get("/api/hardware/status", async () => await getHardwareStatus());
 app.get("/api/hardware/config", async () => await getHardwareConfig());
 app.get("/api/services/status", async () => await getServicesStatus());
@@ -335,6 +371,65 @@ app.get("/api/config", async () => ({
   services: config.services,
 }));
 
+// --- Rotas locais de escrita controlada (organizer) -------------------------
+// Só aplica plano já gerado por GET /api/storage/organizer/plan (planId).
+app.post("/api/local/organizer/apply", async (req, reply) => {
+  const body = req.body || {};
+  if (typeof body.planId !== "string" || !body.planId) {
+    reply.code(400).send({
+      ok: false,
+      error: "planId obrigatório",
+      code: "EBADREQUEST",
+      detail: 'Body deve conter { planId, mode: "apply" }, com planId de um plano já gerado.',
+      at: new Date().toISOString(),
+    });
+    return;
+  }
+  if (body.mode !== "apply") {
+    reply.code(400).send({
+      ok: false,
+      error: 'mode deve ser "apply"',
+      code: "EBADREQUEST",
+      at: new Date().toISOString(),
+    });
+    return;
+  }
+  const plan = await getPlan(body.planId, config.dataDir);
+  if (!plan) {
+    reply.code(404).send({
+      ok: false,
+      error: "Plano não encontrado",
+      code: "EPLANNOTFOUND",
+      detail: "planId inválido, expirado ou nunca gerado.",
+      at: new Date().toISOString(),
+    });
+    return;
+  }
+  return applyOrganizerPlan(plan, config.dataDir);
+});
+app.get("/api/local/organizer/runs", async () => ({
+  items: await getOrganizerRuns(config.dataDir),
+}));
+app.get("/api/local/organizer/runs/:runId", async (req, reply) => {
+  const run = await getOrganizerRun(req.params.runId, config.dataDir);
+  if (!run) {
+    reply.code(404).send({
+      ok: false,
+      error: "Execução não encontrada",
+      code: "ERUNNOTFOUND",
+      at: new Date().toISOString(),
+    });
+    return;
+  }
+  return run;
+});
+app.post("/api/local/organizer/undo", async (req) =>
+  undoOrganizerRun(req.body.runId, config.dataDir),
+);
+app.post("/api/local/organizer/redo", async (req) =>
+  redoOrganizerRun(req.body.undoRunId, config.dataDir),
+);
+
 // --- Rotas de Presence (read-only): consulta same-origin/local --------
 app.get(
   "/api/presence/manifest",
@@ -364,6 +459,10 @@ app.get(
 app.get(
   "/api/presence/services",
   presenceRoute(async () => await getServicesStatus()),
+);
+app.get(
+  "/api/presence/storage",
+  presenceRoute(async () => await getStorageStatus()),
 );
 app.get(
   "/api/presence/backups",

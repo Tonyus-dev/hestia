@@ -30,5 +30,6 @@ export function getHealth() {
     dataDirWritable: existsSync(config.dataDir)
       ? canWrite(config.dataDir)
       : canWrite(join(config.dataDir, "..")),
+    sambaActive: existsSync(config.storageRoot),
   };
 }

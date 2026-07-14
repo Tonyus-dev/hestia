@@ -18,7 +18,7 @@ EnvironmentFile=-/etc/default/hestia-console
 User=hestia-console
 Group=hestia-console
 NoNewPrivileges=yes
-ProtectSystem=strict
+ProtectSystem=full
 
 [Install]
 WantedBy=multi-user.target

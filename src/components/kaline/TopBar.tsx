@@ -4,6 +4,40 @@ import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { SidebarNav } from "./SidebarNav";
 import { HESTIA } from "@/content/kaline";
+import { useQuery } from "@tanstack/react-query";
+import { hestiaApi } from "@/lib/hestia/api";
+import { cn } from "@/lib/utils";
+import kaApple from "@/assets/ka-apple.png";
+
+function SambaIndicator() {
+  const { data } = useQuery({
+    queryKey: ["health"],
+    queryFn: () => hestiaApi.health(),
+    refetchInterval: 5000,
+  });
+
+  const isActive = data?.status === "ok" && data.data.sambaActive === true;
+  const isFetched = data !== undefined;
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden lg:inline text-[10px] uppercase tracking-[0.28em] text-[color:var(--kaline-faint)]">
+        Samba
+      </span>
+      <span
+        title={isActive ? "Conectado ao HD via Tailscale" : "Desconectado do HD"}
+        className={cn(
+          "inline-block h-2 w-2 rounded-full transition-colors duration-300",
+          !isFetched
+            ? "bg-[color:var(--kaline-faint)]/50"
+            : isActive
+              ? "bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.6)]"
+              : "bg-[#ef4444] shadow-[0_0_8px_rgba(239,68,68,0.6)]",
+        )}
+      />
+    </div>
+  );
+}
 
 export function TopBar() {
   const [open, setOpen] = useState(false);
@@ -46,6 +80,7 @@ export function TopBar() {
             className="inline-flex items-center gap-3 min-w-0 max-w-full rounded-md px-1.5 py-1 -mx-1.5 -my-1 hover:bg-[color:var(--kaline-copper)]/[0.06]"
             aria-label={`${HESTIA.appName} — Início`}
           >
+            <img src={kaApple} alt="Logo" className="w-6 h-6 object-contain" />
             <span className="kaline-serif text-[18px] md:text-[20px] text-[color:var(--kaline-text)] tracking-tight truncate">
               Héstia Console
             </span>
@@ -59,7 +94,8 @@ export function TopBar() {
           </Link>
         </div>
 
-        <div className="w-10 h-10 lg:w-auto lg:h-auto flex items-center justify-end">
+        <div className="w-10 h-10 lg:w-auto lg:h-auto flex items-center justify-end gap-4">
+          <SambaIndicator />
           <span className="hidden lg:inline text-[10px] uppercase tracking-[0.28em] text-[color:var(--kaline-faint)]">
             modo protegido
           </span>

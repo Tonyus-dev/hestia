@@ -21,6 +21,8 @@ function loadUserConfig() {
     const out = {};
     if (typeof raw.host === "string") out.host = raw.host;
     if (Number.isFinite(raw.port)) out.port = Number(raw.port);
+    if (Array.isArray(raw.storagePaths))
+      out.storagePaths = raw.storagePaths.filter((s) => typeof s === "string");
     if (Array.isArray(raw.services))
       out.services = raw.services.filter((s) => ALLOWED_SERVICES.includes(s));
     return out;
@@ -29,7 +31,7 @@ function loadUserConfig() {
   }
 }
 
-const ALLOWED_SERVICES = ["tailscaled"];
+const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
 const userCfg = loadUserConfig();
 
 const host = process.env.HESTIA_HOST || userCfg.host || "127.0.0.1";
@@ -50,6 +52,15 @@ export const config = {
   // Diretório de dados persistentes (identidade, eventos, snapshots). Só
   // vem de env/systemd — nunca do whitelist de ~/.chama/config.json.
   dataDir: resolveDataDir(),
+  get storageRoot() {
+    return process.env.HESTIA_STORAGE_PATH || process.env.HESTIA_KALINE_ROOT || "/KALINE";
+  },
+  get storagePaths() {
+    return userCfg.storagePaths && userCfg.storagePaths.length > 0
+      ? userCfg.storagePaths
+      : ["/", this.storageRoot];
+  },
+  storageSources: [],
   services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
   // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
   // whitelist de ~/.chama/config.json.
