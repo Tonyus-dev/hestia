@@ -1,16 +1,72 @@
 # Resumo Executivo
 
-Auditoria técnica do repositório Héstia em 2026-07-14. Escopo: leitura completa dos arquivos versionados relevantes do backend `chama/`, servidor `hestia.js`, frontend `src/`, documentação, scripts, packaging, testes e configuração. Não houve implementação de feature nem refatoração de código: esta entrega adiciona somente este documento de conhecimento.
+Esta auditoria documenta o snapshot do repositório Héstia identificado abaixo. O documento descreve evidências observadas nesse snapshot e não deve ser lido como garantia sobre versões futuras do repositório.
+
+## Identificação da auditoria
+
+- Repositório: `Tonyus-dev/hestia`
+- Branch auditada: `main`
+- Commit-base auditado: `6bb877241b0ddb76822a39a6f2e1e423f2b5a166`
+- Data da auditoria: `2026-07-14`
+- Natureza: auditoria estática + execução de testes/build/lint
+- Validação manual no host físico: não realizada nesta auditoria
+
+## Metodologia e limites
+
+- Leitura completa dos arquivos versionados relevantes ao runtime e aos contratos auditados: `hestia.js`, módulos `chama/`, cliente HTTP `src/lib/hestia/`, rotas `src/routes/`, componentes Héstia relevantes, `package.json`, configuração Vite/Vitest/TypeScript, scripts, packaging e documentação operacional.
+- Verificação por busca e referência cruzada para endpoints, variáveis de ambiente, chamadas frontend→backend, usos de `exec`/`execFile`, testes, dependências e documentação divergente.
+- Arquivos gerados, caches e artefatos de build não foram considerados fonte canônica de arquitetura ou contrato. Exemplos: `dist/`, `node_modules/`, caches do tooling e arquivos gerados pelo build.
+- Dependências externas foram auditadas apenas pelo uso declarado e pontos de integração no repositório; o código interno de bibliotecas npm, LibreOffice, Ollama, systemd, Samba e Tailscale não foi auditado.
+- Não houve validação no servidor físico.
+- Não houve prova manual de UI, `/KALINE`, Ollama, LibreOffice, systemd, Samba ou Tailscale.
+- Build, lint e testes automatizados não equivalem a produto funcionando. Eles provam apenas que os contratos automatizados executados passaram no ambiente desta auditoria.
+
+## Premissas de implantação
+
+Cenário operacional esperado inferido pela documentação e pelo código:
+
+```txt
+Tailscale
+├── rede privada criptografada
+├── acesso remoto ao servidor
+└── fronteira principal de rede
+Samba
+├── administração de arquivos
+└── acesso ao /KALINE
+Héstia
+├── API local
+├── processamento
+├── storage
+└── integração com Códice
+```
+
+Premissas de segurança operacional:
+
+- A Héstia não deve ser exposta diretamente à internet.
+- Não deve haver port forwarding público para a Héstia.
+- Samba deve ficar restrito à rede local confiável e/ou à interface `tailscale0`.
+- Tailscale reduz a superfície de exposição ao retirar a Héstia da internet pública.
+- Tailscale não substitui validação de entrada, autorização de operações, confirmação de escrita, idempotência ou proteção contra escrita insegura.
+- Dispositivos não confiáveis dentro da tailnet devem ser tratados como parte da superfície de ataque.
 
 ## Veredito Produto Real
 
-**INCIDENTE:** não há prova nesta auditoria de que o fluxo principal completo abre e funciona manualmente no host real do usuário. Existem testes automatizados e documentação de validação anterior, mas build/lint/teste automatizado não provam funcionamento manual. A checagem feita aqui validou leitura estática, contratos, testes e build; não validou a UI em navegador com `/KALINE`, Ollama, LibreOffice, systemd e disco reais.
+**INCIDENTE:** não há prova nesta auditoria de que o fluxo principal completo abre e funciona manualmente no host físico real. Existem testes automatizados e documentação de validação anterior, mas build/lint/teste automatizado não provam funcionamento manual. A checagem feita aqui validou leitura estática, contratos, testes e build; não validou a UI em navegador com `/KALINE`, Ollama, LibreOffice, systemd, Samba, Tailscale e disco reais.
+
+## Classificação de evidência
+
+| Tipo | O que foi observado | Limite |
+|---|---|---|
+| Achado comprovado por código | Rotas, middlewares, allowlists, variáveis de ambiente, persistência em filesystem, chamadas frontend→backend e uso de comandos locais. | Evidência estática; não prova operação real no host físico. |
+| Achado comprovado por teste | Suíte Vitest passou após a correção documental; cobre unidades e contratos automatizados existentes. | Não substitui smoke manual nem valida integrações reais com `/KALINE`, Ollama, LibreOffice, systemd, Samba ou Tailscale. |
+| Achado não validado no host real | Abertura do app, fluxo Organizer completo, Códice com arquivos reais grandes, LLM com modelo instalado, Station, Samba e Tailscale. | Deve permanecer como incidente até prova manual datada. |
+| Risco dependente da implantação | Exposição de rotas de escrita/importação e leitura de presença fora de rede confiável. | Severidade aumenta se a Héstia sair do cenário local/tailnet confiável. |
 
 ## Principais achados
 
 | Severidade | Achado | Evidência |
 |---|---|---|
-| Crítica | Endpoint de importação do Códice escreve em disco e executa `soffice` via `exec`, mas não exige header de confirmação local e o CORS do Códice anuncia apenas GET/HEAD/OPTIONS; a rota é consumida pelo frontend como upload real. | `POST /api/codice/import`, `convertDocxToEpub`, `hestiaLegacyApi.codiceImport` |
+| Alta, podendo se tornar Crítica conforme implantação | Endpoint de importação do Códice escreve em disco e executa `soffice` via `exec`, mas não exige confirmação dedicada de operação; a rota é consumida pelo frontend como upload real. | `POST /api/codice/import`, `convertDocxToEpub`, `hestiaLegacyApi.codiceImport` |
 | Alta | Contrato divergente: frontend chama undo/redo em `/api/local/organizer/runs/:id/undo|redo`, README também documenta esse formato, mas backend expõe `/api/local/organizer/undo` e `/api/local/organizer/redo`. | Rotas em `hestia.js`; chamadas em `src/lib/hestia/api.ts` |
 | Alta | README lista rotas de undo/redo antigas/inexistentes; isso quebra operação manual documentada. | README vs backend |
 | Alta | `GET /api/storage/organizer/plan` é GET mas persiste plano no filesystem; é uma escrita por método de leitura e não passa pelo hook de confirmação de POST local. | `generateOrganizerPlan` + `writePlan` |
@@ -408,29 +464,50 @@ Pontos frágeis: sem env fica não configurado; fluxo real depende de agente ext
 
 ## Registro oficial
 
-O registro oficial está em `chama/llm.js`: `ALLOWED_MODELS`, `DEFAULT_MODEL`, facets e funções de normalização/validação.
+O registro oficial encontrado no repositório está em `chama/llm.js`:
 
-## Modelos
+- `ALLOWED_MODELS`: `qwen2.5:0.5b`, `qwen3.5-0.8b`, `qwen3.5-0.8b:latest`.
+- `DEFAULT_MODEL`: `qwen3.5-0.8b`.
+- Facets/tarefas conversacionais permitidas: `kaline`, `klio`, `kharis`.
+- Endpoint de escolha de modelo: `POST /api/llm/chat`, campo opcional `model`.
+- Consumidor frontend real encontrado: rota `/assistente`, que consulta `llmHealth` e chama `llmChat`.
+- Consumidores externos documentados: Kaline/Klio via CORS opt-in para `/api/llm/*`.
+- Modelos rápidos registrados nominalmente no repositório: `qwen2.5:0.5b`, `qwen3.5-0.8b` e `qwen3.5-0.8b:latest`; a auditoria não comprovou desempenho nem instalação física desses modelos.
 
-| Modelo | Status | Quem usa |
-|---|---|---|
-| `qwen2.5:0.5b` | permitido | Cliente pode selecionar; UI menciona como compatível |
-| `qwen3.5-0.8b` | permitido e default | UI seleciona por padrão; backend default |
-| `qwen3.5-0.8b:latest` | permitido | Cliente pode selecionar |
+## Modelos permitidos
 
-## Tarefas/facets
+| Modelo | Papel declarado | Uso real encontrado | Consumidor | Instalado comprovadamente? |
+|---|---|---|---|---|
+| `qwen2.5:0.5b` | Modelo permitido/compatível e opção rápida mencionada na UI/documentação. | Pode ser selecionado pelo cliente se aparecer em `llmHealth.models`; não é default. | `/assistente` e clientes externos de `/api/llm/chat`. | Não comprovado nesta auditoria. |
+| `qwen3.5-0.8b` | Modelo padrão (`DEFAULT_MODEL`) e modelo leve/rápido esperado para chat local. | Default do backend quando `model` vem vazio; UI tenta selecionar se instalado. | `/assistente` e clientes externos de `/api/llm/chat`. | Não comprovado nesta auditoria. |
+| `qwen3.5-0.8b:latest` | Variante/tag permitida do modelo padrão. | Pode ser selecionado pelo cliente se aparecer em `llmHealth.models`; não é default. | `/assistente` e clientes externos de `/api/llm/chat`. | Não comprovado nesta auditoria. |
 
-| Facet | Status |
-|---|---|
-| `kaline` | default |
-| `klio` | permitido |
-| `kharis` | permitido |
+## Tarefas associadas
 
-## Escolha de modelo
+| Tarefa/facet | Implementação real | Consumidor | Observação |
+|---|---|---|---|
+| `kaline` | Conversa local via prompt textual em `generateLocalChat`. | `/assistente`; clientes externos permitidos por CORS. | Facet default. |
+| `klio` | Conversa local via o mesmo endpoint/prompt, sem pipeline separado encontrado. | Cliente externo/documentado. | Tarefa aceita, mas sem processamento especializado no backend atual. |
+| `kharis` | Conversa local via o mesmo endpoint/prompt, sem pipeline separado encontrado. | Cliente externo/documentado. | Tarefa aceita, mas sem processamento especializado no backend atual. |
+| Processamento de arquivos por LLM | Não encontrado como implementação real no runtime auditado. | — | Qualquer uso desse tipo deve ser tratado como planejado/documentado, não comprovado. |
 
-- Se `model` ausente/vazio: usa `DEFAULT_MODEL`.
-- Se cliente envia `model`: backend normaliza e exige `ALLOWED_MODELS.includes(model)`.
-- Portanto há escolha pelo cliente, mas não arbitrária.
+## Validações e limites
+
+- `message` deve ser string não vazia com no máximo 12.000 caracteres.
+- `contextBlock` e `structuredPrompt` são opcionais, mas se presentes devem ser strings com no máximo 40.000 caracteres cada.
+- `facet` é normalizada e precisa estar em `kaline`, `klio`, `kharis`.
+- `model` é normalizado e precisa estar em `ALLOWED_MODELS`.
+- O backend não aceita modelo arbitrário fora da allowlist.
+- O frontend consegue escolher modelo quando usa `/assistente`, mas a escolha continua limitada pela allowlist do backend.
+
+## Timeouts, fallback e indisponibilidade
+
+- Health: `HESTIA_LLM_HEALTH_TIMEOUT_MS` → `HESTIA_LLM_TIMEOUT_MS` → 5000ms.
+- Chat: `HESTIA_LLM_CHAT_TIMEOUT_MS` → `HESTIA_LLM_TIMEOUT_MS` → 90000ms.
+- Se `model` vem ausente/vazio, há fallback para `DEFAULT_MODEL`.
+- Não há fallback automático para outro modelo se o modelo escolhido/default não estiver instalado no Ollama.
+- Se o cliente envia modelo fora da allowlist, o backend responde erro de modelo não permitido.
+- Se Ollama está indisponível ou expira, health retorna `ok: false`; chat retorna 503 com `LLM_TIMEOUT` ou `OLLAMA_UNAVAILABLE`.
 
 ## Prompt interno
 
@@ -449,19 +526,16 @@ Mensagem original:
 <message>
 ```
 
-## Timeouts e fallback
+## Respostas explícitas
 
-- Health: `HESTIA_LLM_HEALTH_TIMEOUT_MS` → `HESTIA_LLM_TIMEOUT_MS` → 5000ms.
-- Chat: `HESTIA_LLM_CHAT_TIMEOUT_MS` → `HESTIA_LLM_TIMEOUT_MS` → 90000ms.
-- Falha/timeout vira 503 com `LLM_TIMEOUT` ou `OLLAMA_UNAVAILABLE`.
-- Não há fallback automático para outro modelo se o escolhido não existir no Ollama.
-
-## Perguntas obrigatórias
-
-- Existe modelo nunca usado? **Possivelmente** `qwen2.5:0.5b` e `qwen3.5-0.8b:latest` podem não ser usados se o usuário não selecionar; ainda estão em allowlist.
-- Existe modelo duplicado? **Parcialmente** `qwen3.5-0.8b` e `qwen3.5-0.8b:latest` podem apontar para o mesmo modelo local dependendo do Ollama.
-- Existe endpoint que permite escolher modelo arbitrário? **Não arbitrário**; `POST /api/llm/chat` aceita `model`, mas valida allowlist.
-- Existe hardcode? **Sim**: allowlist, default, facets e prompt template estão hardcoded.
+- O frontend consegue escolher um modelo? **Sim**, pela UI `/assistente`, desde que o modelo apareça no health/local e o backend aceite a allowlist.
+- O backend aceita modelo arbitrário? **Não**; `POST /api/llm/chat` aceita o campo `model`, mas rejeita nomes fora de `ALLOWED_MODELS`.
+- Existe allowlist? **Sim**, em `chama/llm.js`.
+- Existe fallback? **Sim**, apenas de `model` ausente/vazio para `DEFAULT_MODEL`; **não** existe fallback automático para outro modelo instalado.
+- Existe modelo registrado sem consumidor? **Não há consumidor exclusivo por modelo**; todos os modelos registrados compartilham o mesmo endpoint. `qwen2.5:0.5b` e `qwen3.5-0.8b:latest` podem ficar sem uso real se não forem selecionados por cliente ou não estiverem instalados.
+- Existem modelos hardcoded fora do registro? **Não foi encontrado outro registro oficial de modelos no runtime auditado**. A UI também menciona `qwen2.5:0.5b` e `qwen3.5-0.8b`, alinhados ao registro; `qwen3.5-0.8b:latest` aparece no backend.
+- Tarefas de processamento de arquivos realmente implementadas por LLM? **Não encontradas**; o processamento de arquivo real encontrado é o import/conversão do Códice via LibreOffice, não via LLM.
+- Tarefas apenas planejadas/documentadas? Qualquer integração Klio/Kaline além do chat textual e qualquer processamento de arquivo por LLM deve ser considerada planejada/documentada até validação de implementação específica.
 
 # Biblioteca
 
@@ -563,7 +637,7 @@ Stream com headers privados/no-store
 
 | Severidade | Item | Detalhe |
 |---|---|---|
-| Crítica | Códice import sem confirmação local | `POST /api/codice/import` escreve em `/KALINE` e executa LibreOffice sem `X-Hestia-Local-Confirm`; se CORS/Host forem configurados para acesso remoto, aumenta superfície de escrita. |
+| Alta, podendo se tornar Crítica | Códice import sem confirmação local dedicada | Severidade base: **Alta**. Pode se tornar **Crítica** se a Héstia estiver acessível fora de uma rede confiável ou se dispositivos não confiáveis fizerem parte da tailnet. |
 | Alta | `exec` shell em conversor | `convertDocxToEpub` usa `exec(cmd)`; há sanitização de filename e paths temporários, mas shell string é risco desnecessário. |
 | Alta | Sem limite explícito de upload | Body `.docx` pode consumir memória/disco; rate limit por requisição não limita tamanho. |
 | Alta | Undo/redo quebrado no frontend | A operação de recuperação esperada pelo produto não funciona pela rota atual do cliente. |
@@ -573,6 +647,17 @@ Stream com headers privados/no-store
 | Média | Retorno de path absoluto | Códice import retorna `path` do EPUB no filesystem. |
 | Baixa | CSP permite `unsafe-inline` | Justificado por hidratação TanStack, mas reduz proteção XSS. |
 | Baixa | Rate limit em memória por IP | Suficiente para local simples, mas frágil atrás de proxy/NAT e reinicia com processo. |
+
+### Refinamento específico — `POST /api/codice/import`
+
+| Dimensão | Avaliação |
+|---|---|
+| Severidade técnica | Alta por combinar upload, escrita em disco e execução local do LibreOffice. |
+| Pré-condições | Requisição precisa alcançar a Héstia e enviar corpo `.docx`; risco aumenta se a origem/cliente não for confiável ou se a rota estiver acessível fora do host/tailnet confiável. |
+| Exposição real esperada | Baixa a moderada no cenário correto: Héstia local, sem internet pública, protegida por host guard e por Tailscale/rede confiável. Não comprovado no host físico. |
+| Impacto | Escrita em `/KALINE/codice/epub`, execução de processo local, consumo de CPU/memória/disco e possível exposição de path absoluto no retorno. |
+| Riscos mantidos | Escrita em disco; execução do LibreOffice; ausência de confirmação dedicada; contrato CORS inconsistente; possível sobrescrita de EPUB de mesmo basename; ausência de idempotência; ausência de autenticação/autorização de operação. |
+| Quando vira Crítica | Se exposta diretamente à internet, se houver port forwarding público, se a tailnet incluir dispositivos não confiáveis, ou se CORS/Host allowlist forem configurados de forma ampla. |
 
 # Persistência
 
@@ -729,19 +814,97 @@ Sem remoção proposta nesta auditoria. Itens a verificar por uso real antes de 
 # Incidentes
 
 1. **INCIDENTE — fluxo principal não comprovado manualmente.** Testes automatizados e build não provam que app abre e que Organizer/Códice/LLM funcionam com dados reais.
-2. **INCIDENTE — undo/redo incompatíveis.** Recuperação do Organizer pelo frontend não bate com rotas do backend.
-3. **INCIDENTE — Códice import é escrita/execução sem confirmação dedicada.** Vai contra postura de API local protegida e read-only por padrão.
-4. **INCIDENTE — documentação operacional divergente.** README pode induzir operador a chamar endpoints inexistentes.
-5. **INCIDENTE — storageSources exposto mas sem origem configurável ativa.** UI mostra feature que tende a permanecer vazia.
+2. **INCIDENTE — contrato undo/redo divergente.** Recuperação do Organizer pelo frontend não bate com rotas do backend.
+3. **INCIDENTE — GET que persiste plano.** `GET /api/storage/organizer/plan` tem efeito colateral em disco ao persistir plano.
+4. **INCIDENTE — import do Códice com escrita e execução.** A rota combina upload, escrita local e execução do LibreOffice sem confirmação dedicada de operação.
+5. **INCIDENTE — documentação operacional divergente.** README pode induzir operador a chamar endpoints inexistentes.
+6. **INCIDENTE — storageSources exposto mas sem origem configurável ativa.** UI mostra feature que tende a permanecer vazia.
 
 # Plano de Correção
 
-Este plano é uma ordem de triagem; não implementado nesta auditoria.
+Este plano é apenas documental nesta auditoria. Não criar PRs nem implementar estas fases neste trabalho.
 
-1. Validar produto real manualmente: build, iniciar `hestia.js`, abrir UI, testar dashboard, storage, Códice library, Organizer plan/apply seguro em sandbox, undo/redo, hardware, station/config.
-2. Corrigir contrato undo/redo escolhendo uma única URL e alinhando backend, frontend, README e testes.
-3. Decidir política de Códice import: ou tornar explicitamente controlado com confirmação/limite/`execFile`/sem path absoluto, ou remover/ocultar upload até ficar seguro.
-4. Reclassificar `GET /api/storage/organizer/plan` como operação com efeito colateral: documentar claramente ou migrar para POST com confirmação apropriada.
-5. Resolver `storageSources`: implementar configuração mínima real ou remover da UI/API até existir.
-6. Rodar smoke manual em host real e registrar evidência datada.
-7. Só depois considerar limpeza de dependências/componentes mortos com `rg` e testes.
+## Fase 1 — Arrumar a casa
+
+Inclui:
+
+- corrigir divergência undo/redo;
+- alinhar backend, frontend e README;
+- corrigir GET que persiste plano;
+- revisar import do Códice;
+- remover ou documentar configurações mortas;
+- auditar o registro LLM existente;
+- validar Storage e Organizer no host real.
+
+Critério de saída:
+
+- Héstia abre;
+- Storage funciona;
+- Organizer aplica;
+- Undo funciona;
+- Redo funciona;
+- LLM responde em tarefa real;
+- nenhum contrato documentado está divergente.
+
+## Fase 2 — Biblioteca dedicada do Códice
+
+Inclui:
+
+- EPUB;
+- PDF;
+- TXT;
+- IDs estáveis;
+- scan;
+- paginação;
+- streaming;
+- Range;
+- ETag;
+- cache;
+- detecção de arquivos colocados via Samba.
+
+Critério de saída:
+
+- arquivo entra pelo Samba;
+- Héstia detecta;
+- Códice lista;
+- Códice abre;
+- PDF grande funciona corretamente.
+
+## Fase 3 — Fronteira Héstia ↔ Códice
+
+Inclui:
+
+- contrato versionado;
+- Tailscale;
+- erros estáveis;
+- timeouts;
+- limites;
+- indisponibilidade;
+- compatibilidade de versões;
+- autenticação adicional apenas se necessária.
+
+## Fase 4 — Persistência canônica
+
+Inclui:
+
+- SQLite;
+- progresso;
+- destaques;
+- notas;
+- fichamentos;
+- backup;
+- restauração;
+- integridade.
+
+## Fase 5 — Sincronização offline
+
+Inclui:
+
+- deviceId;
+- batchId;
+- idempotência;
+- checkpoints;
+- conflitos;
+- tombstones;
+- fila local;
+- restauração após formatação do celular.
