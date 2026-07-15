@@ -23,8 +23,8 @@ export async function targetExists(targetPath) {
   }
 }
 
-function kalineRoot() {
-  return legacyStorageRoot();
+function kalineRoot(options = {}) {
+  return options.storagePath || legacyStorageRoot();
 }
 const PLAN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const LARGE_PLAN_THRESHOLD = 5000;
@@ -52,15 +52,18 @@ async function getNearestExistingAncestor(targetPath) {
   }
 }
 
-function allowedSourceRoots() {
+function allowedSourceRoots(options = {}) {
   return [
-    { kind: "kaline", path: kalineRoot() },
-    ...(config.storageSources || []).map((source) => ({ kind: "external", path: source.path })),
+    { kind: "kaline", path: kalineRoot(options) },
+    ...(options.storageSources || config.storageSources || []).map((source) => ({
+      kind: "external",
+      path: source.path,
+    })),
   ];
 }
 
-function allowedRootFor(sourcePath) {
-  return allowedSourceRoots().find((root) => isInside(sourcePath, root.path));
+function allowedRootFor(sourcePath, options) {
+  return allowedSourceRoots(options).find((root) => isInside(sourcePath, root.path));
 }
 
 async function openVerifiedSource(sourcePath, sourceRoot) {
@@ -99,10 +102,10 @@ async function openVerifiedSource(sourcePath, sourceRoot) {
   }
 }
 
-async function validateItem(item) {
+async function validateItem(item, options = {}) {
   if (!["move", "copy"].includes(item.action)) return { error: "action não permitida" };
 
-  const sourceRoot = allowedRootFor(item.sourcePath);
+  const sourceRoot = allowedRootFor(item.sourcePath, options);
   if (!sourceRoot) return { error: "sourcePath fora das fontes permitidas" };
   if (sourceRoot.kind === "external" && item.action !== "copy") {
     return { error: "fonte externa aceita apenas copy" };
@@ -110,7 +113,7 @@ async function validateItem(item) {
 
   // 1. Validação lexical básica contra travessia
   const targetAbs = resolve(item.targetPath);
-  const rootAbs = resolve(kalineRoot());
+  const rootAbs = resolve(kalineRoot(options));
   if (!isInside(targetAbs, rootAbs)) {
     return { error: "targetPath fora de /KALINE" };
   }
@@ -219,15 +222,6 @@ async function copyOpenFileExclusive(sourceHandle, sourceStat, targetPath) {
   }
 }
 
-async function sourcePathStillMatchesHandle(sourcePath, sourceStat) {
-  try {
-    const currentStat = await fs.lstat(sourcePath);
-    return currentStat.dev === sourceStat.dev && currentStat.ino === sourceStat.ino;
-  } catch {
-    return false;
-  }
-}
-
 export async function moveWithExdevFallback(sourcePath, targetPath) {
   let linked = false;
   try {
@@ -263,29 +257,22 @@ export async function moveWithExdevFallback(sourcePath, targetPath) {
   }
 }
 
-export async function applyItem(item) {
+export async function applyItem(item, options = {}) {
   if (item.status === "conflict") {
     return { ...item, status: "skipped", error: "conflito detectado no plano" };
   }
   if (item.status === "ignored" || item.sourcePath === item.targetPath) {
     return { ...item, status: "skipped", error: item.ignoredReason || "item ignorado no plano" };
   }
-  const validation = await validateItem(item);
+  const validation = await validateItem(item, options);
   if (validation.error) return { ...item, status: "skipped", error: validation.error };
   const { sourceHandle, sourceStat } = validation;
   try {
-    await copyOpenFileExclusive(sourceHandle, sourceStat, item.targetPath);
     if (item.action === "move") {
-      if (!(await sourcePathStillMatchesHandle(item.sourcePath, sourceStat))) {
-        await fs.unlink(item.targetPath).catch(() => {});
-        return { ...item, status: "skipped", error: "sourcePath mudou antes de remover origem" };
-      }
-      try {
-        await fs.unlink(item.sourcePath);
-      } catch (err) {
-        await fs.unlink(item.targetPath).catch(() => {});
-        throw err;
-      }
+      await sourceHandle.close();
+      await moveWithExdevFallback(item.sourcePath, item.targetPath);
+    } else {
+      await copyOpenFileExclusive(sourceHandle, sourceStat, item.targetPath);
     }
     const targetStat = await fs.stat(item.targetPath);
     return {
@@ -320,7 +307,7 @@ export async function applyOrganizerPlan(plan, dataDir, options = {}) {
   const runId = `org_${Date.now()}_${randomUUID().slice(0, 8)}`;
   const operations = [];
   for (const item of plan.items) {
-    operations.push(await applyItem(item));
+    operations.push(await applyItem(item, options));
   }
 
   const summary = {
@@ -349,6 +336,8 @@ export async function applyOrganizerPlan(plan, dataDir, options = {}) {
       ({
         sourcePath,
         targetPath,
+        sourceKind,
+        sourceLabel,
         action,
         status: opStatus,
         reason,
@@ -358,6 +347,8 @@ export async function applyOrganizerPlan(plan, dataDir, options = {}) {
       }) => ({
         sourcePath,
         targetPath,
+        sourceKind: sourceKind || "entrada",
+        sourceLabel: sourceLabel || "Entrada",
         from: sourcePath,
         to: targetPath,
         action,
@@ -388,15 +379,21 @@ export async function applyOrganizerPlan(plan, dataDir, options = {}) {
 // Devolve metadados mínimos (não o manifesto inteiro) — o suficiente pra UI decidir quando
 // mostra "Desfazer" (execução original, ainda não desfeita) ou "Refazer" (execução de undo,
 // ainda não refeita). Uma execução de redo é terminal: nunca mostra nenhum dos dois botões.
+function organizerRunTimestamp(runId) {
+  const match = /^(?:org|undo|redo)_(\d+)_[0-9a-f]{8}$/.exec(runId);
+  return match ? Number(match[1]) : -1;
+}
+
 export async function getOrganizerRuns(dataDir) {
   try {
     const dir = join(dataDir, "organizer", "runs");
     const files = await fs.readdir(dir);
     const runIds = files
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => f.replace(/\.json$/, ""))
-      .sort()
-      .reverse();
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => file.replace(/\.json$/, ""))
+      .filter(isValidOrganizerId)
+      .sort((a, b) => organizerRunTimestamp(b) - organizerRunTimestamp(a) || b.localeCompare(a))
+      .slice(0, 200);
     return await Promise.all(
       runIds.map(async (runId) => {
         const manifest = await getOrganizerRun(runId, dataDir);
@@ -447,6 +444,11 @@ export async function claimAndApplyOrganizerPlan(planId, dataDir, options = {}) 
     await fs.rename(origPath, claimPath);
   } catch (err) {
     if (err.code === "ENOENT") {
+      if (await targetExists(consumedPath)) {
+        throw Object.assign(new Error("Plano já aplicado"), {
+          code: "PLAN_ALREADY_APPLIED",
+        });
+      }
       if (await targetExists(claimPath)) {
         throw Object.assign(new Error("Plano já em execução ou reclamado"), {
           code: "PLAN_ALREADY_CLAIMED",

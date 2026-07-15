@@ -3,7 +3,7 @@
 // para que o apply (chama/organizerApply.js) sempre aplique exatamente o que foi aprovado, e
 // não um recálculo potencialmente diferente feito no momento do apply.
 import { promises as fs } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getStorageModel } from "./storageModel.js";
 import { listFiles, DEFAULT_INDEX_LIMITS } from "./storageScanner.js";
@@ -13,8 +13,8 @@ import { legacyStorageRoot } from "./legacyStorageConfig.js";
 
 import { LARGE_PLAN_THRESHOLD } from "./organizerApply.js";
 
-function getRoot() {
-  return legacyStorageRoot();
+function getRoot(options = {}) {
+  return resolve(options.storagePath || legacyStorageRoot());
 }
 
 const RECENTLY_MODIFIED_MS = 60_000;
@@ -120,6 +120,7 @@ async function planItemsForFiles(
   action,
   source = { kind: "unknown", label: "unknown" },
   allowedExtensions = null,
+  options = {},
 ) {
   const items = [];
   const filteredFiles = allowedExtensions
@@ -129,12 +130,12 @@ async function planItemsForFiles(
     const targetBaseRelativePath = targetRelativePathFor(file.ext);
     const { yyyy, mm } = datePartsFor(file);
     const targetRelativePath = join(targetBaseRelativePath, yyyy, mm);
-    const targetPath = join(getRoot(), targetRelativePath, basename(file.path));
+    const targetPath = join(getRoot(options), targetRelativePath, basename(file.path));
     // Cinto e suspensório: EXTENSION_RULES é uma tabela fixa e basename() já corta qualquer
     // ".." do nome do arquivo, então isso nunca deveria disparar — mas se um dia essa tabela
     // vier a ser configurável, isso barra o plano de escapar de /KALINE.
-    if (!targetPath.startsWith(`${getRoot()}/`)) {
-      throw new Error(`targetPath calculado fora de ${getRoot()}: ${targetPath}`);
+    if (!targetPath.startsWith(`${getRoot(options)}/`)) {
+      throw new Error(`targetPath calculado fora do storage root: ${targetPath}`);
     }
     if (file.path === targetPath) {
       items.push(ignoredItem(file, action, source, "arquivo já organizado", "already_organized"));
@@ -176,8 +177,10 @@ async function planItemsForFiles(
 export async function generateOrganizerPlan(
   limits = DEFAULT_INDEX_LIMITS,
   allowedExtensions = null,
+  options = {},
 ) {
-  const model = getStorageModel();
+  const root = getRoot(options);
+  const model = getStorageModel(root);
   const inboxFolders = [
     "entrada-uploads",
     "entrada-dispositivos",
@@ -212,11 +215,12 @@ export async function generateOrganizerPlan(
           rootPath: folder.absolutePath,
         },
         allowedExtensions,
+        options,
       ),
     );
   }
 
-  const sources = config.storageSources || [];
+  const sources = options.storageSources || config.storageSources || [];
   let sourceItems = [];
   for (const source of sources) {
     const listing = await listFiles(source.path, limits);
@@ -230,6 +234,7 @@ export async function generateOrganizerPlan(
           label: source.label || source.id,
         },
         allowedExtensions,
+        options,
       ),
     );
   }
@@ -242,9 +247,9 @@ export async function generateOrganizerPlan(
     const ext = item.sourcePath.includes(".")
       ? `.${item.sourcePath.split(".").pop().toLowerCase()}`
       : "(sem extensão)";
-    const area = item.targetPath.startsWith(`${getRoot()}/`)
+    const area = item.targetPath.startsWith(`${root}/`)
       ? item.targetPath
-          .slice(getRoot().length + 1)
+          .slice(root.length + 1)
           .split("/")
           .slice(0, 2)
           .join("/")

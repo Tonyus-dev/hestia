@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { hestiaLegacyApi } from "@/lib/hestia/api";
+import { hestiaApi, hestiaLegacyApi } from "@/lib/hestia/api";
 import type { OrganizerPlan, OrganizerRunManifest } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_station/organizar")({
       { property: "og:title", content: "Héstia Console — Organizar" },
       {
         property: "og:description",
-        content: "Ações locais em modo protegido, sempre por plano aprovado.",
+        content: "Ações remotas na Estação, em modo protegido e sempre por plano aprovado.",
       },
     ],
   }),
@@ -64,7 +64,15 @@ const FILTERS = [
 ];
 
 export function OrganizarPage() {
-  const runs = useApi(hestiaLegacyApi.organizerRuns);
+  const station = useApi(hestiaApi.stationConnection);
+  const stationAvailable =
+    station.state.status === "ok" && station.state.data.state === "available";
+  const runs = useApi(hestiaApi.stationOrganizerRuns);
+  const stationRefreshing = station.refreshing || runs.refreshing;
+  const retryStation = () => {
+    station.retry();
+    runs.retry();
+  };
 
   const [plan, setPlan] = useState<OrganizerPlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -107,7 +115,10 @@ Destinos: ${JSON.stringify(plan.summary.byTargetArea)}
 Amostra de arquivos do plano (primeiros 20):
 ${plan.items
   .slice(0, 20)
-  .map((i) => `${i.sourcePath} -> ${i.targetPath} (${i.status} - ${i.reason})`)
+  .map(
+    (i) =>
+      `${i.source.label}: ${i.source.relativePath} -> ${i.target.relativePath} (${i.status} - ${i.reason})`,
+  )
   .join("\n")}`;
 
     const result = await hestiaLegacyApi.llmChat(promptText, assistantModel, contextBlock);
@@ -122,12 +133,14 @@ ${plan.items
   }
 
   async function handleGeneratePlan() {
+    setPlan(null);
+    setLargeConfirm("");
     setPlanLoading(true);
     setPlanError(null);
     setApplyResult(null);
     setApplyError(null);
     setAssistantMessages([]);
-    const result = await hestiaLegacyApi.organizerPlan(selectedFilter || undefined);
+    const result = await hestiaApi.stationOrganizerPlan(selectedFilter || undefined);
     setPlanLoading(false);
     if (result.status === "ok") {
       setPlan(result.data);
@@ -140,7 +153,7 @@ ${plan.items
     if (!plan) return;
     setApplying(true);
     setApplyError(null);
-    const result = await hestiaLegacyApi.organizerApply(
+    const result = await hestiaApi.stationOrganizerApply(
       plan.planId,
       !!plan.requiresExtraConfirmation,
     );
@@ -148,6 +161,7 @@ ${plan.items
     if (result.status === "ok") {
       setApplyResult(result.data);
       setPlan(null);
+      setLargeConfirm("");
       runs.retry();
     } else if (result.status === "unavailable") {
       setApplyError(result.message);
@@ -157,7 +171,7 @@ ${plan.items
   async function handleUndo(runId: string) {
     setUndoingRunId(runId);
     setUndoError(null);
-    const result = await hestiaLegacyApi.organizerUndo(runId);
+    const result = await hestiaApi.stationOrganizerUndo(runId);
     setUndoingRunId(null);
     if (result.status === "ok") {
       runs.retry();
@@ -169,7 +183,7 @@ ${plan.items
   async function handleRedo(undoRunId: string) {
     setRedoingRunId(undoRunId);
     setRedoError(null);
-    const result = await hestiaLegacyApi.organizerRedo(undoRunId);
+    const result = await hestiaApi.stationOrganizerRedo(undoRunId);
     setRedoingRunId(null);
     if (result.status === "ok") {
       runs.retry();
@@ -189,6 +203,46 @@ ${plan.items
           Modo protegido: gerar plano é dry-run. Nenhum arquivo é alterado até você clicar em
           Aplicar.
         </p>
+        <p className="text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
+          As operações são executadas no servidor da Estação, nunca no armazenamento local deste
+          notebook.
+        </p>
+        {station.state.status === "loading" && (
+          <p className="text-[12px] text-[color:var(--kaline-muted)]">Verificando Estação…</p>
+        )}
+        {station.state.status === "unavailable" && (
+          <div className="space-y-2 text-[12px] text-[color:var(--kaline-ember)]">
+            <p>{station.state.message}</p>
+            <button
+              type="button"
+              onClick={retryStation}
+              disabled={stationRefreshing}
+              className="rounded border border-[color:var(--kaline-border-copper)] px-3 py-1.5 text-[11px] text-[color:var(--kaline-copper)] disabled:opacity-50"
+            >
+              {stationRefreshing ? "Verificando Estação…" : "Verificar Estação"}
+            </button>
+          </div>
+        )}
+        {station.state.status === "ok" && station.state.data.state !== "available" && (
+          <div className="space-y-2 text-[12px] text-[color:var(--kaline-ember)]">
+            <p>
+              {station.state.data.state === "not_configured"
+                ? "Estação não configurada. Defina a conexão no ambiente do serviço."
+                : "Estação indisponível. As ações do Organizer estão bloqueadas."}
+            </p>
+            <button
+              type="button"
+              onClick={retryStation}
+              disabled={stationRefreshing}
+              className="rounded border border-[color:var(--kaline-border-copper)] px-3 py-1.5 text-[11px] text-[color:var(--kaline-copper)] disabled:opacity-50"
+            >
+              {stationRefreshing ? "Verificando Estação…" : "Verificar Estação"}
+            </button>
+          </div>
+        )}
+        {station.state.status === "ok" && station.state.data.state === "available" && (
+          <p className="text-[12px] text-[color:var(--kaline-muted)]">Estação disponível.</p>
+        )}
       </header>
 
       <section className="grid gap-5 md:grid-cols-2">
@@ -214,7 +268,7 @@ ${plan.items
             <button
               type="button"
               onClick={handleGeneratePlan}
-              disabled={planLoading}
+              disabled={planLoading || !stationAvailable}
               className="text-[11px] px-3 py-1.5 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper)]/10 transition disabled:opacity-50 sm:mt-5"
             >
               {planLoading ? "gerando…" : "Gerar plano"}
@@ -302,12 +356,12 @@ ${plan.items
                   className="border-b border-[color:var(--kaline-border-copper)]/40 pb-2 last:border-0"
                 >
                   <div className="font-mono text-[12px] text-[color:var(--kaline-text)] break-all">
-                    {item.sourcePath} → {item.targetPath}
+                    {item.source.relativePath} → {item.target.relativePath}
                   </div>
                   <div className="text-[11px] text-[color:var(--kaline-faint)]">
                     {item.action} · {item.reason} · {item.status}
-                    {item.sourceKind ? ` · ${item.sourceKind}` : ""}
-                    {item.sourceLabel ? `/${item.sourceLabel}` : ""}
+                    {` · ${item.source.kind}`}
+                    {` · ${item.source.label}`}
                     {item.mtimeIso ? ` · ${item.mtimeIso}` : ""}
                     {item.ignoredReason ? ` · ${item.ignoredReason}` : ""}
                   </div>
@@ -318,6 +372,7 @@ ${plan.items
                 onClick={handleApplyPlan}
                 disabled={
                   applying ||
+                  !stationAvailable ||
                   plan.items.length === 0 ||
                   (plan.requiresExtraConfirmation &&
                     largeConfirm !==
@@ -325,7 +380,7 @@ ${plan.items
                 }
                 className="mt-2 text-[11px] px-3 py-1.5 rounded border border-[color:var(--kaline-copper)] text-[color:var(--kaline-copper)] bg-[color:var(--kaline-copper)]/10 hover:bg-[color:var(--kaline-copper)]/20 transition disabled:opacity-50"
               >
-                {applying ? "aplicando…" : "Aplicar plano localmente"}
+                {applying ? "aplicando…" : "Aplicar plano na Estação"}
               </button>
             </div>
           )}
@@ -338,8 +393,7 @@ ${plan.items
             <div className="mt-3 text-[12px]">
               <p className="text-[color:var(--kaline-faint)]">
                 {applyResult.status} · {applyResult.summary.ok} ok · {applyResult.summary.failed}{" "}
-                falhas · {applyResult.summary.skipped} pulados · manifest: dataDir/organizer/runs/
-                {applyResult.runId}.json
+                falhas · {applyResult.summary.skipped} pulados · execução {applyResult.runId}
               </p>
               <button
                 type="button"
@@ -363,8 +417,8 @@ ${plan.items
             <UnavailableNote
               message={runs.state.message}
               details={runs.state.details}
-              onRetry={runs.retry}
-              refreshing={runs.refreshing}
+              onRetry={retryStation}
+              refreshing={stationRefreshing}
             />
           )}
           {runs.state.status === "ok" && runs.state.data.items.length === 0 && (
@@ -411,7 +465,7 @@ ${plan.items
                     <button
                       type="button"
                       onClick={() => handleUndo(run.runId)}
-                      disabled={undoingRunId === run.runId}
+                      disabled={undoingRunId === run.runId || !stationAvailable}
                       className="text-[11px] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)] transition disabled:opacity-50 shrink-0"
                     >
                       {undoingRunId === run.runId ? "desfazendo…" : "Desfazer"}
@@ -421,7 +475,7 @@ ${plan.items
                     <button
                       type="button"
                       onClick={() => handleRedo(run.runId)}
-                      disabled={redoingRunId === run.runId}
+                      disabled={redoingRunId === run.runId || !stationAvailable}
                       className="text-[11px] px-2.5 py-1 rounded border border-[color:var(--kaline-border-copper)] text-[color:var(--kaline-muted)] hover:text-[color:var(--kaline-copper)] transition disabled:opacity-50 shrink-0"
                     >
                       {redoingRunId === run.runId ? "refazendo…" : "Refazer"}

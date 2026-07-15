@@ -89,6 +89,26 @@ describe("applyOrganizerPlan", () => {
     expect(targetContent).toBe("conteudo-epub");
   });
 
+  it("ordena runs pelo timestamp do ID, independentemente do prefixo", async () => {
+    const runsDir = join(dataDir, "organizer", "runs");
+    await fs.mkdir(runsDir, { recursive: true });
+    for (const runId of ["org_100_aaaaaaaa", "undo_300_bbbbbbbb", "redo_200_cccccccc"]) {
+      await fs.writeFile(
+        join(runsDir, `${runId}.json`),
+        JSON.stringify({ runId, status: "applied" }),
+      );
+    }
+    await fs.writeFile(join(runsDir, "invalido.json"), "{}");
+
+    const runs = await getOrganizerRuns(dataDir);
+
+    expect(runs.map((run) => run.runId)).toEqual([
+      "undo_300_bbbbbbbb",
+      "redo_200_cccccccc",
+      "org_100_aaaaaaaa",
+    ]);
+  });
+
   it("pula (skipped) item já marcado conflict no plano, sem tocar no disco", async () => {
     const sourcePath = join(workDir, "arquivo.txt");
     await fs.writeFile(sourcePath, "x");
@@ -145,10 +165,12 @@ describe("applyOrganizerPlan", () => {
     expect(manifest.operations[0].status).toBe("skipped");
   });
 
-  it("move por cópia verificada a partir da origem aberta e remove a origem", async () => {
+  it("move no mesmo filesystem usa link+unlink sem copiar bytes", async () => {
     const sourcePath = join(workDir, "cross-device.mp4");
     const targetPath = join(workDir, "destino", "cross-device.mp4");
     await fs.writeFile(sourcePath, "conteudo-video-grande");
+    const linkSpy = vi.spyOn(fs, "link");
+    const copySpy = vi.spyOn(fs, "copyFile");
 
     const plan = {
       planId: "plan_exdev",
@@ -158,9 +180,13 @@ describe("applyOrganizerPlan", () => {
     const manifest = await applyOrganizerPlan(plan, dataDir);
 
     expect(manifest.operations[0].status).toBe("ok");
+    expect(linkSpy).toHaveBeenCalledWith(sourcePath, targetPath);
+    expect(copySpy).not.toHaveBeenCalled();
     await expect(fs.access(sourcePath)).rejects.toThrow();
     const content = await fs.readFile(targetPath, "utf8");
     expect(content).toBe("conteudo-video-grande");
+    linkSpy.mockRestore();
+    copySpy.mockRestore();
   });
 
   it("continua em falha parcial: um item falha, outro é aplicado com sucesso", async () => {
@@ -348,6 +374,15 @@ describe("applyOrganizerPlan safety gates", () => {
     const targetPath = join(workDir, "destino", "origem.pdf");
     await fs.writeFile(sourcePath, "conteudo-pdf");
 
+    const originalLink = fs.link;
+    const linkSpy = vi.spyOn(fs, "link").mockImplementation((source, target) => {
+      if (source === sourcePath && target === targetPath) {
+        return Promise.reject(Object.assign(new Error("cross device"), { code: "EXDEV" }));
+      }
+      return originalLink(source, target);
+    });
+    const copySpy = vi.spyOn(fs, "copyFile");
+
     const originalUnlink = fs.unlink;
     const unlinkSpy = vi.spyOn(fs, "unlink").mockImplementation((path) => {
       if (path === sourcePath) {
@@ -369,6 +404,7 @@ describe("applyOrganizerPlan safety gates", () => {
     expect(manifest.status).toBe("failed");
     expect(manifest.summary.failed).toBe(1);
     expect(manifest.operations[0].status).toBe("failed");
+    expect(copySpy).toHaveBeenCalledWith(sourcePath, targetPath, fs.constants.COPYFILE_EXCL);
 
     const sourceContent = await fs.readFile(sourcePath, "utf8");
     expect(sourceContent).toBe("conteudo-pdf");
@@ -376,6 +412,8 @@ describe("applyOrganizerPlan safety gates", () => {
     await expect(fs.access(targetPath)).rejects.toThrow();
 
     unlinkSpy.mockRestore();
+    linkSpy.mockRestore();
+    copySpy.mockRestore();
   });
 });
 

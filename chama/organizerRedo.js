@@ -9,20 +9,24 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getOrganizerRun, targetExists, applyItem, writeManifest } from "./organizerApply.js";
 import { appendEvent } from "./events.js";
+import { withOrganizerOperationLock } from "./organizerOperationLock.js";
 
-async function redoOperation(originalOp) {
+async function redoOperation(originalOp, options) {
   if (await targetExists(originalOp.to)) {
     return { ...originalOp, status: "skipped", error: "target já existe (conflito)" };
   }
-  return applyItem({
-    ...originalOp,
-    sourcePath: originalOp.from,
-    targetPath: originalOp.to,
-    status: "planned",
-  });
+  return applyItem(
+    {
+      ...originalOp,
+      sourcePath: originalOp.from,
+      targetPath: originalOp.to,
+      status: "planned",
+    },
+    options,
+  );
 }
 
-export async function redoOrganizerRun(undoRunId, dataDir) {
+async function redoOrganizerRunLocked(undoRunId, dataDir, options = {}) {
   const undoRun = await getOrganizerRun(undoRunId, dataDir);
   if (!undoRun) return null;
   if (!undoRun.undoOf) {
@@ -43,6 +47,7 @@ export async function redoOrganizerRun(undoRunId, dataDir) {
 
   const redoRunId = `redo_${Date.now()}_${randomUUID().slice(0, 8)}`;
   const operations = [];
+  await options.beforeOperations?.();
   for (let i = 0; i < originalRun.operations.length; i++) {
     const originalOp = originalRun.operations[i];
     const undoOp = undoRun.operations[i];
@@ -54,7 +59,7 @@ export async function redoOrganizerRun(undoRunId, dataDir) {
       });
       continue;
     }
-    operations.push(await redoOperation(originalOp));
+    operations.push(await redoOperation(originalOp, options));
   }
 
   const summary = {
@@ -73,8 +78,10 @@ export async function redoOrganizerRun(undoRunId, dataDir) {
 
   const redoManifest = {
     runId: redoRunId,
+    planId: originalRun.planId,
     redoOf: undoRunId,
     createdAt: new Date().toISOString(),
+    appliedAt: new Date().toISOString(),
     status,
     mode: "local-only-redo",
     operations: operations.map(({ from, to, action, status: opStatus, reason, error }) => ({
@@ -103,4 +110,10 @@ export async function redoOrganizerRun(undoRunId, dataDir) {
   await appendEvent({ type: eventType, data: { undoRunId, redoRunId, summary } }, dataDir);
 
   return redoManifest;
+}
+
+export async function redoOrganizerRun(undoRunId, dataDir, options = {}) {
+  return withOrganizerOperationLock(`redo:${undoRunId}`, () =>
+    redoOrganizerRunLocked(undoRunId, dataDir, options),
+  );
 }

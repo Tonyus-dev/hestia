@@ -15,7 +15,6 @@ import { getStorageStatus } from "./chama/storage.js";
 import { discoverVolumes } from "./chama/storageDiscovery.js";
 import { getStorageModel } from "./chama/storageModel.js";
 import { scanStorageModel, scanConfiguredSources } from "./chama/storageScanner.js";
-import { registerOrganizerRoutes } from "./chama/organizerRoutes.js";
 import { getServicesStatus } from "./chama/services.js";
 import { getHardwareStatus, getHardwareConfig } from "./chama/hardware.js";
 import { getServiceBindings } from "./chama/serviceBindings.js";
@@ -348,9 +347,6 @@ app.get("/api/config", async () => ({
 
 // --- Rotas do Códice (Leitura restrita) -------------------------------------
 registerCodiceRoutes(app, config);
-
-// --- Rotas locais do Organizer --------------------------------------------
-registerOrganizerRoutes(app, config);
 
 // --- Rotas de Presence (read-only): consulta same-origin/local --------
 app.get(

@@ -95,13 +95,25 @@ describe("Station Agent", () => {
     expect(
       resolveStationAgentConfig({
         HESTIA_STATION_TOKEN: token,
-        HESTIA_STORAGE_PATH: "/current",
+        HESTIA_STORAGE_PATH: " /current/ ",
         HESTIA_KALINE_ROOT: "/legacy",
       }),
     ).toMatchObject({
       storagePath: "/current",
       services: ["jellyfin", "smbd", "tailscaled"],
     });
+    expect(
+      resolveStationAgentConfig({
+        HESTIA_STATION_TOKEN: token,
+        HESTIA_STORAGE_PATH: "/srv/KALINE/",
+      }).storagePath,
+    ).toBe("/srv/KALINE");
+    expect(() =>
+      resolveStationAgentConfig({
+        HESTIA_STATION_TOKEN: token,
+        HESTIA_STORAGE_PATH: "srv/KALINE",
+      }),
+    ).toThrow("HESTIA_STORAGE_PATH deve ser absoluto");
   });
 
   it("retorna o contrato exato com autenticação correta", async () => {

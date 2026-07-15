@@ -15,6 +15,7 @@ import {
   writeManifest,
 } from "./organizerApply.js";
 import { appendEvent } from "./events.js";
+import { withOrganizerOperationLock } from "./organizerOperationLock.js";
 
 async function targetChanged(op) {
   if (op.targetSize == null || op.targetMtimeMs == null) return false;
@@ -80,7 +81,7 @@ async function undoOperation(op) {
   }
 }
 
-export async function undoOrganizerRun(runId, dataDir) {
+async function undoOrganizerRunLocked(runId, dataDir, options = {}) {
   const originalRun = await getOrganizerRun(runId, dataDir);
   if (!originalRun) return null;
   if (originalRun.undoneBy) {
@@ -89,6 +90,7 @@ export async function undoOrganizerRun(runId, dataDir) {
 
   const undoRunId = `undo_${Date.now()}_${randomUUID().slice(0, 8)}`;
   const operations = [];
+  await options.beforeOperations?.();
   for (const op of originalRun.operations) {
     operations.push(await undoOperation(op));
   }
@@ -109,8 +111,10 @@ export async function undoOrganizerRun(runId, dataDir) {
 
   const undoManifest = {
     runId: undoRunId,
+    planId: originalRun.planId,
     undoOf: runId,
     createdAt: new Date().toISOString(),
+    appliedAt: new Date().toISOString(),
     status,
     mode: "local-only-undo",
     operations: operations.map(({ from, to, action, undoStatus, undoError }) => ({
@@ -138,4 +142,10 @@ export async function undoOrganizerRun(runId, dataDir) {
   await appendEvent({ type: eventType, data: { runId, undoRunId, summary } }, dataDir);
 
   return undoManifest;
+}
+
+export async function undoOrganizerRun(runId, dataDir, options = {}) {
+  return withOrganizerOperationLock(`undo:${runId}`, () =>
+    undoOrganizerRunLocked(runId, dataDir, options),
+  );
 }

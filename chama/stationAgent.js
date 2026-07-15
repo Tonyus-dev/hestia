@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 
@@ -8,6 +8,9 @@ import { ALLOWED_SERVICES } from "./config.js";
 import { buildAllowedHosts, isAllowedHostHeader, isLoopbackHost } from "./security.js";
 import { getServicesStatus } from "./services.js";
 import { getStorageStatus } from "./storage.js";
+import { ensureDataDir, resolveDataDir } from "./dataDir.js";
+import { config as sharedConfig } from "./config.js";
+import { registerStationOrganizerRoutes } from "./stationOrganizerRoutes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -22,7 +25,13 @@ export function resolveStationAgentConfig(env = process.env) {
   const port = Number(portRaw);
   const token = env.HESTIA_STATION_TOKEN;
   const allowedHosts = env.HESTIA_STATION_ALLOWED_HOSTS?.trim() || "";
-  const storagePath = env.HESTIA_STORAGE_PATH || env.HESTIA_KALINE_ROOT || "/KALINE";
+  const rawStoragePath =
+    env.HESTIA_STORAGE_PATH?.trim() || env.HESTIA_KALINE_ROOT?.trim() || "/KALINE";
+  if (!isAbsolute(rawStoragePath)) {
+    configError("HESTIA_STORAGE_PATH deve ser absoluto.");
+  }
+  const storagePath = resolve(rawStoragePath);
+  const dataDir = resolveDataDir(env);
   const requestedServices = new Set(
     (env.HESTIA_STATION_SERVICES || ALLOWED_SERVICES.join(","))
       .split(",")
@@ -41,7 +50,16 @@ export function resolveStationAgentConfig(env = process.env) {
   if (!isLoopbackHost(host) && !allowedHosts) {
     configError("bind não-loopback exige HESTIA_STATION_ALLOWED_HOSTS.");
   }
-  return { host, port, token, allowedHosts, storagePath, services };
+  return {
+    host,
+    port,
+    token,
+    allowedHosts,
+    storagePath,
+    dataDir,
+    storageSources: sharedConfig.storageSources,
+    services,
+  };
 }
 
 function tokenMatches(actual, expected) {
@@ -86,6 +104,7 @@ function publicServices(result) {
 
 export function createStationAgent(config, providers = {}) {
   if (!config?.token?.trim()) configError("HESTIA_STATION_TOKEN é obrigatório.");
+  if (config.dataDir) ensureDataDir(config.dataDir);
   const app = Fastify({ logger: false });
   const readStorage = providers.getStorageStatus || getStorageStatus;
   const readServices = providers.getServicesStatus || getServicesStatus;
@@ -122,6 +141,16 @@ export function createStationAgent(config, providers = {}) {
 
   app.get("/api/station/services/status", async () =>
     publicServices(await readServices(config.services || ALLOWED_SERVICES)),
+  );
+
+  registerStationOrganizerRoutes(
+    app,
+    {
+      dataDir: config.dataDir || resolveDataDir(),
+      storagePath: config.storagePath || "/KALINE",
+      storageSources: config.storageSources || [],
+    },
+    providers,
   );
 
   app.setNotFoundHandler((_request, reply) => {
