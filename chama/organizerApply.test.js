@@ -89,6 +89,26 @@ describe("applyOrganizerPlan", () => {
     expect(targetContent).toBe("conteudo-epub");
   });
 
+  it("ordena runs pelo timestamp do ID, independentemente do prefixo", async () => {
+    const runsDir = join(dataDir, "organizer", "runs");
+    await fs.mkdir(runsDir, { recursive: true });
+    for (const runId of ["org_100_aaaaaaaa", "undo_300_bbbbbbbb", "redo_200_cccccccc"]) {
+      await fs.writeFile(
+        join(runsDir, `${runId}.json`),
+        JSON.stringify({ runId, status: "applied" }),
+      );
+    }
+    await fs.writeFile(join(runsDir, "invalido.json"), "{}");
+
+    const runs = await getOrganizerRuns(dataDir);
+
+    expect(runs.map((run) => run.runId)).toEqual([
+      "undo_300_bbbbbbbb",
+      "redo_200_cccccccc",
+      "org_100_aaaaaaaa",
+    ]);
+  });
+
   it("pula (skipped) item já marcado conflict no plano, sem tocar no disco", async () => {
     const sourcePath = join(workDir, "arquivo.txt");
     await fs.writeFile(sourcePath, "x");

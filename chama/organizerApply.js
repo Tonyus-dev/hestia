@@ -379,17 +379,23 @@ export async function applyOrganizerPlan(plan, dataDir, options = {}) {
 // Devolve metadados mínimos (não o manifesto inteiro) — o suficiente pra UI decidir quando
 // mostra "Desfazer" (execução original, ainda não desfeita) ou "Refazer" (execução de undo,
 // ainda não refeita). Uma execução de redo é terminal: nunca mostra nenhum dos dois botões.
+function organizerRunTimestamp(runId) {
+  const match = /^(?:org|undo|redo)_(\d+)_[0-9a-f]{8}$/.exec(runId);
+  return match ? Number(match[1]) : -1;
+}
+
 export async function getOrganizerRuns(dataDir) {
   try {
     const dir = join(dataDir, "organizer", "runs");
     const files = await fs.readdir(dir);
     const runIds = files
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => f.replace(/\.json$/, ""))
-      .sort()
-      .reverse();
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => file.replace(/\.json$/, ""))
+      .filter(isValidOrganizerId)
+      .sort((a, b) => organizerRunTimestamp(b) - organizerRunTimestamp(a) || b.localeCompare(a))
+      .slice(0, 200);
     return await Promise.all(
-      runIds.slice(0, 200).map(async (runId) => {
+      runIds.map(async (runId) => {
         const manifest = await getOrganizerRun(runId, dataDir);
         return {
           runId,

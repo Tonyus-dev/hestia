@@ -62,6 +62,25 @@ describe("generateOrganizerPlan", () => {
     }
   });
 
+  it("gera plano normalmente com storage root terminado em barra", async () => {
+    const sourceDir = join(tmpDir, "entrada", "manual");
+    const sourcePath = join(sourceDir, "livro.pdf");
+    await fs.mkdir(sourceDir, { recursive: true });
+    await fs.writeFile(sourcePath, "conteudo");
+    const oldDate = new Date("2026-07-10T00:00:00.000Z");
+    await fs.utimes(sourcePath, oldDate, oldDate);
+
+    const { generateOrganizerPlan } = await import("./organizerPlan.js");
+    const plan = await generateOrganizerPlan(undefined, null, {
+      storagePath: `${tmpDir}/`,
+      storageSources: [],
+    });
+
+    expect(plan.items).toHaveLength(1);
+    expect(plan.items[0].sourcePath).toBe(sourcePath);
+    expect(plan.items[0].targetPath).toBe(join(tmpDir, "codice", "pdf", "2026", "07", "livro.pdf"));
+  });
+
   it("gera plano com items de entrada (action:move) e fontes externas (action:copy)", async () => {
     const entradaDir = join(tmpDir, "entrada");
     const sourceDir = join(tmpDir, "hd-fonte");

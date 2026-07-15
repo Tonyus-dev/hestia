@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 
@@ -25,7 +25,12 @@ export function resolveStationAgentConfig(env = process.env) {
   const port = Number(portRaw);
   const token = env.HESTIA_STATION_TOKEN;
   const allowedHosts = env.HESTIA_STATION_ALLOWED_HOSTS?.trim() || "";
-  const storagePath = env.HESTIA_STORAGE_PATH || env.HESTIA_KALINE_ROOT || "/KALINE";
+  const rawStoragePath =
+    env.HESTIA_STORAGE_PATH?.trim() || env.HESTIA_KALINE_ROOT?.trim() || "/KALINE";
+  if (!isAbsolute(rawStoragePath)) {
+    configError("HESTIA_STORAGE_PATH deve ser absoluto.");
+  }
+  const storagePath = resolve(rawStoragePath);
   const dataDir = resolveDataDir(env);
   const requestedServices = new Set(
     (env.HESTIA_STATION_SERVICES || ALLOWED_SERVICES.join(","))

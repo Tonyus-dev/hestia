@@ -68,6 +68,11 @@ export function OrganizarPage() {
   const stationAvailable =
     station.state.status === "ok" && station.state.data.state === "available";
   const runs = useApi(hestiaApi.stationOrganizerRuns);
+  const stationRefreshing = station.refreshing || runs.refreshing;
+  const retryStation = () => {
+    station.retry();
+    runs.retry();
+  };
 
   const [plan, setPlan] = useState<OrganizerPlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -128,6 +133,8 @@ ${plan.items
   }
 
   async function handleGeneratePlan() {
+    setPlan(null);
+    setLargeConfirm("");
     setPlanLoading(true);
     setPlanError(null);
     setApplyResult(null);
@@ -154,6 +161,7 @@ ${plan.items
     if (result.status === "ok") {
       setApplyResult(result.data);
       setPlan(null);
+      setLargeConfirm("");
       runs.retry();
     } else if (result.status === "unavailable") {
       setApplyError(result.message);
@@ -199,12 +207,41 @@ ${plan.items
           As operações são executadas no servidor da Estação, nunca no armazenamento local deste
           notebook.
         </p>
+        {station.state.status === "loading" && (
+          <p className="text-[12px] text-[color:var(--kaline-muted)]">Verificando Estação…</p>
+        )}
+        {station.state.status === "unavailable" && (
+          <div className="space-y-2 text-[12px] text-[color:var(--kaline-ember)]">
+            <p>{station.state.message}</p>
+            <button
+              type="button"
+              onClick={retryStation}
+              disabled={stationRefreshing}
+              className="rounded border border-[color:var(--kaline-border-copper)] px-3 py-1.5 text-[11px] text-[color:var(--kaline-copper)] disabled:opacity-50"
+            >
+              {stationRefreshing ? "Verificando Estação…" : "Verificar Estação"}
+            </button>
+          </div>
+        )}
         {station.state.status === "ok" && station.state.data.state !== "available" && (
-          <p className="text-[12px] text-[color:var(--kaline-ember)]">
-            {station.state.data.state === "not_configured"
-              ? "Estação não configurada. Defina a conexão no ambiente do serviço."
-              : "Estação indisponível. As ações do Organizer estão bloqueadas."}
-          </p>
+          <div className="space-y-2 text-[12px] text-[color:var(--kaline-ember)]">
+            <p>
+              {station.state.data.state === "not_configured"
+                ? "Estação não configurada. Defina a conexão no ambiente do serviço."
+                : "Estação indisponível. As ações do Organizer estão bloqueadas."}
+            </p>
+            <button
+              type="button"
+              onClick={retryStation}
+              disabled={stationRefreshing}
+              className="rounded border border-[color:var(--kaline-border-copper)] px-3 py-1.5 text-[11px] text-[color:var(--kaline-copper)] disabled:opacity-50"
+            >
+              {stationRefreshing ? "Verificando Estação…" : "Verificar Estação"}
+            </button>
+          </div>
+        )}
+        {station.state.status === "ok" && station.state.data.state === "available" && (
+          <p className="text-[12px] text-[color:var(--kaline-muted)]">Estação disponível.</p>
         )}
       </header>
 
@@ -380,8 +417,8 @@ ${plan.items
             <UnavailableNote
               message={runs.state.message}
               details={runs.state.details}
-              onRetry={runs.retry}
-              refreshing={runs.refreshing}
+              onRetry={retryStation}
+              refreshing={stationRefreshing}
             />
           )}
           {runs.state.status === "ok" && runs.state.data.items.length === 0 && (

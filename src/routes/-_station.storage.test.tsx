@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { StoragePage } from "./_station.storage";
 import { OrganizarPage } from "./_station.organizar";
 import { hestiaApi, hestiaLegacyApi as storageApi } from "@/lib/hestia/api";
+import type { OrganizerPlan } from "@/lib/hestia/api";
 
 vi.mock("@/lib/hestia/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/hestia/api")>();
@@ -44,6 +45,41 @@ function emptyServices() {
 }
 function emptyRuns() {
   return ok({ items: [] });
+}
+
+function largePlan(planId: string): OrganizerPlan {
+  return {
+    planId,
+    generatedAt: new Date().toISOString(),
+    dryRun: true,
+    requiresExtraConfirmation: true,
+    largePlanThreshold: 5000,
+    planned: 5001,
+    items: [
+      {
+        id: `${planId}-item`,
+        source: { kind: "entrada", label: "Entrada manual", relativePath: "livro.pdf" },
+        target: { relativePath: "codice/pdf/2026/07/livro.pdf" },
+        action: "move",
+        reason: ".pdf → codice/pdf/2026/07",
+        risk: "low",
+        status: "planned",
+        size: 1,
+        mtimeIso: null,
+        ignoredReason: null,
+      },
+    ],
+    summary: {
+      total: 5001,
+      planned: 5001,
+      conflicts: 0,
+      ignored: 0,
+      quarantined: 0,
+      byExtension: { ".pdf": 5001 },
+      byTargetArea: { "codice/pdf": 5001 },
+      rules: { extensionRules: [], fallback: "entrada/revisar" },
+    },
+  };
 }
 
 describe("StoragePage", () => {
@@ -132,6 +168,42 @@ describe("OrganizarPage", () => {
   it("não gera plano automaticamente ao montar (só sob clique explícito)", async () => {
     render(<OrganizarPage />);
     expect(hestiaApi.stationOrganizerPlan).not.toHaveBeenCalled();
+  });
+
+  it("recupera a Estação e libera a geração após retry conjunto", async () => {
+    vi.mocked(hestiaApi.stationConnection)
+      .mockResolvedValueOnce({
+        status: "unavailable",
+        message: "Station indisponível agora",
+        fetchedAt: new Date().toISOString(),
+        details: { origin: "network" },
+      })
+      .mockResolvedValue(
+        ok({
+          ok: true,
+          configured: true,
+          state: "available",
+          checkedAt: new Date().toISOString(),
+          latencyMs: 1,
+          station: { service: "hestia-station-agent", schemaVersion: 1, version: "test" },
+        }),
+      );
+    const user = userEvent.setup();
+    render(<OrganizarPage />);
+
+    expect(await screen.findByText("Station indisponível agora")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Gerar plano" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Verificar Estação" }));
+
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Gerar plano" }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+    expect(hestiaApi.stationOrganizerRuns).toHaveBeenCalledTimes(2);
   });
 
   it("gera plano sob clique e mostra os itens", async () => {
@@ -239,6 +311,45 @@ describe("OrganizarPage", () => {
     expect(await screen.findByText(/applied/)).toBeTruthy();
     // O plano some da tela depois de aplicado.
     expect(screen.queryByRole("button", { name: "Aplicar plano na Estação" })).toBeNull();
+  });
+
+  it("descarta plano e frase anteriores enquanto regenera um plano grande", async () => {
+    type PlanState = ReturnType<typeof ok<OrganizerPlan>>;
+    let resolvePlanB = (_value: PlanState) => {};
+    const planBPromise = new Promise<PlanState>((resolve) => {
+      resolvePlanB = resolve;
+    });
+    vi.mocked(hestiaApi.stationOrganizerPlan)
+      .mockResolvedValueOnce(ok(largePlan("plan_1_aaaaaaaa")))
+      .mockReturnValueOnce(planBPromise);
+    const user = userEvent.setup();
+    render(<OrganizarPage />);
+
+    await user.click(screen.getByRole("button", { name: "Gerar plano" }));
+    const phrase = "Estou ciente que este plano afetará 5001 arquivos.";
+    const firstInput = await screen.findByRole("textbox", { name: /Confirmação extra/ });
+    await user.type(firstInput, phrase);
+    expect(
+      (screen.getByRole("button", { name: "Aplicar plano na Estação" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Gerar plano" }));
+    expect(screen.queryByRole("button", { name: "Aplicar plano na Estação" })).toBeNull();
+
+    resolvePlanB(ok(largePlan("plan_2_bbbbbbbb")));
+    const secondInput = await screen.findByRole("textbox", { name: /Confirmação extra/ });
+    expect((secondInput as HTMLInputElement).value).toBe("");
+    expect(
+      (screen.getByRole("button", { name: "Aplicar plano na Estação" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    await user.type(secondInput, phrase);
+    expect(
+      (screen.getByRole("button", { name: "Aplicar plano na Estação" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
   });
 
   describe("Execuções anteriores: Desfazer/Refazer conforme o estado", () => {

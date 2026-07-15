@@ -3,7 +3,7 @@
 // para que o apply (chama/organizerApply.js) sempre aplique exatamente o que foi aprovado, e
 // não um recálculo potencialmente diferente feito no momento do apply.
 import { promises as fs } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { getStorageModel } from "./storageModel.js";
 import { listFiles, DEFAULT_INDEX_LIMITS } from "./storageScanner.js";
@@ -14,7 +14,7 @@ import { legacyStorageRoot } from "./legacyStorageConfig.js";
 import { LARGE_PLAN_THRESHOLD } from "./organizerApply.js";
 
 function getRoot(options = {}) {
-  return options.storagePath || legacyStorageRoot();
+  return resolve(options.storagePath || legacyStorageRoot());
 }
 
 const RECENTLY_MODIFIED_MS = 60_000;
