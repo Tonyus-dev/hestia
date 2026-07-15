@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { hestiaApi, type StationConnection } from "@/lib/hestia/api";
+import { hestiaApi, type StationConnection, type StationStorage } from "@/lib/hestia/api";
 import { usePollingApi } from "@/lib/hestia/usePollingApi";
 import { useApi } from "@/lib/hestia/useApi";
 import { MetricCard } from "@/components/hestia/shared/MetricCard";
@@ -14,6 +14,15 @@ function Painel() {
   const logs = useApi(() => hestiaApi.logs(20));
   const config = useApi(hestiaApi.config);
   const station = useApi(hestiaApi.stationConnection);
+  const stationStorage = useApi(hestiaApi.stationStorage);
+  const stationServices = useApi(hestiaApi.stationServices);
+  const stationRefreshing =
+    station.refreshing || stationStorage.refreshing || stationServices.refreshing;
+  const retryStation = () => {
+    station.retry();
+    stationStorage.retry();
+    stationServices.retry();
+  };
   const d = hw.state.status === "ok" ? hw.state.data : null;
 
   return (
@@ -132,17 +141,52 @@ function Painel() {
             />
           )}
           {station.state.status === "ok" && <StationConnectionBody data={station.state.data} />}
+          {station.state.status === "ok" && station.state.data.state === "available" && (
+            <div className="mt-4 flex flex-col gap-3 border-t border-[color:var(--kaline-border)] pt-4">
+              <div>
+                <p className="kaline-eyebrow">Armazenamento da Estação</p>
+                <Row
+                  k="Kaline"
+                  v={
+                    stationStorage.state.status === "loading"
+                      ? "consultando…"
+                      : stationStorage.state.status === "ok"
+                        ? formatStationStorage(stationStorage.state.data)
+                        : "indisponível"
+                  }
+                />
+              </div>
+              <div>
+                <p className="kaline-eyebrow">Serviços da Estação</p>
+                {stationServices.state.status === "loading" ? (
+                  <Row k="Estado" v="consultando…" />
+                ) : stationServices.state.status === "ok" ? (
+                  stationServices.state.data.services.map((service) => (
+                    <Row key={service.id} k={service.id} v={service.status} />
+                  ))
+                ) : (
+                  <Row k="Estado" v="indisponível" />
+                )}
+              </div>
+            </div>
+          )}
           <button
-            onClick={station.retry}
-            disabled={station.refreshing}
+            onClick={retryStation}
+            disabled={stationRefreshing}
             className="mt-4 rounded border border-[color:var(--kaline-border-copper)] px-3 py-2 text-xs text-[color:var(--kaline-copper)] disabled:opacity-60"
           >
-            {station.refreshing ? "Verificando…" : "Verificar novamente"}
+            {stationRefreshing ? "Verificando…" : "Verificar novamente"}
           </button>
         </DataCard>
       </section>
     </div>
   );
+}
+
+function formatStationStorage(data: StationStorage) {
+  if (!data || data.storage.status !== "ok" || data.storage.percentUsed == null)
+    return data?.storage.status ?? "indisponível";
+  return `${data.storage.percentUsed}% em uso`;
 }
 
 function StationConnectionBody({ data }: { data: StationConnection }) {

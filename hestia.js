@@ -7,12 +7,8 @@ import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
 
 import { config } from "./chama/config.js";
-import {
-  fetchStationHealth,
-  getStationConnectionStatus,
-  publicStationConfig,
-  stationHealthHttpStatus,
-} from "./chama/stationClient.js";
+import { publicStationConfig } from "./chama/stationClient.js";
+import { registerStationRoutes } from "./chama/stationRoutes.js";
 import { getHealth } from "./chama/health.js";
 import { getServerStatus } from "./chama/system.js";
 import { getStorageStatus } from "./chama/storage.js";
@@ -332,19 +328,7 @@ app.get("/api/logs", async (req) => {
   return getLogs(tail);
 });
 
-app.get("/api/station/connection", async () => getStationConnectionStatus());
-app.get("/api/station/health", async (req, reply) => {
-  const result = await fetchStationHealth();
-  if (result.ok) return result.station;
-  reply.code(stationHealthHttpStatus(result.code));
-  return {
-    ok: false,
-    code: result.code,
-    state: result.state,
-    error: "Station health indisponível",
-    checkedAt: result.checkedAt,
-  };
-});
+registerStationRoutes(app);
 
 app.get("/api/config", async () => ({
   appName: config.appName,

@@ -4,7 +4,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 
+import { ALLOWED_SERVICES } from "./config.js";
 import { buildAllowedHosts, isAllowedHostHeader, isLoopbackHost } from "./security.js";
+import { getServicesStatus } from "./services.js";
+import { getStorageStatus } from "./storage.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -19,6 +22,14 @@ export function resolveStationAgentConfig(env = process.env) {
   const port = Number(portRaw);
   const token = env.HESTIA_STATION_TOKEN;
   const allowedHosts = env.HESTIA_STATION_ALLOWED_HOSTS?.trim() || "";
+  const storagePath = env.HESTIA_STORAGE_PATH || env.HESTIA_KALINE_ROOT || "/KALINE";
+  const requestedServices = new Set(
+    (env.HESTIA_STATION_SERVICES || ALLOWED_SERVICES.join(","))
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean),
+  );
+  const services = ALLOWED_SERVICES.filter((name) => requestedServices.has(name));
 
   if (!token?.trim()) configError("HESTIA_STATION_TOKEN é obrigatório.");
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
@@ -30,7 +41,7 @@ export function resolveStationAgentConfig(env = process.env) {
   if (!isLoopbackHost(host) && !allowedHosts) {
     configError("bind não-loopback exige HESTIA_STATION_ALLOWED_HOSTS.");
   }
-  return { host, port, token, allowedHosts };
+  return { host, port, token, allowedHosts, storagePath, services };
 }
 
 function tokenMatches(actual, expected) {
@@ -38,9 +49,46 @@ function tokenMatches(actual, expected) {
   return timingSafeEqual(digest(actual), digest(expected));
 }
 
-export function createStationAgent(config) {
+function publicStorage(result) {
+  const item = result?.items?.[0];
+  const status = ["ok", "missing", "unavailable"].includes(item?.status)
+    ? item.status
+    : "unavailable";
+  const numeric = status === "ok";
+  return {
+    ok: true,
+    schemaVersion: 1,
+    checkedAt: result?.checkedAt || new Date().toISOString(),
+    storage: {
+      id: "kaline",
+      exists: status === "missing" ? false : Boolean(item?.exists),
+      status,
+      totalBytes: numeric && Number.isFinite(item?.total) ? item.total : null,
+      usedBytes: numeric && Number.isFinite(item?.used) ? item.used : null,
+      freeBytes: numeric && Number.isFinite(item?.free) ? item.free : null,
+      percentUsed: numeric && Number.isFinite(item?.percentUsed) ? item.percentUsed : null,
+    },
+  };
+}
+
+function publicServices(result) {
+  return {
+    ok: true,
+    schemaVersion: 1,
+    checkedAt: new Date().toISOString(),
+    services: (result?.items || []).map((item) => ({
+      id: item.name,
+      active: item.active === true,
+      status: item.status,
+    })),
+  };
+}
+
+export function createStationAgent(config, providers = {}) {
   if (!config?.token?.trim()) configError("HESTIA_STATION_TOKEN é obrigatório.");
   const app = Fastify({ logger: false });
+  const readStorage = providers.getStorageStatus || getStorageStatus;
+  const readServices = providers.getServicesStatus || getServicesStatus;
 
   app.addHook("onRequest", async (request, reply) => {
     const address = app.server.address();
@@ -68,6 +116,14 @@ export function createStationAgent(config) {
     checkedAt: new Date().toISOString(),
   }));
 
+  app.get("/api/station/storage/status", async () =>
+    publicStorage(await readStorage([config.storagePath || "/KALINE"])),
+  );
+
+  app.get("/api/station/services/status", async () =>
+    publicServices(await readServices(config.services || ALLOWED_SERVICES)),
+  );
+
   app.setNotFoundHandler((_request, reply) => {
     reply.code(404).send({ ok: false, error: "not_found" });
   });
@@ -77,8 +133,8 @@ export function createStationAgent(config) {
   return app;
 }
 
-export async function startStationAgent(config) {
-  const app = createStationAgent(config);
+export async function startStationAgent(config, providers) {
+  const app = createStationAgent(config, providers);
   await app.listen({ host: config.host, port: config.port });
   return app;
 }

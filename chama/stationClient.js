@@ -22,8 +22,20 @@ const DEFAULT_TIMEOUT_MS = 5000;
 const MIN_TIMEOUT_MS = 1000;
 const MAX_TIMEOUT_MS = 30000;
 const HEALTH_PATH = "/api/station/health";
-const MAX_HEALTH_BODY_BYTES = 64 * 1024;
+const STORAGE_PATH = "/api/station/storage/status";
+const SERVICES_PATH = "/api/station/services/status";
+const MAX_BODY_BYTES = 64 * 1024;
 const SERVICE = "hestia-station-agent";
+const STORAGE_STATUSES = new Set(["ok", "missing", "unavailable"]);
+const SERVICE_STATUSES = new Set([
+  "active",
+  "inactive",
+  "failed",
+  "not-installed",
+  "unavailable",
+  "unknown",
+]);
+const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
 
 function resolveTimeout(raw = process.env.HESTIA_STATION_TIMEOUT_MS) {
   const n = Number(raw);
@@ -120,6 +132,93 @@ function validateStationHealth(body) {
   };
 }
 
+function hasExactKeys(value, keys) {
+  return Object.keys(value).length === keys.length && keys.every((key) => key in value);
+}
+
+function validNonNegativeNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function validateStationStorage(body) {
+  if (!isPlainObject(body) || !hasExactKeys(body, ["ok", "schemaVersion", "checkedAt", "storage"]))
+    return null;
+  const item = body.storage;
+  if (body.ok !== true || body.schemaVersion !== 1 || !isValidIsoDate(body.checkedAt)) return null;
+  if (
+    !isPlainObject(item) ||
+    !hasExactKeys(item, [
+      "id",
+      "exists",
+      "status",
+      "totalBytes",
+      "usedBytes",
+      "freeBytes",
+      "percentUsed",
+    ]) ||
+    item.id !== "kaline" ||
+    typeof item.exists !== "boolean" ||
+    !STORAGE_STATUSES.has(item.status)
+  )
+    return null;
+  const values = [item.totalBytes, item.usedBytes, item.freeBytes];
+  if (item.status === "ok") {
+    if (!item.exists || !values.every(validNonNegativeNumber)) return null;
+    if (!validNonNegativeNumber(item.percentUsed) || item.percentUsed > 100) return null;
+  } else if (values.some((value) => value !== null) || item.percentUsed !== null) return null;
+  if (item.status === "missing" && item.exists) return null;
+  return {
+    ok: true,
+    schemaVersion: 1,
+    checkedAt: body.checkedAt,
+    storage: {
+      id: "kaline",
+      exists: item.exists,
+      status: item.status,
+      totalBytes: item.totalBytes,
+      usedBytes: item.usedBytes,
+      freeBytes: item.freeBytes,
+      percentUsed: item.percentUsed,
+    },
+  };
+}
+
+function validateStationServices(body) {
+  if (!isPlainObject(body) || !hasExactKeys(body, ["ok", "schemaVersion", "checkedAt", "services"]))
+    return null;
+  if (
+    body.ok !== true ||
+    body.schemaVersion !== 1 ||
+    !isValidIsoDate(body.checkedAt) ||
+    !Array.isArray(body.services)
+  )
+    return null;
+  const seen = new Set();
+  const services = [];
+  for (const item of body.services) {
+    if (
+      !isPlainObject(item) ||
+      !hasExactKeys(item, ["id", "active", "status"]) ||
+      !ALLOWED_SERVICES.includes(item.id) ||
+      seen.has(item.id) ||
+      typeof item.active !== "boolean" ||
+      !SERVICE_STATUSES.has(item.status) ||
+      item.active !== (item.status === "active")
+    )
+      return null;
+    seen.add(item.id);
+    services.push({ id: item.id, active: item.active, status: item.status });
+  }
+  if (
+    services.some(
+      (item, index) =>
+        ALLOWED_SERVICES.indexOf(item.id) <= ALLOWED_SERVICES.indexOf(services[index - 1]?.id),
+    )
+  )
+    return null;
+  return { ok: true, schemaVersion: 1, checkedAt: body.checkedAt, services };
+}
+
 function isJsonContentType(header) {
   const mediaType = String(header || "")
     .split(";", 1)[0]
@@ -131,7 +230,7 @@ function isJsonContentType(header) {
 function declaredBodyTooLarge(header) {
   if (!header) return false;
   const value = Number(header);
-  return Number.isFinite(value) && value > MAX_HEALTH_BODY_BYTES;
+  return Number.isFinite(value) && value > MAX_BODY_BYTES;
 }
 
 async function readLimitedJson(res) {
@@ -149,7 +248,7 @@ async function readLimitedJson(res) {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_HEALTH_BODY_BYTES) {
+    if (total > MAX_BODY_BYTES) {
       await reader.cancel();
       return { ok: false, code: STATION_CODES.RESPONSE_TOO_LARGE };
     }
@@ -168,12 +267,19 @@ function failure(state, code, latencyMs = null) {
 }
 
 export async function fetchStationHealth(env = process.env) {
+  const result = await fetchStationResource(HEALTH_PATH, validateStationHealth, env);
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  return { ...metadata, station: resource };
+}
+
+async function fetchStationResource(path, validate, env = process.env) {
   const cfg = resolveStationConfig(env);
   if (!cfg.configured) return failure("not_configured", STATION_CODES.NOT_CONFIGURED);
   if (!cfg.valid) return failure("misconfigured", cfg.errorCode || STATION_CODES.MISCONFIGURED);
 
-  const finalUrl = new URL(HEALTH_PATH, cfg.baseUrl);
-  if (finalUrl.origin !== cfg.baseUrl.origin || finalUrl.pathname !== HEALTH_PATH) {
+  const finalUrl = new URL(path, cfg.baseUrl);
+  if (finalUrl.origin !== cfg.baseUrl.origin || finalUrl.pathname !== path) {
     return failure("misconfigured", STATION_CODES.MISCONFIGURED);
   }
 
@@ -200,14 +306,14 @@ export async function fetchStationHealth(env = process.env) {
     if (!res.ok) return failure("unavailable", STATION_CODES.UNAVAILABLE);
     const parsed = await readLimitedJson(res);
     if (!parsed.ok) return failure("incompatible", parsed.code);
-    const health = validateStationHealth(parsed.body);
-    if (!health) return failure("incompatible", STATION_CODES.CONTRACT_MISMATCH);
+    const resource = validate(parsed.body);
+    if (!resource) return failure("incompatible", STATION_CODES.CONTRACT_MISMATCH);
     return {
       ok: true,
       state: "available",
       code: null,
       latencyMs,
-      station: health,
+      resource,
       checkedAt: new Date().toISOString(),
     };
   } catch (err) {
@@ -217,6 +323,20 @@ export async function fetchStationHealth(env = process.env) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function fetchStationStorageStatus(env = process.env) {
+  const result = await fetchStationResource(STORAGE_PATH, validateStationStorage, env);
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  return { ...metadata, storage: resource };
+}
+
+export async function fetchStationServicesStatus(env = process.env) {
+  const result = await fetchStationResource(SERVICES_PATH, validateStationServices, env);
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  return { ...metadata, services: resource };
 }
 
 export async function getStationConnectionStatus(env = process.env) {

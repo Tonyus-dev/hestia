@@ -56,4 +56,21 @@ describe("getServicesStatus", () => {
       true,
     );
   });
+
+  it("filtra nomes não permitidos e preserva a ordem canônica", async () => {
+    execFile.mockImplementation((_command, _args, _options, callback) => {
+      callback(null, "loaded\nactive\n", "");
+    });
+
+    const { items } = await getServicesStatus([
+      "tailscaled",
+      "evil.service",
+      "jellyfin",
+      "tailscaled",
+    ]);
+
+    expect(items.map((item) => item.name)).toEqual(["jellyfin", "tailscaled"]);
+    expect(execFile).toHaveBeenCalledTimes(2);
+    expect(execFile.mock.calls.flatMap((call) => call[1])).not.toContain("evil.service");
+  });
 });

@@ -33,7 +33,7 @@ function loadUserConfig() {
   }
 }
 
-const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
+export const ALLOWED_SERVICES = Object.freeze(["jellyfin", "smbd", "tailscaled"]);
 const userCfg = loadUserConfig();
 
 const host = process.env.HESTIA_HOST || userCfg.host || "127.0.0.1";

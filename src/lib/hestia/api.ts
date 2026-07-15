@@ -240,6 +240,32 @@ export type StationConnection = {
   code?: string;
 };
 
+export type StationStorage = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  storage: {
+    id: "kaline";
+    exists: boolean;
+    status: "ok" | "missing" | "unavailable";
+    totalBytes: number | null;
+    usedBytes: number | null;
+    freeBytes: number | null;
+    percentUsed: number | null;
+  };
+};
+
+export type StationServices = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  services: Array<{
+    id: "jellyfin" | "smbd" | "tailscaled";
+    active: boolean;
+    status: "active" | "inactive" | "failed" | "not-installed" | "unavailable" | "unknown";
+  }>;
+};
+
 export type Config = {
   appName: string;
   serverName: string;
@@ -558,6 +584,8 @@ export const hestiaApi = {
   config: () => safeFetch<Config>("/api/config"),
   stationConnection: () => safeFetch<StationConnection>("/api/station/connection"),
   stationHealth: () => safeFetch<StationHealth>("/api/station/health"),
+  stationStorage: () => safeFetch<StationStorage>("/api/station/storage/status"),
+  stationServices: () => safeFetch<StationServices>("/api/station/services/status"),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
