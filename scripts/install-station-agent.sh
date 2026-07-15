@@ -65,8 +65,24 @@ for _attempt in 1 2 3 4 5 6 7 8 9 10; do
   sleep 1
 done
 [ "$ACTIVE" -eq 1 ] || fail "serviço não ficou ativo em até 10 segundos."
-"$NODE_BIN" "$ROOT_DIR/scripts/station-doctor.mjs" \
-  --env-file "$ENV_FILE" \
-  --require-systemd \
-  --timeout-ms 10000
+
+DOCTOR_OK=0
+DOCTOR_OUTPUT=""
+for _attempt in 1 2 3 4 5; do
+  if DOCTOR_OUTPUT="$(
+    "$NODE_BIN" "$ROOT_DIR/scripts/station-doctor.mjs" \
+      --env-file "$ENV_FILE" \
+      --require-systemd \
+      --timeout-ms 10000 2>&1
+  )"; then
+    DOCTOR_OK=1
+    break
+  fi
+  [ "$_attempt" -eq 5 ] || sleep 1
+done
+
+printf '%s\n' "$DOCTOR_OUTPUT"
+[ "$DOCTOR_OK" -eq 1 ] ||
+  fail "serviço ficou ativo, mas o Station Doctor não passou após 5 tentativas."
+
 log "serviço instalado e verificado"
