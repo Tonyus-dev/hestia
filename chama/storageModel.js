@@ -273,8 +273,8 @@ const FOLDERS = [
   }),
 ];
 
-export function getStorageModel() {
-  const root = legacyStorageRoot();
+export function getStorageModel(storagePath = legacyStorageRoot()) {
+  const root = storagePath;
   const mappedFolders = FOLDERS.map((f) => ({
     ...f,
     absolutePath: path.join(root, f.relativePath),

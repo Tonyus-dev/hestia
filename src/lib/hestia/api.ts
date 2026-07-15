@@ -321,18 +321,15 @@ export type StorageScan = {
 
 export type OrganizerPlanItem = {
   id: string;
-  sourcePath: string;
-  targetPath: string;
+  source: { kind: "entrada" | "external"; label: string; relativePath: string };
+  target: { relativePath: string };
   action: "move" | "copy";
   reason: string;
   risk: "low" | "medium" | "high";
   status: "planned" | "conflict" | "ignored";
-  sourceKind?: "entrada" | "upload" | "dispositivo" | "manual" | "external" | "unknown";
-  sourceLabel?: string;
-  size?: number;
-  mtimeMs?: number;
-  mtimeIso?: string;
-  ignoredReason?: string;
+  size: number;
+  mtimeIso: string | null;
+  ignoredReason: string | null;
 };
 export type OrganizerPlan = {
   planId: string;
@@ -342,11 +339,11 @@ export type OrganizerPlan = {
     total: number;
     planned: number;
     conflicts: number;
-    ignored?: number;
-    quarantined?: number;
-    byExtension?: Record<string, number>;
-    byTargetArea?: Record<string, number>;
-    rules?: {
+    ignored: number;
+    quarantined: number;
+    byExtension: Record<string, number>;
+    byTargetArea: Record<string, number>;
+    rules: {
       extensionRules: { extensions: string[]; relativePath: string }[];
       fallback: string;
     };
@@ -358,24 +355,27 @@ export type OrganizerPlan = {
 };
 
 export type OrganizerOperation = {
-  from: string;
-  to: string;
-  action: string;
+  source: { kind: "entrada" | "external"; label: string; relativePath: string };
+  target: { relativePath: string };
+  action: "move" | "copy" | "delete";
   status: "ok" | "failed" | "skipped";
-  reason?: string;
-  error?: string;
+  reason: string | null;
+  error: string | null;
+  undoPossible: boolean;
 };
 export type OrganizerRunManifest = {
   runId: string;
-  planId?: string;
-  undoOf?: string;
+  planId: string;
+  kind: "apply" | "undo" | "redo";
+  undoOf: string | null;
+  redoOf: string | null;
   createdAt: string;
+  appliedAt: string;
   status: "applied" | "partially_applied" | "failed";
-  mode: string;
   operations: OrganizerOperation[];
   summary: { total: number; ok: number; failed: number; skipped: number };
-  undoneBy?: string;
-  undoneAt?: string;
+  undoneBy: string | null;
+  redoneBy: string | null;
 };
 
 export type OrganizerRunListing = {
@@ -387,6 +387,14 @@ export type OrganizerRunListing = {
   redoneBy: string | null;
 };
 export type OrganizerRuns = { items: OrganizerRunListing[] };
+
+type OrganizerPlanEnvelope = { ok: true; schemaVersion: 1; checkedAt: string; plan: OrganizerPlan };
+type OrganizerRunEnvelope = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  run: OrganizerRunManifest;
+};
 
 const DEFAULT_TIMEOUT_MS = 3500;
 const CHAMA_PORT = 4517;
@@ -570,6 +578,15 @@ async function safePost<T>(
   }
 }
 
+async function unwrapApiState<E, P extends keyof E>(
+  promise: Promise<ApiState<E>>,
+  property: P,
+): Promise<ApiState<E[P]>> {
+  const result = await promise;
+  if (result.status !== "ok") return result;
+  return { status: "ok", data: result.data[property], fetchedAt: result.fetchedAt };
+}
+
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
   llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
@@ -586,6 +603,60 @@ export const hestiaApi = {
   stationHealth: () => safeFetch<StationHealth>("/api/station/health"),
   stationStorage: () => safeFetch<StationStorage>("/api/station/storage/status"),
   stationServices: () => safeFetch<StationServices>("/api/station/services/status"),
+  stationOrganizerPlan: (extensions?: string) =>
+    unwrapApiState(
+      safePost<OrganizerPlanEnvelope>(
+        extensions
+          ? `/api/station/organizer/plan?extensions=${encodeURIComponent(extensions)}`
+          : "/api/station/organizer/plan",
+        {},
+        { "x-hestia-local-confirm": "organize" },
+        3600000,
+      ),
+      "plan",
+    ),
+  stationOrganizerApply: (planId: string, largePlanConfirm = false) =>
+    unwrapApiState(
+      safePost<OrganizerRunEnvelope>(
+        "/api/station/organizer/apply",
+        { planId, mode: "apply" },
+        {
+          "x-hestia-local-confirm": "organize",
+          ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
+        },
+        3600000,
+      ),
+      "run",
+    ),
+  stationOrganizerRuns: () => safeFetch<OrganizerRuns>("/api/station/organizer/runs"),
+  stationOrganizerRun: (runId: string) =>
+    unwrapApiState(
+      safeFetch<OrganizerRunEnvelope>(
+        `/api/station/organizer/runs/${encodeURIComponent(runId)}`,
+        30000,
+      ),
+      "run",
+    ),
+  stationOrganizerUndo: (runId: string) =>
+    unwrapApiState(
+      safePost<OrganizerRunEnvelope>(
+        `/api/station/organizer/runs/${encodeURIComponent(runId)}/undo`,
+        {},
+        { "x-hestia-local-confirm": "organize" },
+        3600000,
+      ),
+      "run",
+    ),
+  stationOrganizerRedo: (undoRunId: string) =>
+    unwrapApiState(
+      safePost<OrganizerRunEnvelope>(
+        `/api/station/organizer/runs/${encodeURIComponent(undoRunId)}/redo`,
+        {},
+        { "x-hestia-local-confirm": "organize" },
+        3600000,
+      ),
+      "run",
+    ),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
@@ -621,48 +692,12 @@ export const hestiaLegacyApi = {
   storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
   storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
-  organizerPlan: (extensions?: string) =>
-    safePost<OrganizerPlan>(
-      extensions
-        ? `/api/local/organizer/plan?extensions=${encodeURIComponent(extensions)}`
-        : "/api/local/organizer/plan",
-      {},
-      { "x-hestia-local-confirm": "organize" },
-      3600000,
-    ),
   llmChat: (message: string, model?: string, contextBlock?: string, facet?: string) =>
     safePost<LlmChatResult>(
       "/api/llm/chat",
       { message, model, contextBlock, facet: facet || "kaline" },
       {},
       90000,
-    ),
-  organizerApply: (planId: string, largePlanConfirm = false) =>
-    safePost<OrganizerRunManifest>(
-      "/api/local/organizer/apply",
-      { planId, mode: "apply" },
-      {
-        "x-hestia-local-confirm": "organize",
-        ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
-      },
-      3600000,
-    ),
-  organizerRuns: () => safeFetch<OrganizerRuns>("/api/local/organizer/runs"),
-  organizerRun: (runId: string) =>
-    safeFetch<OrganizerRunManifest>(`/api/local/organizer/runs/${runId}`),
-  organizerUndo: (runId: string) =>
-    safePost<OrganizerRunManifest>(
-      `/api/local/organizer/runs/${runId}/undo`,
-      {},
-      { "x-hestia-local-confirm": "organize" },
-      3600000,
-    ),
-  organizerRedo: (undoRunId: string) =>
-    safePost<OrganizerRunManifest>(
-      `/api/local/organizer/runs/${undoRunId}/redo`,
-      {},
-      { "x-hestia-local-confirm": "organize" },
-      3600000,
     ),
   codiceLibrary: () => safeFetch<CodiceLibrary>("/api/codice/library"),
   codiceImport: async (file: File, name: string) => {

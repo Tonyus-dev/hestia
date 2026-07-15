@@ -4,6 +4,7 @@ import {
   fetchStationHealth,
   fetchStationServicesStatus,
   fetchStationStorageStatus,
+  fetchStationOrganizerPlan,
   getStationConnectionStatus,
   resolveStationConfig,
 } from "./stationClient.js";
@@ -299,6 +300,91 @@ describe("fetchStationHealth", () => {
       env({ HESTIA_STATION_BASE_URL: "http://127.0.0.1:1", HESTIA_STATION_TOKEN: "top-secret" }),
     );
     expect(JSON.stringify(status)).not.toContain("top-secret");
+  });
+});
+
+describe("Station Organizer client", () => {
+  function planEnvelope(extraItem = {}) {
+    const now = new Date().toISOString();
+    return {
+      ok: true,
+      schemaVersion: 1,
+      checkedAt: now,
+      plan: {
+        planId: "plan_1_deadbeef",
+        generatedAt: now,
+        dryRun: true,
+        requiresExtraConfirmation: false,
+        largePlanThreshold: 5000,
+        planned: 1,
+        items: [
+          {
+            id: "123e4567-e89b-42d3-a456-426614174000",
+            source: { kind: "entrada", label: "Manual", relativePath: "livro.pdf" },
+            target: { relativePath: "codice/pdf/2026/07/livro.pdf" },
+            action: "move",
+            reason: ".pdf → codice/pdf/2026/07",
+            risk: "low",
+            status: "planned",
+            size: 10,
+            mtimeIso: now,
+            ignoredReason: null,
+            ...extraItem,
+          },
+        ],
+        summary: {
+          total: 1,
+          planned: 1,
+          conflicts: 0,
+          ignored: 0,
+          quarantined: 0,
+          byExtension: { ".pdf": 1 },
+          byTargetArea: { "codice/pdf": 1 },
+          rules: { extensionRules: [], fallback: "entrada/revisar" },
+        },
+      },
+    };
+  }
+
+  it("envia apenas intenção, confirmação e filtro de extensão", async () => {
+    const p = await peer((req, res) => {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        expect(JSON.parse(Buffer.concat(chunks).toString("utf8"))).toEqual({});
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(planEnvelope()));
+      });
+    });
+    const result = await fetchStationOrganizerPlan(
+      ".pdf",
+      env({ HESTIA_STATION_BASE_URL: p.baseUrl, HESTIA_STATION_TOKEN: "secret" }),
+    );
+    expect(result.ok).toBe(true);
+    expect(p.requests[0]).toMatchObject({
+      method: "POST",
+      url: "/api/station/organizer/plan?extensions=.pdf",
+    });
+    expect(p.requests[0].headers["x-hestia-local-confirm"]).toBe("organize");
+    expect(JSON.stringify(result)).not.toContain("secret");
+  });
+
+  it("rejeita path absoluto e campo extra mesmo em resposta 200", async () => {
+    for (const extra of [
+      { source: { kind: "entrada", label: "Manual", relativePath: "/home/x" } },
+      { storagePath: "/KALINE" },
+    ]) {
+      const p = await peer((_req, res) => {
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(planEnvelope(extra)));
+      });
+      await expect(
+        fetchStationOrganizerPlan(
+          undefined,
+          env({ HESTIA_STATION_BASE_URL: p.baseUrl, HESTIA_STATION_TOKEN: "secret" }),
+        ),
+      ).resolves.toMatchObject({ code: "STATION_CONTRACT_MISMATCH" });
+    }
   });
 });
 
