@@ -56,7 +56,7 @@ jobs:
           WORKDIR="$GITHUB_WORKSPACE"
           SERVICE_USER="$(id -un)"
           SERVICE_GROUP="$(id -gn)"
-          UNIT_FILE="$(mktemp)"
+          UNIT_FILE="$(mktemp "$RUNNER_TEMP/hestia-station-agent.XXXXXX.service")"
           sed -e "s#__NODE_BIN__#$NODE_BIN#g" \
             -e "s#__WORKDIR__#$WORKDIR#g" \
             -e "s#__SERVICE_USER__#$SERVICE_USER#g" \
