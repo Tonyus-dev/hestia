@@ -16,6 +16,13 @@ function Painel() {
   const station = useApi(hestiaApi.stationConnection);
   const stationStorage = useApi(hestiaApi.stationStorage);
   const stationServices = useApi(hestiaApi.stationServices);
+  const stationRefreshing =
+    station.refreshing || stationStorage.refreshing || stationServices.refreshing;
+  const retryStation = () => {
+    station.retry();
+    stationStorage.retry();
+    stationServices.retry();
+  };
   const d = hw.state.status === "ok" ? hw.state.data : null;
 
   return (
@@ -141,15 +148,19 @@ function Painel() {
                 <Row
                   k="Kaline"
                   v={
-                    stationStorage.state.status === "ok"
-                      ? formatStationStorage(stationStorage.state.data)
-                      : "indisponível"
+                    stationStorage.state.status === "loading"
+                      ? "consultando…"
+                      : stationStorage.state.status === "ok"
+                        ? formatStationStorage(stationStorage.state.data)
+                        : "indisponível"
                   }
                 />
               </div>
               <div>
                 <p className="kaline-eyebrow">Serviços da Estação</p>
-                {stationServices.state.status === "ok" ? (
+                {stationServices.state.status === "loading" ? (
+                  <Row k="Estado" v="consultando…" />
+                ) : stationServices.state.status === "ok" ? (
                   stationServices.state.data.services.map((service) => (
                     <Row key={service.id} k={service.id} v={service.status} />
                   ))
@@ -160,11 +171,11 @@ function Painel() {
             </div>
           )}
           <button
-            onClick={station.retry}
-            disabled={station.refreshing}
+            onClick={retryStation}
+            disabled={stationRefreshing}
             className="mt-4 rounded border border-[color:var(--kaline-border-copper)] px-3 py-2 text-xs text-[color:var(--kaline-copper)] disabled:opacity-60"
           >
-            {station.refreshing ? "Verificando…" : "Verificar novamente"}
+            {stationRefreshing ? "Verificando…" : "Verificar novamente"}
           </button>
         </DataCard>
       </section>
