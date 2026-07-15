@@ -5,9 +5,9 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=__WORKDIR__
-ExecStart=/usr/bin/env node __WORKDIR__/station.js
+ExecStart=__NODE_BIN__ __WORKDIR__/station.js
 User=__SERVICE_USER__
-Group=__SERVICE_USER__
+Group=__SERVICE_GROUP__
 Environment=NODE_ENV=production
 EnvironmentFile=-/etc/default/hestia-station-agent
 Restart=on-failure

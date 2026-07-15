@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import http from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
@@ -19,12 +20,13 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-async function start() {
+async function start(overrides = {}) {
   const app = await startStationAgent({
     host: "127.0.0.1",
     port: 0,
     token,
     allowedHosts: "",
+    ...overrides,
   });
   apps.push(app);
   const { port } = app.server.address();
@@ -33,6 +35,23 @@ async function start() {
 
 function request(baseUrl, options) {
   return fetch(`${baseUrl}/api/station/health`, options);
+}
+
+function requestWithHost(baseUrl, host) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(
+      `${baseUrl}/api/station/health`,
+      { headers: { Host: host, Authorization: `Bearer ${token}` } },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          resolve({ status: response.statusCode, body: JSON.parse(Buffer.concat(chunks)) });
+        });
+      },
+    );
+    request.on("error", reject);
+  });
 }
 
 describe("Station Agent", () => {
@@ -92,6 +111,29 @@ describe("Station Agent", () => {
     });
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ ok: false, error: "not_found" });
+  });
+
+  it("rejeita Host não permitido pelo HTTP real", async () => {
+    const { baseUrl } = await start();
+    const response = await requestWithHost(baseUrl, "attacker.example");
+    expect(response.status).toBe(421);
+    expect(response.body).toEqual({ ok: false, error: "host_not_allowed" });
+  });
+
+  it("aceita Host exato da allowlist pelo HTTP real", async () => {
+    const { baseUrl } = await start({ allowedHosts: "station.example.test" });
+    const response = await requestWithHost(baseUrl, "station.example.test");
+    expect(response.status).toBe(200);
+    const body = response.body;
+    expect(Object.keys(body)).toEqual(["ok", "schemaVersion", "service", "version", "checkedAt"]);
+    expect(body).toEqual({
+      ok: true,
+      schemaVersion: 1,
+      service: "hestia-station-agent",
+      version: pkg.version,
+      checkedAt: body.checkedAt,
+    });
+    expect(new Date(body.checkedAt).toISOString()).toBe(body.checkedAt);
   });
 
   it("integra com fetchStationHealth real e rejeita token incorreto", async () => {
