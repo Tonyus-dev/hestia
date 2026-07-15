@@ -2,7 +2,7 @@
 // Nunca aceita nome de serviço vindo de fora.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { config } from "./config.js";
+import { ALLOWED_SERVICES, config } from "./config.js";
 
 const pExecFile = promisify(execFile);
 
@@ -41,7 +41,9 @@ export function mapSystemctlShow(raw) {
   return "unknown";
 }
 
-export async function getServicesStatus() {
-  const items = await Promise.all(config.services.map(check));
+export async function getServicesStatus(serviceNames = config.services) {
+  const requested = new Set(Array.isArray(serviceNames) ? serviceNames : []);
+  const safeNames = ALLOWED_SERVICES.filter((name) => requested.has(name));
+  const items = await Promise.all(safeNames.map(check));
   return { items };
 }
