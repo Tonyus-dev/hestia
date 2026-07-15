@@ -14,6 +14,8 @@
     "preview": "vite preview",
     "start": "node hestia.js",
     "station:start": "node station.js",
+    "station:doctor": "node scripts/station-doctor.mjs",
+    "station:smoke": "npm run build && node scripts/station-smoke.mjs",
     "station:install": "bash scripts/install-station-agent.sh",
     "station:uninstall": "bash scripts/uninstall-station-agent.sh",
     "dev:local": "node --watch hestia.js",

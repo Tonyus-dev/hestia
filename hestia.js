@@ -421,6 +421,12 @@ if (build) {
   if (build.serverEntry) {
     const ssrFetch = createSsrFetcher(build.serverEntry);
     app.setNotFoundHandler(async (req, reply) => {
+      if (req.url.startsWith("/api/")) {
+        return reply.code(404).send({
+          ok: false,
+          error: "não encontrado",
+        });
+      }
       try {
         const ssrRes = await ssrFetch(req);
         reply.code(ssrRes.status);

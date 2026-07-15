@@ -44,11 +44,20 @@ function resolveTimeout(raw = process.env.HESTIA_STATION_TIMEOUT_MS) {
 }
 
 function isLoopback(hostname) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
 }
 
 function isDevelopmentLike(env = process.env.NODE_ENV) {
   return env === "development" || env === "test";
+}
+
+function allowsExplicitLoopbackHttp(env) {
+  return env.HESTIA_STATION_ALLOW_HTTP_LOOPBACK === "1";
 }
 
 export function resolveStationConfig(env = process.env) {
@@ -84,7 +93,7 @@ export function resolveStationConfig(env = process.env) {
     baseUrl.protocol === "https:" ||
     (baseUrl.protocol === "http:" &&
       isLoopback(baseUrl.hostname) &&
-      isDevelopmentLike(env.NODE_ENV));
+      (isDevelopmentLike(env.NODE_ENV) || allowsExplicitLoopbackHttp(env)));
   const token = env.HESTIA_STATION_TOKEN?.trim() || null;
   if (!hasOnlyOrigin || baseUrl.username || baseUrl.password || !protocolAllowed || !token) {
     return {

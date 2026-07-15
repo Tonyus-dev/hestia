@@ -152,6 +152,60 @@ describe("resolveStationConfig", () => {
       }),
     ).toMatchObject({ valid: false });
   });
+
+  it("exige opt-in exato para HTTP loopback em produção", () => {
+    const production = {
+      NODE_ENV: "production",
+      HESTIA_STATION_BASE_URL: "http://127.0.0.1:4518",
+      HESTIA_STATION_TOKEN: "secret",
+    };
+    expect(resolveStationConfig(production)).toMatchObject({
+      valid: false,
+      errorCode: "STATION_MISCONFIGURED",
+    });
+    for (const baseUrl of ["http://127.0.0.1:4518", "http://localhost:4518", "http://[::1]:4518"]) {
+      expect(
+        resolveStationConfig({
+          ...production,
+          HESTIA_STATION_BASE_URL: baseUrl,
+          HESTIA_STATION_ALLOW_HTTP_LOOPBACK: "1",
+        }),
+      ).toMatchObject({ valid: true });
+    }
+    for (const value of ["true", "yes", "TRUE", "0", ""]) {
+      expect(
+        resolveStationConfig({
+          ...production,
+          HESTIA_STATION_ALLOW_HTTP_LOOPBACK: value,
+        }),
+      ).toMatchObject({ valid: false, errorCode: "STATION_MISCONFIGURED" });
+    }
+  });
+
+  it("mantém HTTP remoto e URLs inseguras proibidos mesmo com opt-in", () => {
+    const optIn = {
+      NODE_ENV: "production",
+      HESTIA_STATION_TOKEN: "secret",
+      HESTIA_STATION_ALLOW_HTTP_LOOPBACK: "1",
+    };
+    for (const baseUrl of [
+      "http://192.168.1.10:4518",
+      "http://10.0.0.2:4518",
+      "http://station.example.ts.net:4518",
+      "http://0.0.0.0:4518",
+      "http://user:pass@127.0.0.1:4518",
+      "http://127.0.0.1:4518/api",
+      "http://127.0.0.1:4518?token=x",
+      "http://127.0.0.1:4518#x",
+      "file:///KALINE",
+      "javascript:alert(1)",
+    ]) {
+      expect(resolveStationConfig({ ...optIn, HESTIA_STATION_BASE_URL: baseUrl })).toMatchObject({
+        valid: false,
+        errorCode: "STATION_MISCONFIGURED",
+      });
+    }
+  });
 });
 
 describe("fetchStationHealth", () => {

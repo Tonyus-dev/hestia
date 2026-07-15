@@ -22,6 +22,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check shell syntax
+        run: |
+          bash -n scripts/doctor.sh
+          bash -n scripts/install-station-agent.sh
+          bash -n scripts/uninstall-station-agent.sh
+          bash -n scripts/build-deb.sh
+
       - name: Run lint
         run: npm run lint
 
@@ -31,8 +38,33 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Run Console doctor
+        run: npm run doctor
+
+      - name: Run Station operational smoke
+        run: node scripts/station-smoke.mjs
+
       - name: Build Debian Package
         run: npm run build-deb
 
-      - name: Validate systemd unit file
+      - name: Validate Console systemd unit file
         run: SYSTEMD_UNIT_PATH=packaging/:/lib/systemd/system:/usr/lib/systemd/system:/etc/systemd/system systemd-analyze verify hestia-console.service
+
+      - name: Render and validate Station Agent systemd unit file
+        run: |
+          NODE_BIN="$(command -v node)"
+          WORKDIR="$GITHUB_WORKSPACE"
+          SERVICE_USER="$(id -un)"
+          SERVICE_GROUP="$(id -gn)"
+          UNIT_FILE="$(mktemp "$RUNNER_TEMP/hestia-station-agent.XXXXXX.service")"
+          sed -e "s#__NODE_BIN__#$NODE_BIN#g" \
+            -e "s#__WORKDIR__#$WORKDIR#g" \
+            -e "s#__SERVICE_USER__#$SERVICE_USER#g" \
+            -e "s#__SERVICE_GROUP__#$SERVICE_GROUP#g" \
+            packaging/hestia-station-agent.service.in > "$UNIT_FILE"
+          ! grep -Eq '__[A-Z_]+__' "$UNIT_FILE"
+          grep -Fqx "WorkingDirectory=$WORKDIR" "$UNIT_FILE"
+          grep -Fqx "ExecStart=$NODE_BIN $WORKDIR/station.js" "$UNIT_FILE"
+          grep -Eq '^User=.+$' "$UNIT_FILE"
+          grep -Eq '^Group=.+$' "$UNIT_FILE"
+          SYSTEMD_UNIT_PATH=packaging/:/lib/systemd/system:/usr/lib/systemd/system:/etc/systemd/system systemd-analyze verify "$UNIT_FILE"

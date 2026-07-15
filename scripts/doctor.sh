@@ -3,6 +3,13 @@ set -u -o pipefail
 SERVICE_NAME="${HESTIA_SERVICE_NAME:-hestia-console}"
 BASE_URL="${HESTIA_URL:-http://127.0.0.1:4517}"
 DESKTOP_FILE="${HESTIA_DESKTOP_FILE:-/usr/share/applications/hestia-console.desktop}"
+KALINE_ROOT="${HESTIA_STORAGE_PATH:-${HESTIA_KALINE_ROOT:-/KALINE}}"
+DATA_DIR="${HESTIA_DATA_DIR:-}"
+if [ -z "$DATA_DIR" ] && [ -n "${STATE_DIRECTORY:-}" ]; then
+  DATA_DIR="${STATE_DIRECTORY%%:*}"
+fi
+DATA_DIR="${DATA_DIR:-${HOME:-/tmp}/.chama/data}"
+HERMES_ROOT="${HESTIA_HERMES_ROOT:-$DATA_DIR/hermes}"
 fail=0
 ok(){ echo "ok: $*"; }
 warn(){ echo "warn: $*"; }
