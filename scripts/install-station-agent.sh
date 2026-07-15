@@ -56,4 +56,17 @@ chmod 0644 "$UNIT_FILE"
 systemctl daemon-reload
 systemctl enable --now "$SERVICE_NAME.service"
 systemctl restart "$SERVICE_NAME.service"
-log "serviço instalado e iniciado"
+ACTIVE=0
+for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+  if systemctl is-active --quiet "$SERVICE_NAME.service"; then
+    ACTIVE=1
+    break
+  fi
+  sleep 1
+done
+[ "$ACTIVE" -eq 1 ] || fail "serviço não ficou ativo em até 10 segundos."
+"$NODE_BIN" "$ROOT_DIR/scripts/station-doctor.mjs" \
+  --env-file "$ENV_FILE" \
+  --require-systemd \
+  --timeout-ms 10000
+log "serviço instalado e verificado"
