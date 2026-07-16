@@ -52,7 +52,9 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "HESTIA_STATION_PORT=$STATION_PORT"
     echo "HESTIA_STATION_TOKEN=$TOKEN"
     echo "HESTIA_STATION_ORGANIZER_ENABLED=0"
-    echo "# HESTIA_STATION_ALLOWED_HOSTS=station.example.ts.net"
+    echo "HESTIA_STATION_CODICE_ENABLED=0"
+    echo "# HESTIA_CODICE_CORS_ORIGIN=https://codice.example"
+    echo "# HESTIA_STATION_ALLOWED_HOSTS=kaline-box.example.ts.net"
   } > "$ENV_FILE"
   log "configuração criada em $ENV_FILE"
 else
