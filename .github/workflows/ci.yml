@@ -64,8 +64,21 @@ jobs:
         run: |
           grep -Fq '/opt/hestia-console/scripts/console-doctor.mjs' docs/DEPLOYMENT.md
           grep -Fq '/opt/hestia-station/scripts/station-doctor.mjs' docs/DEPLOYMENT.md
+          grep -Fq 'sudo systemctl restart hestia-console' docs/DEPLOYMENT.md
+          grep -Fq 'sudo systemctl restart hestia-station-agent' docs/DEPLOYMENT.md
+          grep -Fq 'sudo systemctl is-active --quiet hestia-console' docs/DEPLOYMENT.md
+          grep -Fq 'sudo systemctl is-active --quiet hestia-station-agent' docs/DEPLOYMENT.md
           ! grep -Fq 'sudo npm run station:doctor' docs/DEPLOYMENT.md
           ! grep -Fq 'sudo npm run doctor' docs/DEPLOYMENT.md
+          check_order() {
+            edit_line="$(grep -nF "$1" docs/DEPLOYMENT.md | head -n 1 | cut -d: -f1)"
+            restart_line="$(awk -v start="$edit_line" -v needle="$2" 'NR > start && index($0, needle) { print NR; exit }' docs/DEPLOYMENT.md)"
+            doctor_line="$(awk -v start="$restart_line" -v needle="$3" 'NR > start && index($0, needle) { print NR; exit }' docs/DEPLOYMENT.md)"
+            test -n "$edit_line" -a -n "$restart_line" -a -n "$doctor_line"
+            test "$edit_line" -lt "$restart_line" -a "$restart_line" -lt "$doctor_line"
+          }
+          check_order 'sudoedit /etc/default/hestia-console' 'sudo systemctl restart hestia-console' '/opt/hestia-console/scripts/console-doctor.mjs'
+          check_order 'sudoedit /etc/default/hestia-station-agent' 'sudo systemctl restart hestia-station-agent' '/opt/hestia-station/scripts/station-doctor.mjs'
 
       - name: Build Debian Package
         run: npm run build-deb

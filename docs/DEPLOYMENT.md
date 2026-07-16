@@ -63,6 +63,8 @@ git clone https://github.com/Tonyus-dev/hestia.git
 cd hestia
 sudo npm run install:local
 sudoedit /etc/default/hestia-console
+sudo systemctl restart hestia-console
+sudo systemctl is-active --quiet hestia-console
 sudo /usr/bin/env node \
   /opt/hestia-console/scripts/console-doctor.mjs \
   --require-systemd
@@ -87,6 +89,8 @@ git clone https://github.com/Tonyus-dev/hestia.git
 cd hestia
 sudo HESTIA_STATION_PORT=4518 npm run station:install
 sudoedit /etc/default/hestia-station-agent
+sudo systemctl restart hestia-station-agent
+sudo systemctl is-active --quiet hestia-station-agent
 sudo /usr/bin/env node \
   /opt/hestia-station/scripts/station-doctor.mjs \
   --require-systemd
@@ -101,6 +105,8 @@ git clone https://github.com/Tonyus-dev/hestia.git
 cd hestia
 sudo HESTIA_STATION_PORT=4519 npm run station:install
 sudoedit /etc/default/hestia-station-agent
+sudo systemctl restart hestia-station-agent
+sudo systemctl is-active --quiet hestia-station-agent
 sudo /usr/bin/env node \
   /opt/hestia-station/scripts/station-doctor.mjs \
   --require-systemd
@@ -124,6 +130,10 @@ O Organizer permanece disponível apenas como opt-in interno do Agent. As instal
 
 O Doctor do checkout é ferramenta de desenvolvimento. O gate pós-instalação deve
 sempre executar diretamente o Doctor instalado em `/opt`.
+
+Alterações em `/etc/default` não afetam processos já iniciados. O restart é
+obrigatório antes do gate pós-configuração: editar env → reiniciar serviço →
+confirmar serviço ativo → executar Doctor instalado → validar endpoints reais.
 
 ## Desinstalação
 
