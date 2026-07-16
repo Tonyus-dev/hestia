@@ -1,11 +1,11 @@
 [Unit]
-Description=Héstia Console (rodando direto do checkout do git em __WORKDIR__)
+Description=Héstia Console
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=__WORKDIR__
-ExecStart=/usr/bin/env node __WORKDIR__/hestia.js
+WorkingDirectory=__RUNTIME_DIR__
+ExecStart=/usr/bin/env node __RUNTIME_DIR__/hestia.js
 Restart=on-failure
 RestartSec=3
 StateDirectory=hestia-console
@@ -14,11 +14,13 @@ Environment=HESTIA_HOST=127.0.0.1
 Environment=HESTIA_PORT=4517
 Environment=NODE_ENV=production
 EnvironmentFile=-/etc/default/hestia-console
-
-User=hestia-console
-Group=hestia-console
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
 NoNewPrivileges=yes
-ProtectSystem=full
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=-/var/lib/hestia-console -/var/log/hestia-console
 
 [Install]
 WantedBy=multi-user.target

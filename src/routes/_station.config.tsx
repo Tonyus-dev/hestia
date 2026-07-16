@@ -81,10 +81,13 @@ function ConfigPage() {
             <div>
               <p className="kaline-eyebrow">Estação</p>
               <div className="mt-2 flex flex-col gap-2">
-                <Row k="Estação configurada" v={state.data.stationConfigured ? "sim" : "não"} />
+                <Row k="Servidor configurado" v={state.data.desktopConfigured ? "sim" : "não"} />
+                <Row k="Token do Servidor" v={state.data.desktopAuthConfigured ? "sim" : "não"} />
+                <Row k="TV Box configurada" v={state.data.tvboxConfigured ? "sim" : "não"} />
+                <Row k="Token da TV Box" v={state.data.tvboxAuthConfigured ? "sim" : "não"} />
                 <Row
-                  k="Credencial configurada"
-                  v={state.data.stationAuthConfigured ? "sim" : "não"}
+                  k="Configuração legada"
+                  v={state.data.legacyStationConfigDetected ? "corrigir" : "ausente"}
                 />
                 <Row k="Timeout" v={`${state.data.stationTimeoutMs} ms`} />
               </div>

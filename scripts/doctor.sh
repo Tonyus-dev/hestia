@@ -16,7 +16,7 @@ warn(){ echo "warn: $*"; }
 bad(){ echo "erro: $*"; fail=1; }
 check_path(){ [ -e "$1" ] && ok "$1 existe" || bad "$1 ausente"; }
 check_command(){ command -v "$1" >/dev/null 2>&1 && ok "$1 disponível ($(command -v "$1"))" || warn "$1 não encontrado no PATH"; }
-if command -v node >/dev/null 2>&1; then major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"; [ "$major" -ge 20 ] && ok "Node $(node -v)" || bad "Node >=20 necessário (detectado $(node -v 2>/dev/null || echo n/a))"; else bad "node ausente"; fi
+if command -v node >/dev/null 2>&1; then node "$(dirname "$0")/require-node.mjs" && ok "Node $(node -v)" || bad "Node >=22.13.0 necessário (detectado $(node -v 2>/dev/null || echo n/a))"; else bad "node ausente"; fi
 command -v npm >/dev/null 2>&1 && ok "npm $(npm -v)" || bad "npm ausente"
 [ -d dist/client ] && ok "dist/client existe" || bad "dist/client ausente; rode npm run build"
 if [ -f dist/server/index.mjs ] || [ -f dist/server/server.js ] || [ -f .output/server/index.mjs ]; then ok "bundle SSR encontrado"; else bad "bundle SSR ausente; rode npm run build"; fi

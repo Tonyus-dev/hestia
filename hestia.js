@@ -340,7 +340,6 @@ app.get("/api/config", async () => ({
   readonly: config.readonly,
   controlledWrites: config.controlledWrites,
   lanEnabled: config.lanEnabled,
-  stationBaseUrl: config.stationBaseUrl,
   ...publicStationConfig(),
   services: config.services,
 }));

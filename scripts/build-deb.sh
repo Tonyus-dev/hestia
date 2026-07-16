@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gera dist-deb/hestia-console_<versão>_amd64.deb a partir do repo atual.
+# Gera um pacote para a arquitetura nativa informada pelo dpkg.
 # Empacota o backend (hestia.js + chama/), o frontend buildado, um serviço
 # systemd (bind fixo em 127.0.0.1:4517), um launcher de menu e os ícones.
 set -euo pipefail
@@ -7,23 +7,21 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKG_NAME="hestia-console"
 VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
-ARCH="amd64"
+ARCH="${HESTIA_DEB_ARCH:-$(dpkg --print-architecture)}"
 OUT_DIR="$ROOT_DIR/dist-deb"
 STAGING="$ROOT_DIR/.deb-staging"
 DEB_FILE="$OUT_DIR/${PKG_NAME}_${VERSION}_${ARCH}.deb"
 
 log() { echo "[build-deb] $*"; }
 
+[ "$(id -u)" -ne 0 ] || { echo "[build-deb] ERRO: não execute npm/build como root." >&2; exit 1; }
+
 # --- Pré-requisitos: falha rápido com mensagem clara em vez de erro cru de shell. ------
 command -v node >/dev/null 2>&1 || {
-  echo "[build-deb] ERRO: node não encontrado. Instale Node.js 20+ antes de continuar." >&2
+  echo "[build-deb] ERRO: node não encontrado. Instale Node.js >=22.13.0 antes de continuar." >&2
   exit 1
 }
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-if [ "$NODE_MAJOR" -lt 20 ]; then
-  echo "[build-deb] ERRO: Node.js 20+ é necessário para buildar (detectado $(node -v))." >&2
-  exit 1
-fi
+node "$ROOT_DIR/scripts/require-node.mjs" || exit 1
 command -v npm >/dev/null 2>&1 || {
   echo "[build-deb] ERRO: npm não encontrado." >&2
   exit 1
@@ -93,7 +91,10 @@ fi
 
 log "instalando systemd unit, launcher, desktop entry e ícones"
 mkdir -p "$STAGING/etc/systemd/system"
-cp "$ROOT_DIR/packaging/hestia-console.service" "$STAGING/etc/systemd/system/"
+sed -e 's#__RUNTIME_DIR__#/opt/hestia-console#g' \
+  -e 's#__SERVICE_USER__#hestia-console#g' \
+  -e 's#__SERVICE_GROUP__#hestia-console#g' \
+  "$ROOT_DIR/packaging/hestia-console.service.in" > "$STAGING/etc/systemd/system/hestia-console.service"
 
 mkdir -p "$STAGING/usr/bin"
 for bin in hestia-console hestia-console-status hestia-console-stop; do
@@ -117,7 +118,7 @@ if [ -f "$ICONS_SRC/hestia-console.svg" ]; then
 fi
 
 log "gerando metadados DEBIAN/"
-sed "s/__VERSION__/$VERSION/" "$ROOT_DIR/packaging/debian/control.template" > "$STAGING/DEBIAN/control"
+sed -e "s/__VERSION__/$VERSION/" -e "s/__ARCH__/$ARCH/" "$ROOT_DIR/packaging/debian/control.template" > "$STAGING/DEBIAN/control"
 cp "$ROOT_DIR/packaging/debian/postinst" "$STAGING/DEBIAN/postinst"
 cp "$ROOT_DIR/packaging/debian/prerm" "$STAGING/DEBIAN/prerm"
 cp "$ROOT_DIR/packaging/debian/postrm" "$STAGING/DEBIAN/postrm"

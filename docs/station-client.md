@@ -1,33 +1,7 @@
-# Station Client Boundary
+# Limite do Station Client
 
-O Héstia Console e o futuro Station Agent são processos diferentes. O Console observa o notebook; o Agent governará o servidor em um PR posterior.
+Este documento foi consolidado. O contrato atual, as variáveis explícitas de `desktop`/`tvbox`, as rotas plurais e o procedimento operacional ficam em [`DEPLOYMENT.md`](DEPLOYMENT.md) e no [README](../README.md).
 
-Neste PR existe somente o cliente server-side do Console para consultar `GET /api/station/health` e publicar diagnósticos sanitizados em duas rotas locais same-origin:
+O navegador consulta apenas a origem da Héstia Console. O backend resolve uma configuração separada para cada Station, envia o Bearer correspondente server-to-server e devolve somente contratos sanitizados. URL e token nunca chegam ao frontend.
 
-- `GET /api/station/connection`
-- `GET /api/station/health`
-
-O navegador nunca chama a Estação diretamente e não recebe o token. O fluxo é:
-
-```txt
-React same-origin → Héstia Console → Station Client Node → HTTPS privado → Station Agent
-```
-
-## Configuração
-
-Exemplo para o ambiente do serviço:
-
-```ini
-# URL HTTPS privada oferecida pelo futuro Tailscale Serve
-HESTIA_STATION_BASE_URL=https://<STATION_HOST>
-
-# Credencial compartilhada com o futuro Station Agent
-HESTIA_STATION_TOKEN=<STATION_TOKEN>
-
-# Timeout do health remoto
-HESTIA_STATION_TIMEOUT_MS=5000
-```
-
-O token fica somente no backend. `/api/config` informa apenas se a Estação e a credencial estão configuradas, além do timeout resolvido; não expõe URL completa nem segredo.
-
-HTTPS privado será fornecido pelo Tailscale Serve no futuro. Tailscale Funnel não é usado. O Station Agent ainda será criado no PR #31; Storage remoto, Organizer remoto e Códice remoto não existem neste PR.
+Os únicos IDs aceitos são `desktop` e `tvbox`; não há descoberta nem lista dinâmica.

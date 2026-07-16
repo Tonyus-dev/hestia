@@ -1,5 +1,7 @@
 # Relatório de Validação — PR #28 (Héstia Production Safety & Códice Real-Station Proof)
 
+> Documento histórico do PR #28. Não descreve o estado operacional atual e não substitui o gate físico pendente em [`DEPLOYMENT.md`](DEPLOYMENT.md).
+
 Este relatório consolida a execução do plano de testes e validação da Héstia no notebook físico da estação real, em conformidade com as restrições de segurança de produção.
 
 ---

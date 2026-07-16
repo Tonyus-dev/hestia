@@ -6,9 +6,9 @@ set -e
 # manualmente e só avisamos — não abortamos a instalação por causa disso.
 NODE_BIN="$(command -v node || true)"
 if [ -n "$NODE_BIN" ]; then
-  NODE_MAJOR="$("$NODE_BIN" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
-  if [ "${NODE_MAJOR:-0}" -lt 20 ] 2>/dev/null; then
-    echo "Aviso: Héstia Console requer Node.js 20+; detectado $("$NODE_BIN" -v)." >&2
+  NODE_VERSION="$("$NODE_BIN" -p 'process.versions.node' 2>/dev/null || echo 0.0.0)"
+  if ! "$NODE_BIN" -e 'const [a,b,c]=process.versions.node.split(".").map(Number); process.exit(a>22 || (a===22 && (b>13 || (b===13 && c>=0))) ? 0 : 1)'; then
+    echo "Aviso: Héstia Console requer Node.js >=22.13.0; detectado $NODE_VERSION." >&2
   fi
 else
   echo "Aviso: binário 'node' não encontrado no PATH; o serviço não vai conseguir iniciar." >&2
@@ -19,13 +19,18 @@ if [ ! -f /etc/default/hestia-console ]; then
   echo "Criando template de configuração em /etc/default/hestia-console"
   cat << 'EOF' > /etc/default/hestia-console
 # Héstia Console Configuration
-# Future Station URL placeholder. Not used yet.
-# HESTIA_STATION_BASE_URL=https://station.example.ts.net
+# HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>
+# HESTIA_DESKTOP_TOKEN=<TOKEN_DESKTOP>
+# HESTIA_TVBOX_BASE_URL=https://<TVBOX_PRIVADA>
+# HESTIA_TVBOX_TOKEN=<TOKEN_TVBOX>
+HESTIA_STATION_TIMEOUT_MS=5000
 
 # Allowed Host headers (comma-separated, exact values, no wildcards)
 # HESTIA_ALLOWED_HOSTS=hestia.exemplo.ts.net,hestia.exemplo.ts.net:443
 EOF
 fi
+chown root:root /etc/default/hestia-console
+chmod 0600 /etc/default/hestia-console
 
 # Criar grupo de sistema se não existir
 if ! getent group hestia-console >/dev/null; then

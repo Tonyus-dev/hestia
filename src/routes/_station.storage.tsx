@@ -43,8 +43,7 @@ export function StoragePage() {
           Storage da Héstia Console
         </h1>
         <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
-          Volumes, caminhos, fontes externas e estado do /KALINE. Esta rota consulta o scan
-          read-only; organização local fica em /organizar.
+          Volumes, caminhos, fontes externas e estado do /KALINE. Esta rota é somente leitura.
         </p>
       </header>
 

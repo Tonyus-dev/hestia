@@ -6,7 +6,6 @@ export type NavItem = {
     | "/"
     | "/sistema"
     | "/storage"
-    | "/organizar"
     | "/servicos"
     | "/historico"
     | "/config"
@@ -21,7 +20,6 @@ export const nav: NavItem[] = [
   { to: "/", label: "Painel", hint: "cockpit" },
   { to: "/sistema", label: "Sistema", hint: "hardware real" },
   { to: "/storage", label: "Storage", hint: "/KALINE" },
-  { to: "/organizar", label: "Organizar", hint: "plano aprovado" },
   { to: "/codice", label: "Códice", hint: "leis e epubs" },
   { to: "/assistente", label: "Assistente", hint: "chat llm" },
   { to: "/servicos", label: "Serviços", hint: "status real" },
@@ -42,8 +40,10 @@ export const HESTIA = {
   footer: "Héstia é o Console. Chama pulsa. Console mostra. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,
-  stationConfigured: false,
-  stationAuthConfigured: false,
+  desktopConfigured: false,
+  desktopAuthConfigured: false,
+  tvboxConfigured: false,
+  tvboxAuthConfigured: false,
   stationTimeoutMs: 5000,
   services: ["tailscaled"],
   endpoints: [
@@ -117,8 +117,10 @@ export const HESTIA = {
         "port",
         "mode",
         "readonly",
-        "stationConfigured",
-        "stationAuthConfigured",
+        "desktopConfigured",
+        "desktopAuthConfigured",
+        "tvboxConfigured",
+        "tvboxAuthConfigured",
         "stationTimeoutMs",
         "services",
       ],

@@ -485,9 +485,12 @@ describe("Station Agent", () => {
   it("integra com fetchStationHealth real e rejeita token incorreto", async () => {
     const { baseUrl } = await start();
     const good = await fetchStationHealth({
-      NODE_ENV: "test",
-      HESTIA_STATION_BASE_URL: baseUrl,
-      HESTIA_STATION_TOKEN: token,
+      stationId: "desktop",
+      configured: true,
+      valid: true,
+      baseUrl: new URL(baseUrl),
+      token,
+      timeoutMs: 5000,
     });
     expect(good).toMatchObject({
       ok: true,
@@ -495,9 +498,12 @@ describe("Station Agent", () => {
       station: { service: "hestia-station-agent", version: pkg.version },
     });
     const bad = await fetchStationHealth({
-      NODE_ENV: "test",
-      HESTIA_STATION_BASE_URL: baseUrl,
-      HESTIA_STATION_TOKEN: "wrong-token",
+      stationId: "desktop",
+      configured: true,
+      valid: true,
+      baseUrl: new URL(baseUrl),
+      token: "wrong-token",
+      timeoutMs: 5000,
     });
     expect(bad).toMatchObject({
       ok: false,
@@ -644,13 +650,13 @@ describe("Station Agent", () => {
     const consoleApp = Fastify({ logger: false });
     registerStationRoutes(consoleApp, {
       NODE_ENV: "test",
-      HESTIA_STATION_BASE_URL: station.baseUrl,
-      HESTIA_STATION_TOKEN: token,
+      HESTIA_DESKTOP_BASE_URL: station.baseUrl,
+      HESTIA_DESKTOP_TOKEN: token,
     });
     await consoleApp.listen({ host: "127.0.0.1", port: 0 });
     apps.push(consoleApp);
     const { port } = consoleApp.server.address();
-    const response = await fetch(`http://127.0.0.1:${port}/api/station/storage/status`);
+    const response = await fetch(`http://127.0.0.1:${port}/api/stations/desktop/storage/status`);
     expect(response.status).toBe(200);
     expect((await response.json()).storage.totalBytes).toBe(777);
   });
@@ -661,13 +667,13 @@ describe("Station Agent", () => {
     const consoleApp = Fastify({ logger: false });
     registerStationRoutes(consoleApp, {
       NODE_ENV: "test",
-      HESTIA_STATION_BASE_URL: station.baseUrl,
-      HESTIA_STATION_TOKEN: secret,
+      HESTIA_DESKTOP_BASE_URL: station.baseUrl,
+      HESTIA_DESKTOP_TOKEN: secret,
     });
     await consoleApp.listen({ host: "127.0.0.1", port: 0 });
     apps.push(consoleApp);
     const { port } = consoleApp.server.address();
-    const response = await fetch(`http://127.0.0.1:${port}/api/station/storage/status`);
+    const response = await fetch(`http://127.0.0.1:${port}/api/stations/desktop/storage/status`);
     const body = await response.json();
     expect(response.status).toBe(502);
     expect(Object.keys(body)).toEqual(["ok", "code", "state", "error", "checkedAt"]);
@@ -675,7 +681,7 @@ describe("Station Agent", () => {
       ok: false,
       code: "STATION_AUTH_FAILED",
       state: "unauthorized",
-      error: "Station storage indisponível",
+      error: "desktop storage indisponível",
     });
     expect(JSON.stringify(body)).not.toContain(secret);
     expect(JSON.stringify(body)).not.toContain(station.baseUrl);
