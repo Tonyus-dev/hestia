@@ -1,6 +1,7 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { resolveStationAgentConfig } from "./stationAgent.js";
@@ -26,6 +27,14 @@ const RECOGNIZED_KEYS = new Set([
   "HESTIA_DATA_DIR",
 ]);
 const execFile = promisify(execFileCallback);
+const RUNTIME_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+function supportedNode(value) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
+  if (!match) return false;
+  const [major, minor] = match.slice(1).map(Number);
+  return major > 22 || (major === 22 && minor >= 13);
+}
 
 export function parseStationEnv(text) {
   const values = {};
@@ -153,9 +162,15 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
     lines.push(`erro: ${message}`);
   };
 
-  const major = Number(process.versions.node.split(".")[0]);
-  if (major >= 20) ok(`Node ${process.version}`);
-  else bad(`Node >=20 necessário (detectado ${process.version})`);
+  if (supportedNode(process.versions.node)) ok(`Node ${process.version}`);
+  else bad(`Node >=22.13.0 necessário (detectado ${process.version})`);
+  ok(`arquitetura ${process.arch}`);
+  try {
+    const runtime = await stat(resolve(RUNTIME_DIR, "station.js"));
+    runtime.isFile() ? ok("runtime da Station instalado") : bad("runtime da Station inválido");
+  } catch {
+    bad("runtime da Station ausente");
+  }
 
   let fileEnv;
   try {
@@ -178,6 +193,8 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
     config = resolveStationAgentConfig(agentEnv);
     if (!isAbsolute(config.storagePath)) throw new Error("storage root não é absoluto");
     ok("configuração válida");
+    if (config.organizerEnabled) bad("Organizer deve estar desativado nesta instalação");
+    else ok("Organizer desativado");
   } catch (error) {
     bad(String(error.message || "configuração inválida").replace(/^\[Station Agent\]\s*/, ""));
     return finish();
@@ -196,26 +213,28 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
     else warn("serviço systemd inativo");
   }
 
-  const clientEnv = {
-    NODE_ENV: "production",
-    HESTIA_STATION_BASE_URL: `http://${localHost(config.host)}:${config.port}`,
-    HESTIA_STATION_TOKEN: config.token,
-    HESTIA_STATION_TIMEOUT_MS: String(timeoutMs),
-    HESTIA_STATION_ALLOW_HTTP_LOOPBACK: "1",
+  const clientConfig = {
+    stationId: "desktop",
+    configured: true,
+    valid: true,
+    baseUrl: new URL(`http://${localHost(config.host)}:${config.port}`),
+    token: config.token,
+    timeoutMs,
+    errorCode: null,
   };
-  const health = await fetchStationHealth(clientEnv);
+  const health = await fetchStationHealth(clientConfig);
   if (!health.ok) {
     bad(`health falhou (${health.code})`);
     return finish();
   }
   ok("health respondeu");
 
-  const storage = await fetchStationStorageStatus(clientEnv);
+  const storage = await fetchStationStorageStatus(clientConfig);
   if (!storage.ok) bad(`storage falhou (${storage.code})`);
   else if (storage.storage.storage.status === "ok") ok("storage disponível");
   else warn(`storage ${storage.storage.storage.status}`);
 
-  const services = await fetchStationServicesStatus(clientEnv);
+  const services = await fetchStationServicesStatus(clientConfig);
   if (!services.ok) bad(`serviços falharam (${services.code})`);
   else {
     for (const item of services.services.services) {

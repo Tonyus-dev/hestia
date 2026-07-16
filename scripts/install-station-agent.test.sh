@@ -2,106 +2,165 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEST_ROOT="$(mktemp -d)"
-FAKE_BIN="$TEST_ROOT/bin"
+TEST_ROOT="$(mktemp -d /tmp/hestia-install-test-station-XXXXXX)"
+SOURCE="$TEST_ROOT/source"
+BIN="$TEST_ROOT/bin"
 TOKEN="installer-test-secret-token"
-mkdir -p "$FAKE_BIN"
-trap 'rm -rf "$TEST_ROOT"' EXIT
-
+mkdir -p "$SOURCE/chama" "$SOURCE/scripts" "$SOURCE/packaging/station-runtime" "$BIN"
+trap 'rm -rf "$TEST_ROOT" "${OUTSIDE:-}"' EXIT
+cp "$ROOT_DIR/station.js" "$SOURCE/"
+cp "$ROOT_DIR/packaging/station-runtime/package.json" "$ROOT_DIR/packaging/station-runtime/package-lock.json" "$SOURCE/packaging/station-runtime/"
+cp "$ROOT_DIR/packaging/hestia-station-agent.service.in" "$SOURCE/packaging/"
+cp "$ROOT_DIR/scripts/station-doctor.mjs" "$ROOT_DIR/scripts/require-node.mjs" "$SOURCE/scripts/"
+for file in codice.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do cp "$ROOT_DIR/chama/$file" "$SOURCE/chama/$file"; done
 fail() { echo "[station-install-test] ERRO: $*" >&2; exit 1; }
 
-cat > "$FAKE_BIN/id" <<'EOF'
+cat > "$BIN/id" <<'EOF'
 #!/usr/bin/env bash
-case "${1:-}" in
-  -u) [ "$#" -eq 1 ] && echo 0 || echo 1000 ;;
-  -gn) echo station-test ;;
-  *) exit 0 ;;
+case "${1:-}" in -u) [ "$#" -eq 1 ] && echo 0 || echo 1000;; -gn) echo station-test;; *) exit 0;; esac
+EOF
+cat > "$BIN/node" <<EOF
+#!/usr/bin/env bash
+case "\${1:-}" in
+  --check|*require-node.mjs) exit 0;;
+  -e) printf '%s' '$TOKEN'; exit 0;;
+  *station-doctor.mjs) [ "\${HESTIA_FAKE_DOCTOR_FAIL:-0}" = 1 ] && exit 1; echo 'Station Doctor: OK'; exit 0;;
 esac
-EOF
-cat > "$FAKE_BIN/node" <<EOF
-#!/usr/bin/env bash
-if [ "\${1:-}" = "-e" ]; then printf '%s' '$TOKEN'; fi
-EOF
-cat > "$FAKE_BIN/systemctl" <<'EOF'
-#!/usr/bin/env bash
 exit 0
 EOF
-cat > "$FAKE_BIN/chown" <<'EOF'
+cat > "$BIN/npm" <<'EOF'
 #!/usr/bin/env bash
+[ "${HESTIA_FAKE_NPM_FAIL:-0}" = 1 ] && exit 20
+prefix=""
+while [ "$#" -gt 0 ]; do [ "$1" = "--prefix" ] && { prefix="$2"; shift 2; continue; }; shift; done
+[ -n "$prefix" ] && mkdir -p "$prefix/node_modules/fastify"
+EOF
+cat > "$BIN/runuser" <<'EOF'
+#!/usr/bin/env bash
+shift 2; [ "${1:-}" = "--" ] && shift; exec "$@"
+EOF
+cat > "$BIN/getent" <<'EOF'
+#!/usr/bin/env bash
+[ "${1:-}" = "passwd" ] && echo "station-test:x:1000:1000::/tmp:/bin/false"
+EOF
+cat > "$BIN/systemctl" <<'EOF'
+#!/usr/bin/env bash
+[ "${HESTIA_FAKE_SYSTEMCTL_FAIL:-}" = "${1:-}" ] && exit 21
+[ "${1:-}" = "is-active" ] && [ "${HESTIA_FAKE_SYSTEMCTL_INACTIVE:-0}" = 1 ] && exit 1
 exit 0
 EOF
-cat > "$FAKE_BIN/install" <<'EOF'
+cat > "$BIN/install" <<'EOF'
 #!/usr/bin/env bash
-target="${!#}"
-/usr/bin/install -m 0600 /dev/null "$target"
+args=()
+while [ "$#" -gt 0 ]; do case "$1" in -o|-g) shift 2;; *) args+=("$1"); shift;; esac; done
+exec /usr/bin/install "${args[@]}"
 EOF
-chmod +x "$FAKE_BIN"/*
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/chown"
+chmod +x "$BIN"/*
 
 run_install() {
-  local env_file="$1"
-  local unit_file="$2"
-  shift 2
-  env -u HESTIA_STATION_PORT \
-    PATH="$FAKE_BIN:/usr/bin:/bin" \
-    HESTIA_STATION_SERVICE_USER=station-test \
-    HESTIA_STATION_ENV_FILE="$env_file" \
-    HESTIA_STATION_UNIT_FILE="$unit_file" \
-    "$@" bash "$ROOT_DIR/scripts/install-station-agent.sh"
+  local name="$1"; shift
+  env -u HESTIA_STATION_PORT -u HESTIA_STATION_INSTALL_ROOT -u HESTIA_STATION_ENV_FILE -u HESTIA_STATION_UNIT_FILE -u HESTIA_SYSTEMCTL_BIN \
+    PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_SOURCE_DIR="$SOURCE" \
+    HESTIA_STATION_SERVICE_USER=station-test HESTIA_STATION_ENV_FILE="$TEST_ROOT/$name/station.env" \
+    HESTIA_STATION_UNIT_FILE="$TEST_ROOT/$name/station.service" HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/$name/runtime" \
+    HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" "$@" bash "$ROOT_DIR/scripts/install-station-agent.sh"
 }
 
-default_env="$TEST_ROOT/default.env"
-default_unit="$TEST_ROOT/default.service"
-output="$(run_install "$default_env" "$default_unit" env 2>&1)"
-grep -Fqx "HESTIA_STATION_PORT=4518" "$default_env" || fail "porta padrão não é 4518"
-grep -Fqx "HESTIA_STATION_ORGANIZER_ENABLED=0" "$default_env" ||
-  fail "env novo não desativa Organizer"
-grep -Fqx "HESTIA_STATION_CODICE_ENABLED=0" "$default_env" ||
-  fail "env novo não desativa Códice"
-grep -Fqx "# HESTIA_CODICE_CORS_ORIGIN=https://codice.example" "$default_env" ||
-  fail "env novo não documenta origem do Códice"
-grep -Fqx "# HESTIA_STATION_ALLOWED_HOSTS=kaline-box.example.ts.net" "$default_env" ||
-  fail "env novo não documenta Host privado"
-[[ "$output" != *"$TOKEN"* ]] || fail "token apareceu na saída"
+output="$(run_install desktop env 2>&1)"
+grep -Fqx 'HESTIA_STATION_PORT=4518' "$TEST_ROOT/desktop/station.env" || fail "porta padrão incorreta"
+grep -Fqx 'HESTIA_STATION_ORGANIZER_ENABLED=0' "$TEST_ROOT/desktop/station.env" || fail "Organizer não foi desativado"
+grep -Fqx 'HESTIA_STATION_CODICE_ENABLED=0' "$TEST_ROOT/desktop/station.env" || fail "Códice não foi desativado"
+grep -Fqx '# HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>' "$TEST_ROOT/desktop/station.env" || fail "placeholder CORS incorreto"
+grep -Fq "WorkingDirectory=$TEST_ROOT/desktop/runtime" "$TEST_ROOT/desktop/station.service" || fail "unit depende do checkout"
+[ -f "$TEST_ROOT/desktop/runtime/station.js" ] && [ -d "$TEST_ROOT/desktop/runtime/node_modules/fastify" ] || fail "runtime mínimo não instalado"
+[ ! -e "$TEST_ROOT/desktop/runtime/src" ] && [ ! -e "$TEST_ROOT/desktop/runtime/dist" ] || fail "frontend foi copiado"
+[[ "$output" != *"$TOKEN"* ]] || fail "token vazou"
 
-custom_env="$TEST_ROOT/custom.env"
-custom_unit="$TEST_ROOT/custom.service"
-output="$(run_install "$custom_env" "$custom_unit" env HESTIA_STATION_PORT=4519 2>&1)"
-grep -Fqx "HESTIA_STATION_PORT=4519" "$custom_env" || fail "porta 4519 não foi gravada"
-[[ "$output" != *"$TOKEN"* ]] || fail "token apareceu na saída"
+run_install tvbox env HESTIA_STATION_PORT=4519 >/dev/null
+grep -Fqx 'HESTIA_STATION_PORT=4519' "$TEST_ROOT/tvbox/station.env" || fail "porta TV Box incorreta"
+for invalid in 0 -1 1.5 texto 65536 " 4519" "4519 "; do if run_install invalid env HESTIA_STATION_PORT="$invalid" >/dev/null 2>&1; then fail "porta inválida aceita: $invalid"; fi; done
 
-for invalid in 0 -1 1.5 texto "4519 " " 4519" 4519x 65536 ""; do
-  invalid_env="$TEST_ROOT/invalid-${RANDOM}.env"
-  if output="$(run_install "$invalid_env" "$TEST_ROOT/invalid.service" env HESTIA_STATION_PORT="$invalid" 2>&1)"; then
-    fail "porta inválida foi aceita: '$invalid'"
-  fi
-  [[ "$output" == *"HESTIA_STATION_PORT deve ser um inteiro entre 1 e 65535."* ]] ||
-    fail "erro inesperado para porta inválida"
-  [[ "$output" != *"$TOKEN"* ]] || fail "token apareceu no erro"
+printf 'runtime-antigo\n' > "$TEST_ROOT/desktop/runtime/rollback-marker"
+env_hash="$(sha256sum "$TEST_ROOT/desktop/station.env")"
+if run_install desktop env HESTIA_FAKE_NPM_FAIL=1 >/dev/null 2>&1; then fail "falha antes do swap foi aceita"; fi
+[ -f "$TEST_ROOT/desktop/runtime/rollback-marker" ] || fail "falha antes do swap alterou runtime"
+if run_install desktop env HESTIA_FAKE_SYSTEMCTL_FAIL=restart >/dev/null 2>&1; then fail "falha de restart foi aceita"; fi
+[ -f "$TEST_ROOT/desktop/runtime/rollback-marker" ] || fail "rollback de restart falhou"
+if run_install desktop env HESTIA_FAKE_DOCTOR_FAIL=1 >/dev/null 2>&1; then fail "falha do Doctor foi aceita"; fi
+[ -f "$TEST_ROOT/desktop/runtime/rollback-marker" ] || fail "rollback de Doctor falhou"
+[ "$(sha256sum "$TEST_ROOT/desktop/station.env")" = "$env_hash" ] || fail "env/token foi alterado"
+[ -z "$(find "$TEST_ROOT/desktop" -maxdepth 1 \( -name '*.new.*' -o -name '*.previous.*' \) -print -quit)" ] || fail "temporários sobraram"
+
+run_install desktop env >/dev/null
+[ ! -e "$TEST_ROOT/desktop/runtime/rollback-marker" ] || fail "atualização bem-sucedida não ativou runtime novo"
+mv "$SOURCE" "$TEST_ROOT/source.removed"
+[ -f "$TEST_ROOT/desktop/runtime/station.js" ] && grep -Fq "WorkingDirectory=$TEST_ROOT/desktop/runtime" "$TEST_ROOT/desktop/station.service" || fail "runtime depende do checkout"
+SOURCE="$TEST_ROOT/source.removed"
+
+OUTSIDE="$TEST_ROOT-outside"; mkdir -p "$OUTSIDE"; printf 'intacto\n' > "$OUTSIDE/sentinel"
+printf 'external-station-env\n' > "$OUTSIDE/env"; chmod 0640 "$OUTSIDE/env"
+external_hash="$(sha256sum "$OUTSIDE/env")"; external_mode="$(stat -c '%a' "$OUTSIDE/env")"
+reject_existing_env() {
+  local kind="$1" output
+  rm -rf "$TEST_ROOT/desktop/station.env"
+  case "$kind" in
+    outside) ln -s "$OUTSIDE/env" "$TEST_ROOT/desktop/station.env" ;;
+    inside) printf 'inside-target\n' > "$TEST_ROOT/inside-station-env"; ln -s "$TEST_ROOT/inside-station-env" "$TEST_ROOT/desktop/station.env" ;;
+    broken) ln -s "$OUTSIDE/missing" "$TEST_ROOT/desktop/station.env" ;;
+    directory) mkdir "$TEST_ROOT/desktop/station.env" ;;
+    fifo) mkfifo "$TEST_ROOT/desktop/station.env" ;;
+  esac
+  printf 'runtime-antigo\n' > "$TEST_ROOT/desktop/runtime/env-safety-marker"
+  if output="$(run_install desktop env 2>&1)"; then fail "env inseguro aceito pelo instalador: $kind"; fi
+  [ -f "$TEST_ROOT/desktop/runtime/env-safety-marker" ] || fail "runtime alterado por env inseguro: $kind"
+  [[ "$output" != *external-station-env* ]] || fail "conteúdo de env apareceu na saída: $kind"
+  rm -rf "$TEST_ROOT/desktop/station.env"
+}
+for env_kind in outside inside broken directory fifo; do reject_existing_env "$env_kind"; done
+[ "$(sha256sum "$OUTSIDE/env")" = "$external_hash" ] || fail "destino externo do env foi alterado"
+[ "$(stat -c '%a' "$OUTSIDE/env")" = "$external_mode" ] || fail "modo do destino externo foi alterado"
+reject_install() {
+  if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_SOURCE_DIR="$SOURCE" \
+    HESTIA_STATION_SERVICE_USER=station-test HESTIA_STATION_INSTALL_ROOT="$1" HESTIA_STATION_ENV_FILE="$TEST_ROOT/reject-install/env" \
+    HESTIA_STATION_UNIT_FILE="$TEST_ROOT/reject-install/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" \
+    bash "$ROOT_DIR/scripts/install-station-agent.sh" >/dev/null 2>&1; then fail "runtime inseguro aceito pelo instalador: $1"; fi
+}
+for unsafe in / /etc /usr /home /KALINE /opt /tmp /opt/../etc relative "$OUTSIDE/runtime"; do reject_install "$unsafe"; done
+ln -s "$OUTSIDE" "$TEST_ROOT/install-escape"; reject_install "$TEST_ROOT/install-escape/runtime"
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_SOURCE_DIR="$SOURCE" \
+  HESTIA_STATION_SERVICE_USER=station-test HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/reject-install/runtime" HESTIA_STATION_ENV_FILE="$OUTSIDE/env" \
+  HESTIA_STATION_UNIT_FILE="$TEST_ROOT/reject-install/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" bash "$ROOT_DIR/scripts/install-station-agent.sh" >/dev/null 2>&1; then fail "env fora da raiz aceito pelo instalador"; fi
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_SOURCE_DIR="$SOURCE" \
+  HESTIA_STATION_SERVICE_USER=station-test HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/reject-install/runtime" HESTIA_STATION_ENV_FILE="$TEST_ROOT/reject-install/env" \
+  HESTIA_STATION_UNIT_FILE="$OUTSIDE/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" bash "$ROOT_DIR/scripts/install-station-agent.sh" >/dev/null 2>&1; then fail "unit fora da raiz aceita pelo instalador"; fi
+for bad_systemctl in "$OUTSIDE/systemctl" "$BIN/systemctl --quiet"; do
+  if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_SOURCE_DIR="$SOURCE" \
+    HESTIA_STATION_SERVICE_USER=station-test HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/reject-install/runtime" HESTIA_STATION_ENV_FILE="$TEST_ROOT/reject-install/env" \
+    HESTIA_STATION_UNIT_FILE="$TEST_ROOT/reject-install/unit" HESTIA_SYSTEMCTL_BIN="$bad_systemctl" bash "$ROOT_DIR/scripts/install-station-agent.sh" >/dev/null 2>&1; then fail "systemctl inseguro aceito pelo instalador"; fi
 done
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 bash "$ROOT_DIR/scripts/install-station-agent.sh" >/dev/null 2>&1; then fail "instalador aceitou modo de teste sem raiz"; fi
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/reject-install/runtime" bash "$ROOT_DIR/scripts/install-station-agent.sh" >/dev/null 2>&1; then fail "override operacional aceito pelo instalador"; fi
+reject_uninstall() {
+  if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+    HESTIA_STATION_INSTALL_ROOT="$1" HESTIA_STATION_ENV_FILE="$TEST_ROOT/reject/env" \
+    HESTIA_STATION_UNIT_FILE="$TEST_ROOT/reject/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" \
+    bash "$ROOT_DIR/scripts/uninstall-station-agent.sh" >/dev/null 2>&1; then fail "runtime inseguro aceito: $1"; fi
+}
+for unsafe in / /etc /usr /home /KALINE /opt /tmp /opt/../etc relative "$OUTSIDE/runtime"; do reject_uninstall "$unsafe"; done
+ln -s "$OUTSIDE" "$TEST_ROOT/escape"; reject_uninstall "$TEST_ROOT/escape/runtime"
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/reject/runtime" HESTIA_STATION_ENV_FILE="$OUTSIDE/env" HESTIA_STATION_UNIT_FILE="$TEST_ROOT/reject/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" bash "$ROOT_DIR/scripts/uninstall-station-agent.sh" >/dev/null 2>&1; then fail "env fora da raiz aceito"; fi
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/reject/runtime" HESTIA_STATION_ENV_FILE="$TEST_ROOT/reject/env" HESTIA_STATION_UNIT_FILE="$OUTSIDE/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" bash "$ROOT_DIR/scripts/uninstall-station-agent.sh" >/dev/null 2>&1; then fail "unit fora da raiz aceita"; fi
+for bad_systemctl in "$OUTSIDE/systemctl" "$BIN/systemctl --quiet"; do if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/reject/runtime" HESTIA_STATION_ENV_FILE="$TEST_ROOT/reject/env" HESTIA_STATION_UNIT_FILE="$TEST_ROOT/reject/unit" HESTIA_SYSTEMCTL_BIN="$bad_systemctl" bash "$ROOT_DIR/scripts/uninstall-station-agent.sh" >/dev/null 2>&1; then fail "systemctl inseguro aceito"; fi; done
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 bash "$ROOT_DIR/scripts/uninstall-station-agent.sh" >/dev/null 2>&1; then fail "test mode sem raiz aceito"; fi
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/reject/runtime" bash "$ROOT_DIR/scripts/uninstall-station-agent.sh" >/dev/null 2>&1; then fail "override operacional aceito"; fi
+[ "$(cat "$OUTSIDE/sentinel")" = intacto ] || fail "arquivo externo foi alterado"
 
-existing_env="$TEST_ROOT/existing.env"
-existing_unit="$TEST_ROOT/existing.service"
-printf '%s\n' \
-  "HESTIA_STATION_HOST=127.0.0.1" \
-  "HESTIA_STATION_PORT=4518" \
-  "HESTIA_STATION_TOKEN=existing-secret" \
-  "HESTIA_STATION_ORGANIZER_ENABLED=0" > "$existing_env"
-before="$(sha256sum "$existing_env")"
-output="$(run_install "$existing_env" "$existing_unit" env 2>&1)"
-[ "$(sha256sum "$existing_env")" = "$before" ] || fail "env existente foi alterado"
-[[ "$output" == *"configuração existente preservada"* ]] || fail "preservação não informada"
-[[ "$output" != *"existing-secret"* ]] || fail "token existente apareceu na saída"
+mkdir -p "$TEST_ROOT/uninstall/runtime"; printf 'secret\n' > "$TEST_ROOT/uninstall/env"; printf 'unit\n' > "$TEST_ROOT/uninstall/unit"
+common=(PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_STATION_INSTALL_ROOT="$TEST_ROOT/uninstall/runtime" HESTIA_STATION_ENV_FILE="$TEST_ROOT/uninstall/env" HESTIA_STATION_UNIT_FILE="$TEST_ROOT/uninstall/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" HESTIA_FAKE_SYSTEMCTL_INACTIVE=1)
+env "${common[@]}" bash "$ROOT_DIR/scripts/uninstall-station-agent.sh" >/dev/null
+[ -f "$TEST_ROOT/uninstall/env" ] && [ ! -e "$TEST_ROOT/uninstall/runtime" ] || fail "uninstall padrão incorreto"
+env "${common[@]}" bash "$ROOT_DIR/scripts/uninstall-station-agent.sh" --purge >/dev/null
+[ ! -e "$TEST_ROOT/uninstall/env" ] || fail "purge preservou env"
 
-output="$(run_install "$existing_env" "$existing_unit" env HESTIA_STATION_PORT=4518 2>&1)"
-[ "$(sha256sum "$existing_env")" = "$before" ] || fail "env foi alterado com porta igual"
-[[ "$output" != *"existing-secret"* ]] || fail "token existente apareceu na saída"
-
-if output="$(run_install "$existing_env" "$existing_unit" env HESTIA_STATION_PORT=4519 2>&1)"; then
-  fail "conflito explícito de porta foi aceito"
-fi
-[[ "$output" == *"Configuração existente usa a porta 4518."* ]] ||
-  fail "conflito de porta não foi explicado"
-[ "$(sha256sum "$existing_env")" = "$before" ] || fail "conflito alterou o env existente"
-[[ "$output" != *"existing-secret"* ]] || fail "token existente apareceu no conflito"
-
-echo "Station installer tests: OK"
+echo "Station installer safety and rollback tests: OK"

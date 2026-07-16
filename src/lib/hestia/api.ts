@@ -162,9 +162,12 @@ export type HardwareConfig = {
     port: number;
     mode: string;
     lanEnabled: boolean;
-    stationConfigured: boolean;
-    stationAuthConfigured: boolean;
+    desktopConfigured: boolean;
+    desktopAuthConfigured: boolean;
+    tvboxConfigured: boolean;
+    tvboxAuthConfigured: boolean;
     stationTimeoutMs: number;
+    legacyStationConfigDetected: boolean;
     services: string[];
   };
 };
@@ -222,6 +225,8 @@ export type StationState =
   | "unauthorized"
   | "incompatible";
 
+export type StationId = "desktop" | "tvbox";
+
 export type StationHealth = {
   ok: true;
   schemaVersion: 1;
@@ -266,6 +271,14 @@ export type StationServices = {
   }>;
 };
 
+export type StationCodiceHealth = {
+  ok: true;
+  state: "available";
+  libraryAvailable: true;
+  formats: Array<"epub" | "pdf" | "txt">;
+  checkedAt: string;
+};
+
 export type Config = {
   appName: string;
   serverName: string;
@@ -277,9 +290,12 @@ export type Config = {
   readonly: boolean;
   controlledWrites: boolean;
   lanEnabled: boolean;
-  stationConfigured: boolean;
-  stationAuthConfigured: boolean;
+  desktopConfigured: boolean;
+  desktopAuthConfigured: boolean;
+  tvboxConfigured: boolean;
+  tvboxAuthConfigured: boolean;
   stationTimeoutMs: number;
+  legacyStationConfigDetected: boolean;
   services: string[];
 };
 
@@ -317,83 +333,6 @@ export type StorageScan = {
     items: (ScanResult & { id: string; label: string; category: string; mode: string })[];
     generatedAt: string;
   };
-};
-
-export type OrganizerPlanItem = {
-  id: string;
-  source: { kind: "entrada" | "external"; label: string; relativePath: string };
-  target: { relativePath: string };
-  action: "move" | "copy";
-  reason: string;
-  risk: "low" | "medium" | "high";
-  status: "planned" | "conflict" | "ignored";
-  size: number;
-  mtimeIso: string | null;
-  ignoredReason: string | null;
-};
-export type OrganizerPlan = {
-  planId: string;
-  generatedAt: string;
-  items: OrganizerPlanItem[];
-  summary: {
-    total: number;
-    planned: number;
-    conflicts: number;
-    ignored: number;
-    quarantined: number;
-    byExtension: Record<string, number>;
-    byTargetArea: Record<string, number>;
-    rules: {
-      extensionRules: { extensions: string[]; relativePath: string }[];
-      fallback: string;
-    };
-  };
-  dryRun?: boolean;
-  requiresExtraConfirmation: boolean;
-  largePlanThreshold: number;
-  planned: number;
-};
-
-export type OrganizerOperation = {
-  source: { kind: "entrada" | "external"; label: string; relativePath: string };
-  target: { relativePath: string };
-  action: "move" | "copy" | "delete";
-  status: "ok" | "failed" | "skipped";
-  reason: string | null;
-  error: string | null;
-  undoPossible: boolean;
-};
-export type OrganizerRunManifest = {
-  runId: string;
-  planId: string;
-  kind: "apply" | "undo" | "redo";
-  undoOf: string | null;
-  redoOf: string | null;
-  createdAt: string;
-  appliedAt: string;
-  status: "applied" | "partially_applied" | "failed";
-  operations: OrganizerOperation[];
-  summary: { total: number; ok: number; failed: number; skipped: number };
-  undoneBy: string | null;
-  redoneBy: string | null;
-};
-
-export type OrganizerRunListing = {
-  runId: string;
-  status: string | null;
-  undoOf: string | null;
-  undoneBy: string | null;
-  redoOf: string | null;
-  redoneBy: string | null;
-};
-export type OrganizerRuns = { items: OrganizerRunListing[] };
-
-type OrganizerPlanEnvelope = { ok: true; schemaVersion: 1; checkedAt: string; plan: OrganizerPlan };
-type OrganizerRunEnvelope = {
-  ok: true;
-  schemaVersion: 1;
-  checkedAt: string;
-  run: OrganizerRunManifest;
 };
 
 const DEFAULT_TIMEOUT_MS = 3500;
@@ -578,15 +517,6 @@ async function safePost<T>(
   }
 }
 
-async function unwrapApiState<E, P extends keyof E>(
-  promise: Promise<ApiState<E>>,
-  property: P,
-): Promise<ApiState<E[P]>> {
-  const result = await promise;
-  if (result.status !== "ok") return result;
-  return { status: "ok", data: result.data[property], fetchedAt: result.fetchedAt };
-}
-
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
   llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
@@ -599,64 +529,14 @@ export const hestiaApi = {
   logs: (tail?: number) =>
     safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
-  stationConnection: () => safeFetch<StationConnection>("/api/station/connection"),
-  stationHealth: () => safeFetch<StationHealth>("/api/station/health"),
-  stationStorage: () => safeFetch<StationStorage>("/api/station/storage/status"),
-  stationServices: () => safeFetch<StationServices>("/api/station/services/status"),
-  stationOrganizerPlan: (extensions?: string) =>
-    unwrapApiState(
-      safePost<OrganizerPlanEnvelope>(
-        extensions
-          ? `/api/station/organizer/plan?extensions=${encodeURIComponent(extensions)}`
-          : "/api/station/organizer/plan",
-        {},
-        { "x-hestia-local-confirm": "organize" },
-        3600000,
-      ),
-      "plan",
-    ),
-  stationOrganizerApply: (planId: string, largePlanConfirm = false) =>
-    unwrapApiState(
-      safePost<OrganizerRunEnvelope>(
-        "/api/station/organizer/apply",
-        { planId, mode: "apply" },
-        {
-          "x-hestia-local-confirm": "organize",
-          ...(largePlanConfirm ? { "x-hestia-large-plan-confirm": planId } : {}),
-        },
-        3600000,
-      ),
-      "run",
-    ),
-  stationOrganizerRuns: () => safeFetch<OrganizerRuns>("/api/station/organizer/runs"),
-  stationOrganizerRun: (runId: string) =>
-    unwrapApiState(
-      safeFetch<OrganizerRunEnvelope>(
-        `/api/station/organizer/runs/${encodeURIComponent(runId)}`,
-        30000,
-      ),
-      "run",
-    ),
-  stationOrganizerUndo: (runId: string) =>
-    unwrapApiState(
-      safePost<OrganizerRunEnvelope>(
-        `/api/station/organizer/runs/${encodeURIComponent(runId)}/undo`,
-        {},
-        { "x-hestia-local-confirm": "organize" },
-        3600000,
-      ),
-      "run",
-    ),
-  stationOrganizerRedo: (undoRunId: string) =>
-    unwrapApiState(
-      safePost<OrganizerRunEnvelope>(
-        `/api/station/organizer/runs/${encodeURIComponent(undoRunId)}/redo`,
-        {},
-        { "x-hestia-local-confirm": "organize" },
-        3600000,
-      ),
-      "run",
-    ),
+  stationConnection: (id: StationId) =>
+    safeFetch<StationConnection>(`/api/stations/${id}/connection`),
+  stationHealth: (id: StationId) => safeFetch<StationHealth>(`/api/stations/${id}/health`),
+  stationStorage: (id: StationId) =>
+    safeFetch<StationStorage>(`/api/stations/${id}/storage/status`),
+  stationServices: (id: StationId) =>
+    safeFetch<StationServices>(`/api/stations/${id}/services/status`),
+  tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;

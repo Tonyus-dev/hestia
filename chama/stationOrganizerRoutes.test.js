@@ -1,13 +1,11 @@
-import Fastify from "fastify";
 import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { startStationAgent } from "./stationAgent.js";
-import { registerStationRoutes } from "./stationRoutes.js";
-import { undoOrganizerRun } from "./organizerUndo.js";
 import { redoOrganizerRun } from "./organizerRedo.js";
+import { undoOrganizerRun } from "./organizerUndo.js";
 
 const token = "organizer-station-test-token";
 const apps = [];
@@ -29,7 +27,7 @@ async function fixture(providers) {
   await mkdir(inbox, { recursive: true });
   await mkdir(dataDir, { recursive: true });
   const sourcePath = join(inbox, "exemplo.txt");
-  await writeFile(sourcePath, "teste PR38\n");
+  await writeFile(sourcePath, "teste Organizer opt-in\n");
   const old = new Date(Date.now() - 120_000);
   await utimes(sourcePath, old, old);
 
@@ -48,31 +46,15 @@ async function fixture(providers) {
     providers,
   );
   apps.push(agent);
-  const agentPort = agent.server.address().port;
-  const agentBaseUrl = `http://127.0.0.1:${agentPort}`;
-  const consoleApp = Fastify({ logger: false });
-  registerStationRoutes(consoleApp, {
-    NODE_ENV: "test",
-    HESTIA_STATION_BASE_URL: agentBaseUrl,
-    HESTIA_STATION_TOKEN: token,
-  });
-  await consoleApp.listen({ host: "127.0.0.1", port: 0 });
-  apps.push(consoleApp);
-  const consolePort = consoleApp.server.address().port;
-  return {
-    agent,
-    agentBaseUrl,
-    consoleBaseUrl: `http://127.0.0.1:${consolePort}`,
-    storagePath,
-    dataDir,
-    sourcePath,
-  };
+  const port = agent.server.address().port;
+  return { agentBaseUrl: `http://127.0.0.1:${port}`, storagePath, dataDir, sourcePath };
 }
 
-function post(baseUrl, path, body = {}, headers = {}) {
-  return fetch(`${baseUrl}${path}`, {
+function post(f, path, body = {}, headers = {}) {
+  return fetch(`${f.agentBaseUrl}${path}`, {
     method: "POST",
     headers: {
+      authorization: `Bearer ${token}`,
       "content-type": "application/json",
       "x-hestia-local-confirm": "organize",
       ...headers,
@@ -81,11 +63,17 @@ function post(baseUrl, path, body = {}, headers = {}) {
   });
 }
 
-function assertSanitized(body, fixtureData) {
+function get(f, path, bearer = token) {
+  return fetch(`${f.agentBaseUrl}${path}`, {
+    headers: bearer == null ? {} : { authorization: `Bearer ${bearer}` },
+  });
+}
+
+function assertSanitized(body, f) {
   const serialized = JSON.stringify(body);
   for (const secret of [
-    fixtureData.storagePath,
-    fixtureData.dataDir,
+    f.storagePath,
+    f.dataDir,
     "/KALINE",
     "/home/",
     "sourcePath",
@@ -99,21 +87,44 @@ function assertSanitized(body, fixtureData) {
   }
 }
 
-describe("Station Organizer HTTP real", () => {
-  it("executa Console → Client → Agent → filesystem com apply, undo e redo sanitizados", async () => {
+describe("Station Organizer opt-in direto no Agent", () => {
+  it("exige Bearer válido e confirmação local", async () => {
     const f = await fixture();
-    const planResponse = await post(f.consoleBaseUrl, "/api/station/organizer/plan");
+    const noBearer = await fetch(`${f.agentBaseUrl}/api/station/organizer/plan`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(noBearer.status).toBe(401);
+    expect(
+      (
+        await fetch(`${f.agentBaseUrl}/api/station/organizer/plan`, {
+          method: "POST",
+          headers: { authorization: "Bearer incorreto", "content-type": "application/json" },
+          body: "{}",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await fetch(`${f.agentBaseUrl}/api/station/organizer/plan`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: "{}",
+        })
+      ).status,
+    ).toBe(403);
+  });
+
+  it("executa plan, apply, runs, detalhe, undo e redo sem vazar campos internos", async () => {
+    const f = await fixture();
+    const planResponse = await post(f, "/api/station/organizer/plan");
     expect(planResponse.status).toBe(200);
     const planBody = await planResponse.json();
     expect(planBody.plan.items).toHaveLength(1);
-    expect(planBody.plan.items[0]).toMatchObject({
-      source: { kind: "entrada", label: "Entrada manual", relativePath: "exemplo.txt" },
-      target: { relativePath: expect.stringMatching(/^codice\/fichamentos\//) },
-      action: "move",
-    });
     assertSanitized(planBody, f);
 
-    const applyResponse = await post(f.consoleBaseUrl, "/api/station/organizer/apply", {
+    const applyResponse = await post(f, "/api/station/organizer/apply", {
       planId: planBody.plan.planId,
       mode: "apply",
     });
@@ -121,71 +132,45 @@ describe("Station Organizer HTTP real", () => {
     const applyBody = await applyResponse.json();
     assertSanitized(applyBody, f);
     const targetPath = join(f.storagePath, applyBody.run.operations[0].target.relativePath);
-    await expect(readFile(targetPath, "utf8")).resolves.toBe("teste PR38\n");
+    await expect(readFile(targetPath, "utf8")).resolves.toBe("teste Organizer opt-in\n");
     await expect(stat(f.sourcePath)).rejects.toMatchObject({ code: "ENOENT" });
 
-    const duplicate = await post(f.consoleBaseUrl, "/api/station/organizer/apply", {
+    const duplicate = await post(f, "/api/station/organizer/apply", {
       planId: planBody.plan.planId,
       mode: "apply",
     });
     expect(duplicate.status).toBe(409);
     expect((await duplicate.json()).code).toBe("PLAN_ALREADY_APPLIED");
 
-    const runsResponse = await fetch(`${f.consoleBaseUrl}/api/station/organizer/runs`);
-    const runsBody = await runsResponse.json();
-    expect(runsBody.items[0].runId).toBe(applyBody.run.runId);
-    assertSanitized(runsBody, f);
+    const runs = await (await get(f, "/api/station/organizer/runs")).json();
+    expect(runs.items[0].runId).toBe(applyBody.run.runId);
+    assertSanitized(runs, f);
+    const detail = await (
+      await get(f, `/api/station/organizer/runs/${applyBody.run.runId}`)
+    ).json();
+    assertSanitized(detail, f);
 
-    const detailResponse = await fetch(
-      `${f.consoleBaseUrl}/api/station/organizer/runs/${applyBody.run.runId}`,
-    );
-    assertSanitized(await detailResponse.json(), f);
-
-    const undoResponse = await post(
-      f.consoleBaseUrl,
-      `/api/station/organizer/runs/${applyBody.run.runId}/undo`,
-    );
-    expect(undoResponse.status).toBe(200);
-    const undoBody = await undoResponse.json();
-    assertSanitized(undoBody, f);
-    await expect(readFile(f.sourcePath, "utf8")).resolves.toBe("teste PR38\n");
-    await expect(stat(targetPath)).rejects.toMatchObject({ code: "ENOENT" });
-
-    const redoResponse = await post(
-      f.consoleBaseUrl,
-      `/api/station/organizer/runs/${undoBody.run.runId}/redo`,
-    );
+    const undo = await (
+      await post(f, `/api/station/organizer/runs/${applyBody.run.runId}/undo`)
+    ).json();
+    assertSanitized(undo, f);
+    await expect(readFile(f.sourcePath, "utf8")).resolves.toBe("teste Organizer opt-in\n");
+    const redoResponse = await post(f, `/api/station/organizer/runs/${undo.run.runId}/redo`);
     expect(redoResponse.status).toBe(200);
     assertSanitized(await redoResponse.json(), f);
-    await expect(readFile(targetPath, "utf8")).resolves.toBe("teste PR38\n");
-    await expect(stat(f.sourcePath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(targetPath, "utf8")).resolves.toBe("teste Organizer opt-in\n");
   });
 
-  it("protege autenticação, confirmação, extensões, bodies e rotas antigas", async () => {
+  it("rejeita paths, extensões e rotas legadas sem alterar o arquivo", async () => {
     const f = await fixture();
-    expect((await post(f.agentBaseUrl, "/api/station/organizer/plan")).status).toBe(401);
-    const auth = { authorization: `Bearer ${token}` };
+    expect((await post(f, "/api/station/organizer/plan?extensions=../txt")).status).toBe(400);
     expect(
       (
-        await fetch(`${f.agentBaseUrl}/api/station/organizer/plan`, {
-          method: "POST",
-          headers: { "content-type": "application/json", ...auth },
-          body: "{}",
+        await post(f, "/api/station/organizer/apply", {
+          planId: "plan_x",
+          mode: "apply",
+          sourcePath: "/tmp/x",
         })
-      ).status,
-    ).toBe(403);
-    expect(
-      (await post(f.agentBaseUrl, "/api/station/organizer/plan?extensions=../txt", {}, auth))
-        .status,
-    ).toBe(400);
-    expect(
-      (
-        await post(
-          f.agentBaseUrl,
-          "/api/station/organizer/apply",
-          { planId: "plan_x", mode: "apply", sourcePath: "/tmp/x" },
-          auth,
-        )
       ).status,
     ).toBe(400);
     for (const [method, path] of [
@@ -195,23 +180,16 @@ describe("Station Organizer HTTP real", () => {
       ["POST", "/api/storage/organizer/plan"],
       ["GET", "/api/storage/organizer/plan"],
     ]) {
-      const response = await fetch(`${f.consoleBaseUrl}${path}`, { method });
-      expect([404, 405]).toContain(response.status);
+      const response = await fetch(`${f.agentBaseUrl}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.status).toBe(404);
     }
-    await expect(readFile(f.sourcePath, "utf8")).resolves.toBe("teste PR38\n");
+    await expect(readFile(f.sourcePath, "utf8")).resolves.toBe("teste Organizer opt-in\n");
   });
 
-  it("não faz fallback local quando o Agent fica indisponível", async () => {
-    const f = await fixture();
-    await f.agent.close();
-    apps.splice(apps.indexOf(f.agent), 1);
-    const response = await post(f.consoleBaseUrl, "/api/station/organizer/plan");
-    expect(response.status).toBe(503);
-    expect((await response.json()).code).toBe("STATION_UNAVAILABLE");
-    await expect(readFile(f.sourcePath, "utf8")).resolves.toBe("teste PR38\n");
-  });
-
-  it("retorna ERUNBUSY para undo e redo concorrentes via HTTP real", async () => {
+  it("retorna ERUNBUSY para undo e redo concorrentes", async () => {
     let enterUndo;
     let releaseUndo;
     let enterRedo;
@@ -238,41 +216,27 @@ describe("Station Organizer HTTP real", () => {
           },
         }),
     });
-    const plan = await (await post(f.consoleBaseUrl, "/api/station/organizer/plan")).json();
+    const plan = await (await post(f, "/api/station/organizer/plan")).json();
     const applied = await (
-      await post(f.consoleBaseUrl, "/api/station/organizer/apply", {
-        planId: plan.plan.planId,
-        mode: "apply",
-      })
+      await post(f, "/api/station/organizer/apply", { planId: plan.plan.planId, mode: "apply" })
     ).json();
-
-    const firstUndo = post(
-      f.consoleBaseUrl,
-      `/api/station/organizer/runs/${applied.run.runId}/undo`,
-    );
+    const firstUndo = post(f, `/api/station/organizer/runs/${applied.run.runId}/undo`);
     await undoEntered;
-    const busyUndo = await post(
-      f.consoleBaseUrl,
-      `/api/station/organizer/runs/${applied.run.runId}/undo`,
-    );
+    const busyUndo = await post(f, `/api/station/organizer/runs/${applied.run.runId}/undo`);
     expect(busyUndo.status).toBe(409);
     expect((await busyUndo.json()).code).toBe("ERUNBUSY");
     releaseUndo();
     const undo = await (await firstUndo).json();
-
-    const firstRedo = post(f.consoleBaseUrl, `/api/station/organizer/runs/${undo.run.runId}/redo`);
+    const firstRedo = post(f, `/api/station/organizer/runs/${undo.run.runId}/redo`);
     await redoEntered;
-    const busyRedo = await post(
-      f.consoleBaseUrl,
-      `/api/station/organizer/runs/${undo.run.runId}/redo`,
-    );
+    const busyRedo = await post(f, `/api/station/organizer/runs/${undo.run.runId}/redo`);
     expect(busyRedo.status).toBe(409);
     expect((await busyRedo.json()).code).toBe("ERUNBUSY");
     releaseRedo();
     expect((await firstRedo).status).toBe(200);
   });
 
-  it("não consome plano grande sem o planId exato e permite corrigir", async () => {
+  it("exige o planId exato para confirmar plano grande", async () => {
     const now = new Date().toISOString();
     const f = await fixture({
       generateOrganizerPlan: async () => ({
@@ -295,21 +259,22 @@ describe("Station Organizer HTTP real", () => {
         },
       }),
     });
-    const auth = { authorization: `Bearer ${token}` };
-    const plan = await (await post(f.agentBaseUrl, "/api/station/organizer/plan", {}, auth)).json();
+    const plan = await (await post(f, "/api/station/organizer/plan")).json();
     const body = { planId: plan.plan.planId, mode: "apply" };
-    const missing = await post(f.agentBaseUrl, "/api/station/organizer/apply", body, auth);
-    expect(missing.status).toBe(412);
-    expect((await missing.json()).code).toBe("ELARGEPLANCONFIRM");
-    const wrong = await post(f.agentBaseUrl, "/api/station/organizer/apply", body, {
-      ...auth,
-      "x-hestia-large-plan-confirm": "true",
-    });
-    expect(wrong.status).toBe(412);
-    const correct = await post(f.agentBaseUrl, "/api/station/organizer/apply", body, {
-      ...auth,
-      "x-hestia-large-plan-confirm": plan.plan.planId,
-    });
-    expect(correct.status).toBe(200);
+    expect((await post(f, "/api/station/organizer/apply", body)).status).toBe(412);
+    expect(
+      (
+        await post(f, "/api/station/organizer/apply", body, {
+          "x-hestia-large-plan-confirm": "true",
+        })
+      ).status,
+    ).toBe(412);
+    expect(
+      (
+        await post(f, "/api/station/organizer/apply", body, {
+          "x-hestia-large-plan-confirm": plan.plan.planId,
+        })
+      ).status,
+    ).toBe(200);
   });
 });

@@ -2,7 +2,7 @@ Package: hestia-console
 Version: __VERSION__
 Section: utils
 Priority: optional
-Architecture: amd64
+Architecture: __ARCH__
 Depends: nodejs, xdg-utils
 Maintainer: Estação Kaline <contato@nomosludens.ia.br>
 Description: Console local da Héstia com Chama Local embutida
