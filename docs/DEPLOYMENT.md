@@ -16,6 +16,46 @@ Console, Station e Códice não copiam arquivos. A cópia desktop → TV Box con
 - acesso SSH entre as máquinas quando necessário;
 - biblioteca já copiada para `/KALINE` na TV Box.
 
+## Ordem recomendada de implantação
+
+1. Desktop/servidor;
+2. TV Box;
+3. Tailscale e acesso privado;
+4. Notebook/Console;
+5. Gate físico completo.
+
+As Stations não dependem da Console. Por isso, instale e valide primeiro o
+desktop em `127.0.0.1:4518` e depois a TV Box em `127.0.0.1:4519`. Só então
+configure manualmente a rede privada e instale a Console com as duas URLs e
+tokens reais. Esta é uma sequência operacional, não uma automação.
+
+### 1. Desktop/servidor
+
+Instale a Station em `127.0.0.1:4518`, confirme o runtime em `/opt`, serviço
+ativo e execute o Doctor instalado. Confirme também Organizer e Códice em 404
+e que o token próprio não aparece em logs.
+
+### 2. TV Box
+
+Instale a Station em `127.0.0.1:4519`, confirme o runtime mínimo em `/opt` e
+configure explicitamente `HESTIA_STATION_ORGANIZER_ENABLED=0`,
+`HESTIA_STATION_CODICE_ENABLED=1`, `HESTIA_STORAGE_PATH=/KALINE`,
+`HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>` e
+`HESTIA_STATION_ALLOWED_HOSTS=<HOST_PRIVADO>`. Execute o Doctor instalado e
+valide health, storage, services e Códice.
+
+### 3. Rede privada
+
+Depois das duas Stations funcionarem localmente, configure Tailscale e acesso
+privado manualmente. Valide os dois endpoints, hosts permitidos exatos e que o
+acesso não é público. A Héstia não automatiza esse passo.
+
+### 4. Notebook/Console
+
+Somente depois de obter as duas URLs privadas e os dois tokens independentes,
+instale a Console e execute o Doctor instalado em `/opt`. A Console depende das
+Stations; as Stations não dependem da Console.
+
 ## Notebook
 
 ```bash
@@ -23,7 +63,9 @@ git clone https://github.com/Tonyus-dev/hestia.git
 cd hestia
 sudo npm run install:local
 sudoedit /etc/default/hestia-console
-sudo npm run doctor
+sudo /usr/bin/env node \
+  /opt/hestia-console/scripts/console-doctor.mjs \
+  --require-systemd
 ```
 
 Configure separadamente, sem reutilizar tokens:
@@ -45,7 +87,9 @@ git clone https://github.com/Tonyus-dev/hestia.git
 cd hestia
 sudo HESTIA_STATION_PORT=4518 npm run station:install
 sudoedit /etc/default/hestia-station-agent
-sudo npm run station:doctor -- --require-systemd
+sudo /usr/bin/env node \
+  /opt/hestia-station/scripts/station-doctor.mjs \
+  --require-systemd
 ```
 
 Confirme `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`.
@@ -57,7 +101,9 @@ git clone https://github.com/Tonyus-dev/hestia.git
 cd hestia
 sudo HESTIA_STATION_PORT=4519 npm run station:install
 sudoedit /etc/default/hestia-station-agent
-sudo npm run station:doctor -- --require-systemd
+sudo /usr/bin/env node \
+  /opt/hestia-station/scripts/station-doctor.mjs \
+  --require-systemd
 ```
 
 Configure `HESTIA_STATION_ORGANIZER_ENABLED=0`, `HESTIA_STATION_CODICE_ENABLED=1`, `HESTIA_STORAGE_PATH=/KALINE`, `HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>` e os hosts privados permitidos. EPUB e PDF são obrigatórios; TXT é opcional. O instalador não instala LibreOffice nem frontend na Station.
@@ -75,6 +121,9 @@ Atualize o checkout e execute novamente o mesmo instalador. Os paths operacionai
 O pacote Debian da Console usa somente a arquitetura nativa de `dpkg --print-architecture` em produção. O teste `armhf` da CI valida apenas nome e metadata do pacote, não execução ou build em ARM. O `postinst` falha se Node.js `>=22.13.0`, serviço ativo ou Console Doctor não forem confirmados.
 
 O Organizer permanece disponível apenas como opt-in interno do Agent. As instalações atuais mantêm `HESTIA_STATION_ORGANIZER_ENABLED=0`; a Console não expõe proxy ou interface de escrita.
+
+O Doctor do checkout é ferramenta de desenvolvimento. O gate pós-instalação deve
+sempre executar diretamente o Doctor instalado em `/opt`.
 
 ## Desinstalação
 

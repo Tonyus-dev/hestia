@@ -27,6 +27,7 @@ case "${1:-}" in group) echo 'hestia-console:x:1001:';; passwd) echo 'hestia-con
 EOF
   cat > "$root/bin/systemctl" <<'EOF'
 #!/usr/bin/env bash
+[ -n "${POSTINST_SYSTEMCTL_LOG:-}" ] && printf '%s\n' "$*" >> "$POSTINST_SYSTEMCTL_LOG"
 [ "${POSTINST_SERVICE_INACTIVE:-0}" = 1 ] && [ "${1:-}" = is-active ] && exit 1
 exit 0
 EOF
@@ -39,7 +40,7 @@ write_node() {
 #!/usr/bin/env bash
 case "${1:-}" in
   *require-node.mjs) [ "${POSTINST_NODE_OLD:-0}" = 1 ] && exit 1; exit 0;;
-  *console-doctor.mjs) [ "${POSTINST_DOCTOR_FAIL:-0}" = 1 ] && { echo 'Console Doctor: FALHOU'; exit 1; }; echo 'Console Doctor: OK'; exit 0;;
+  *console-doctor.mjs) [ -n "${POSTINST_DOCTOR_LOG:-}" ] && : > "$POSTINST_DOCTOR_LOG"; [ "${POSTINST_DOCTOR_FAIL:-0}" = 1 ] && { echo 'Console Doctor: FALHOU'; exit 1; }; echo 'Console Doctor: OK'; exit 0;;
 esac
 exit 0
 EOF
@@ -71,5 +72,23 @@ output="$(run_postinst "$root" 2>&1)"
 [ "$(sha256sum "$root/etc/default/hestia-console")" = "$before" ] || fail "env existente foi sobrescrito"
 grep -Fq 'Héstia Console instalada e validada.' <<<"$output" || fail "mensagem final de sucesso ausente"
 [[ "$output" != *postinst-secret* ]] || fail "token apareceu na saída"
+
+root="$OUTER/env-symlink"; prepare_case "$root"; write_node "$root"
+printf 'external-postinst-env\n' > "$OUTER/postinst-target"
+chmod 0640 "$OUTER/postinst-target"
+target_hash="$(sha256sum "$OUTER/postinst-target")"; target_mode="$(stat -c '%a' "$OUTER/postinst-target")"
+ln -s "$OUTER/postinst-target" "$root/etc/default/hestia-console"
+if run_postinst "$root" env POSTINST_DOCTOR_LOG="$root/doctor.log" POSTINST_SYSTEMCTL_LOG="$root/systemctl.log" >/dev/null 2>&1; then fail "env symlink foi aceito"; fi
+[ "$(sha256sum "$OUTER/postinst-target")" = "$target_hash" ] || fail "destino do symlink foi alterado"
+[ "$(stat -c '%a' "$OUTER/postinst-target")" = "$target_mode" ] || fail "modo do destino do symlink foi alterado"
+[ ! -e "$root/doctor.log" ] || fail "Doctor executou para env symlink"
+[ ! -e "$root/systemctl.log" ] || fail "serviço foi operado para env symlink"
+
+root="$OUTER/env-special"; prepare_case "$root"; write_node "$root"
+mkdir "$root/etc/default/hestia-console"
+if run_postinst "$root" >/dev/null 2>&1; then fail "env diretório foi aceito"; fi
+rm -rf "$root/etc/default/hestia-console"
+mkfifo "$root/etc/default/hestia-console"
+if run_postinst "$root" >/dev/null 2>&1; then fail "env FIFO foi aceito"; fi
 
 echo "Debian postinst failure tests: OK"

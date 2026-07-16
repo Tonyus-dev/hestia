@@ -101,6 +101,29 @@ SOURCE="$TEST_ROOT/source.removed"
 OUTSIDE="$TEST_ROOT-outside"
 mkdir -p "$OUTSIDE"
 printf 'intacto\n' > "$OUTSIDE/sentinel"
+printf 'external-console-env\n' > "$OUTSIDE/env"
+chmod 0640 "$OUTSIDE/env"
+external_hash="$(sha256sum "$OUTSIDE/env")"
+external_mode="$(stat -c '%a' "$OUTSIDE/env")"
+reject_existing_env() {
+  local kind="$1" output
+  rm -rf "$TEST_ROOT/fresh/console.env"
+  case "$kind" in
+    outside) ln -s "$OUTSIDE/env" "$TEST_ROOT/fresh/console.env" ;;
+    inside) printf 'inside-target\n' > "$TEST_ROOT/inside-env"; ln -s "$TEST_ROOT/inside-env" "$TEST_ROOT/fresh/console.env" ;;
+    broken) ln -s "$OUTSIDE/missing" "$TEST_ROOT/fresh/console.env" ;;
+    directory) mkdir "$TEST_ROOT/fresh/console.env" ;;
+    fifo) mkfifo "$TEST_ROOT/fresh/console.env" ;;
+  esac
+  printf 'runtime-antigo\n' > "$TEST_ROOT/fresh/runtime/env-safety-marker"
+  if output="$(run_install fresh env 2>&1)"; then fail "env inseguro aceito pelo instalador: $kind"; fi
+  [ -f "$TEST_ROOT/fresh/runtime/env-safety-marker" ] || fail "runtime alterado por env inseguro: $kind"
+  [[ "$output" != *external-console-env* ]] || fail "conteúdo de env apareceu na saída: $kind"
+  rm -rf "$TEST_ROOT/fresh/console.env"
+}
+for env_kind in outside inside broken directory fifo; do reject_existing_env "$env_kind"; done
+[ "$(sha256sum "$OUTSIDE/env")" = "$external_hash" ] || fail "destino externo do env foi alterado"
+[ "$(stat -c '%a' "$OUTSIDE/env")" = "$external_mode" ] || fail "modo do destino externo foi alterado"
 reject_install() {
   if env PATH="$BIN:/usr/bin:/bin" SUDO_USER=builder HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
     HESTIA_SOURCE_DIR="$SOURCE" HESTIA_INSTALL_ROOT="$1" HESTIA_ENV_FILE="$TEST_ROOT/reject-install/env" \

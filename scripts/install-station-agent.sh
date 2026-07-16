@@ -43,6 +43,10 @@ id "$SERVICE_USER" >/dev/null 2>&1 || fail "usuário $SERVICE_USER não existe."
 [ "$(id -u "$SERVICE_USER")" -ne 0 ] || fail "o usuário do serviço não pode ser root."
 SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
 
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+  hestia_assert_regular_config_file "$ENV_FILE"
+fi
+
 STAGING=""
 NEW_RUNTIME="$RUNTIME_DIR.new.$$"
 PREVIOUS_RUNTIME="$RUNTIME_DIR.previous.$$"
@@ -95,7 +99,10 @@ log "instalando dependências mínimas reproduzivelmente"
 runuser -u "$SERVICE_USER" -- env HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)" npm --prefix "$STAGING" ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 install -d -m 0755 -o root -g root "$(dirname -- "$ENV_FILE")" "$(dirname -- "$UNIT_FILE")" "$(dirname -- "$RUNTIME_DIR")"
-if [ ! -f "$ENV_FILE" ]; then
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+  hestia_assert_regular_config_file "$ENV_FILE"
+fi
+if [ ! -e "$ENV_FILE" ]; then
   TOKEN="$($NODE_BIN -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
   install -m 0600 -o root -g root /dev/null "$ENV_FILE"
   {

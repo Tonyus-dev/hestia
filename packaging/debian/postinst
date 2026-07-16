@@ -20,7 +20,10 @@ NODE_BIN="$(command -v node || true)"
 "$NODE_BIN" "$RUNTIME_DIR/scripts/require-node.mjs" || fail "Node.js >=22.13.0 é obrigatório."
 
 install -d -m 0755 -o root -g root "$(dirname -- "$ENV_FILE")"
-if [ ! -f "$ENV_FILE" ]; then
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+  hestia_assert_regular_config_file "$ENV_FILE"
+fi
+if [ ! -e "$ENV_FILE" ]; then
   install -m 0600 -o root -g root /dev/null "$ENV_FILE"
   cat > "$ENV_FILE" <<'EOF'
 # Héstia Console Configuration

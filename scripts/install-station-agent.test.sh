@@ -99,6 +99,27 @@ mv "$SOURCE" "$TEST_ROOT/source.removed"
 SOURCE="$TEST_ROOT/source.removed"
 
 OUTSIDE="$TEST_ROOT-outside"; mkdir -p "$OUTSIDE"; printf 'intacto\n' > "$OUTSIDE/sentinel"
+printf 'external-station-env\n' > "$OUTSIDE/env"; chmod 0640 "$OUTSIDE/env"
+external_hash="$(sha256sum "$OUTSIDE/env")"; external_mode="$(stat -c '%a' "$OUTSIDE/env")"
+reject_existing_env() {
+  local kind="$1" output
+  rm -rf "$TEST_ROOT/desktop/station.env"
+  case "$kind" in
+    outside) ln -s "$OUTSIDE/env" "$TEST_ROOT/desktop/station.env" ;;
+    inside) printf 'inside-target\n' > "$TEST_ROOT/inside-station-env"; ln -s "$TEST_ROOT/inside-station-env" "$TEST_ROOT/desktop/station.env" ;;
+    broken) ln -s "$OUTSIDE/missing" "$TEST_ROOT/desktop/station.env" ;;
+    directory) mkdir "$TEST_ROOT/desktop/station.env" ;;
+    fifo) mkfifo "$TEST_ROOT/desktop/station.env" ;;
+  esac
+  printf 'runtime-antigo\n' > "$TEST_ROOT/desktop/runtime/env-safety-marker"
+  if output="$(run_install desktop env 2>&1)"; then fail "env inseguro aceito pelo instalador: $kind"; fi
+  [ -f "$TEST_ROOT/desktop/runtime/env-safety-marker" ] || fail "runtime alterado por env inseguro: $kind"
+  [[ "$output" != *external-station-env* ]] || fail "conteúdo de env apareceu na saída: $kind"
+  rm -rf "$TEST_ROOT/desktop/station.env"
+}
+for env_kind in outside inside broken directory fifo; do reject_existing_env "$env_kind"; done
+[ "$(sha256sum "$OUTSIDE/env")" = "$external_hash" ] || fail "destino externo do env foi alterado"
+[ "$(stat -c '%a' "$OUTSIDE/env")" = "$external_mode" ] || fail "modo do destino externo foi alterado"
 reject_install() {
   if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_SOURCE_DIR="$SOURCE" \
     HESTIA_STATION_SERVICE_USER=station-test HESTIA_STATION_INSTALL_ROOT="$1" HESTIA_STATION_ENV_FILE="$TEST_ROOT/reject-install/env" \

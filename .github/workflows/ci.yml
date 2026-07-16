@@ -60,6 +60,13 @@ jobs:
           bash scripts/build-deb.test.sh
           bash packaging/debian/postinst.test.sh
 
+      - name: Verify deployment documentation uses installed Doctors
+        run: |
+          grep -Fq '/opt/hestia-console/scripts/console-doctor.mjs' docs/DEPLOYMENT.md
+          grep -Fq '/opt/hestia-station/scripts/station-doctor.mjs' docs/DEPLOYMENT.md
+          ! grep -Fq 'sudo npm run station:doctor' docs/DEPLOYMENT.md
+          ! grep -Fq 'sudo npm run doctor' docs/DEPLOYMENT.md
+
       - name: Build Debian Package
         run: npm run build-deb
 

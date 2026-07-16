@@ -53,6 +53,17 @@ hestia_validate_test_path() {
   printf '%s\n' "$normalized"
 }
 
+hestia_assert_regular_config_file() {
+  local path="${1:-}"
+  [ "$#" -eq 1 ] || { hestia_safety_fail "arquivo de configuração não informado."; return 1; }
+  if [ -e "$path" ] || [ -L "$path" ]; then
+    [ ! -L "$path" ] && [ -f "$path" ] || {
+      hestia_safety_fail "arquivo de configuração existente deve ser regular e não pode ser symlink."
+      return 1
+    }
+  fi
+}
+
 hestia_reject_production_override() {
   local name
   for name in "$@"; do

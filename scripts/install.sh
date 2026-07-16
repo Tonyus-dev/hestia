@@ -32,6 +32,10 @@ BUILD_USER="${SUDO_USER:-}"
 BUILD_HOME="$(getent passwd "$BUILD_USER" | cut -d: -f6)"
 run_as_builder() { runuser -u "$BUILD_USER" -- env HOME="$BUILD_HOME" "$@"; }
 
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+  hestia_assert_regular_config_file "$ENV_FILE"
+fi
+
 STAGING=""
 NEW_RUNTIME="$RUNTIME_DIR.new.$$"
 PREVIOUS_RUNTIME="$RUNTIME_DIR.previous.$$"
@@ -91,7 +95,10 @@ if ! getent passwd "$SERVICE_USER" >/dev/null; then
 fi
 
 install -d -m 0755 -o root -g root "$(dirname -- "$ENV_FILE")" "$(dirname -- "$UNIT_FILE")" "$(dirname -- "$RUNTIME_DIR")"
-if [ ! -f "$ENV_FILE" ]; then
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+  hestia_assert_regular_config_file "$ENV_FILE"
+fi
+if [ ! -e "$ENV_FILE" ]; then
   install -m 0600 -o root -g root /dev/null "$ENV_FILE"
   cat > "$ENV_FILE" <<'EOF'
 HESTIA_HOST=127.0.0.1
