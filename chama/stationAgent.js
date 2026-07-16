@@ -188,7 +188,9 @@ export function createStationAgent(config, providers = {}) {
     if (origin !== undefined && origin !== config.codiceCorsOrigin) {
       return reply.code(403).send({ ok: false, error: "origin_not_allowed" });
     }
-    if (origin) applyCodiceCors(request, reply, config.codiceCorsOrigin);
+    if (origin) {
+      applyCodiceCors(request, reply, config.codiceCorsOrigin, { allowCredentials: false });
+    }
     if (request.method === "OPTIONS") {
       if (!origin) return reply.code(403).send({ ok: false, error: "origin_not_allowed" });
       return reply.code(204).send();

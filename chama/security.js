@@ -82,7 +82,7 @@ export class RateLimiter {
   }
 }
 
-export function applyCodiceCors(req, reply, allowedOrigin) {
+export function applyCodiceCors(req, reply, allowedOrigin, options = {}) {
   if (!allowedOrigin) return false;
 
   const reqOrigin = req.headers.origin;
@@ -100,7 +100,9 @@ export function applyCodiceCors(req, reply, allowedOrigin) {
   reply.header("Vary", "Origin");
   reply.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
   reply.header("Access-Control-Allow-Headers", "Content-Type");
-  reply.header("Access-Control-Allow-Credentials", "true");
+  if (options.allowCredentials !== false) {
+    reply.header("Access-Control-Allow-Credentials", "true");
+  }
 
   if (req.headers["access-control-request-private-network"] === "true") {
     reply.header("Access-Control-Allow-Private-Network", "true");

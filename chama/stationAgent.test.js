@@ -351,6 +351,7 @@ describe("Station Agent", () => {
     const pdf = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x74, 0x65, 0x73, 0x74, 0x65]);
     await mkdir(join(root, "codice", "epub"), { recursive: true });
     await mkdir(join(root, "codice", "pdf"), { recursive: true });
+    // Fixtures sintéticas: exercitam streaming, mas não são livros EPUB/PDF válidos para leitura.
     await writeFile(join(root, "codice", "epub", "Livro Teste.epub"), epub);
     await writeFile(join(root, "codice", "pdf", "Documento.pdf"), pdf);
     await writeFile(join(root, "codice", "pdf", "ignorado.exe"), "ignore");
@@ -372,12 +373,20 @@ describe("Station Agent", () => {
     });
     expect(health.headers.get("access-control-allow-origin")).toBeNull();
 
+    const corsHealth = await fetch(`${baseUrl}/api/codice/health`, {
+      headers: { Origin: origin },
+    });
+    expect(corsHealth.status).toBe(200);
+    expect(corsHealth.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(corsHealth.headers.get("access-control-allow-credentials")).toBeNull();
+
     const libraryResponse = await fetch(`${baseUrl}/api/codice/library`, {
       headers: { Origin: origin },
     });
     expect(libraryResponse.status).toBe(200);
     expect(libraryResponse.headers.get("access-control-allow-origin")).toBe(origin);
     expect(libraryResponse.headers.get("vary")).toContain("Origin");
+    expect(libraryResponse.headers.get("access-control-allow-credentials")).toBeNull();
     const library = await libraryResponse.json();
     expect(library.books).toHaveLength(2);
     expect(library.books.map((book) => book.format).sort()).toEqual(["epub", "pdf"]);
@@ -392,17 +401,29 @@ describe("Station Agent", () => {
       expect(book.id).not.toContain(book.name);
     }
 
-    const epubBook = library.books.find((book) => book.format === "epub");
-    const head = await fetch(`${baseUrl}${epubBook.url}`, { method: "HEAD" });
-    expect(head.status).toBe(200);
-    expect(head.headers.get("content-type")).toBe("application/epub+zip");
-    expect(head.headers.get("content-length")).toBe(String(epub.length));
-    expect(await head.text()).toBe("");
-    const get = await fetch(`${baseUrl}${epubBook.url}`);
-    expect(get.status).toBe(200);
-    expect(Buffer.from(await get.arrayBuffer())).toEqual(epub);
-    expect(get.headers.get("cache-control")).toBe("private, no-store");
-    expect(get.headers.get("x-content-type-options")).toBe("nosniff");
+    for (const testCase of [
+      { format: "epub", bytes: epub, contentType: "application/epub+zip" },
+      { format: "pdf", bytes: pdf, contentType: "application/pdf" },
+    ]) {
+      const book = library.books.find((item) => item.format === testCase.format);
+      expect(book).toBeDefined();
+      const head = await fetch(`${baseUrl}${book.url}`, {
+        method: "HEAD",
+        headers: { Origin: origin },
+      });
+      expect(head.status).toBe(200);
+      expect(await head.text()).toBe("");
+      expect(head.headers.get("content-type")).toBe(testCase.contentType);
+      expect(head.headers.get("content-length")).toBe(String(testCase.bytes.length));
+      expect(head.headers.get("access-control-allow-credentials")).toBeNull();
+
+      const get = await fetch(`${baseUrl}${book.url}`, { headers: { Origin: origin } });
+      expect(get.status).toBe(200);
+      expect(Buffer.from(await get.arrayBuffer())).toEqual(testCase.bytes);
+      expect(get.headers.get("cache-control")).toBe("private, no-store");
+      expect(get.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(get.headers.get("access-control-allow-credentials")).toBeNull();
+    }
 
     const wrongOrigin = await fetch(`${baseUrl}/api/codice/health`, {
       headers: { Origin: "https://wrong.example" },
@@ -421,6 +442,7 @@ describe("Station Agent", () => {
     expect(preflight.headers.get("access-control-allow-methods")).toBe("GET, HEAD, OPTIONS");
     expect(preflight.headers.get("access-control-allow-private-network")).toBe("true");
     expect(preflight.headers.get("access-control-allow-headers")).not.toContain("Authorization");
+    expect(preflight.headers.get("access-control-allow-credentials")).toBeNull();
     expect((await fetch(`${baseUrl}/api/codice/library`, { method: "OPTIONS" })).status).toBe(403);
 
     for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {

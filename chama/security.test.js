@@ -167,4 +167,21 @@ describe("applyCodiceCors", () => {
     expect(allowed).toBe(false);
     expect(headers["Access-Control-Allow-Origin"]).toBeUndefined();
   });
+
+  it("omite credentials quando explicitamente desativado", () => {
+    const req = { headers: { origin: "https://codice.example.com" } };
+    const headers = {};
+    const reply = {
+      header: (name, val) => {
+        headers[name] = val;
+      },
+    };
+
+    const allowed = applyCodiceCors(req, reply, "https://codice.example.com", {
+      allowCredentials: false,
+    });
+    expect(allowed).toBe(true);
+    expect(headers["Access-Control-Allow-Origin"]).toBe("https://codice.example.com");
+    expect(headers["Access-Control-Allow-Credentials"]).toBeUndefined();
+  });
 });

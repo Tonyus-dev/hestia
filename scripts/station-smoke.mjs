@@ -308,6 +308,7 @@ async function main() {
   await mkdir(dirname(epubPath), { recursive: true });
   await mkdir(dirname(pdfPath), { recursive: true });
   await mkdir(codiceData, { recursive: true });
+  // Fixtures sintéticas: exercitam streaming, mas não são livros EPUB/PDF válidos para leitura.
   await writeFile(epubPath, epubBytes);
   await writeFile(pdfPath, pdfBytes);
   const codicePort = await freePort();
@@ -363,18 +364,46 @@ async function main() {
   ensure(codiceLibrary.response.status === 200, "library do Códice falhou");
   ensure(codiceLibrary.body.books?.length === 2, "library do Códice não listou EPUB/PDF");
   assertSanitized(codiceLibrary.raw, [token, root, codiceStorage, codiceData], "library Códice");
-  const epubBook = codiceLibrary.body.books.find((book) => book.format === "epub");
-  ensure(epubBook, "EPUB ausente da library");
-  const head = await fetch(`${codiceBase}${epubBook.url}`, { method: "HEAD" });
-  ensure(head.status === 200, "HEAD do EPUB falhou");
-  ensure(
-    head.headers.get("content-length") === String(epubBytes.length),
-    "HEAD com tamanho errado",
-  );
-  ensure((await head.text()) === "", "HEAD devolveu body");
-  const get = await fetch(`${codiceBase}${epubBook.url}`);
-  ensure(get.status === 200, "GET do EPUB falhou");
-  ensure(Buffer.from(await get.arrayBuffer()).equals(epubBytes), "GET alterou bytes do EPUB");
+  for (const testCase of [
+    {
+      format: "epub",
+      label: "EPUB",
+      bytes: epubBytes,
+      contentType: "application/epub+zip",
+    },
+    { format: "pdf", label: "PDF", bytes: pdfBytes, contentType: "application/pdf" },
+  ]) {
+    const book = codiceLibrary.body.books.find((item) => item.format === testCase.format);
+    ensure(book, `${testCase.label} ausente da library`);
+    const head = await fetch(`${codiceBase}${book.url}`, {
+      method: "HEAD",
+      headers: { Origin: codiceOrigin },
+    });
+    ensure(head.status === 200, `HEAD do ${testCase.label} falhou`);
+    ensure((await head.text()) === "", `HEAD do ${testCase.label} devolveu body`);
+    ensure(
+      head.headers.get("content-type") === testCase.contentType,
+      `HEAD do ${testCase.label} com Content-Type errado`,
+    );
+    ensure(
+      head.headers.get("content-length") === String(testCase.bytes.length),
+      `HEAD do ${testCase.label} com tamanho errado`,
+    );
+    const get = await fetch(`${codiceBase}${book.url}`, { headers: { Origin: codiceOrigin } });
+    ensure(get.status === 200, `GET do ${testCase.label} falhou`);
+    ensure(
+      Buffer.from(await get.arrayBuffer()).equals(testCase.bytes),
+      `GET alterou bytes do ${testCase.label}`,
+    );
+    ensure(
+      get.headers.get("cache-control") === "private, no-store",
+      `GET do ${testCase.label} com Cache-Control errado`,
+    );
+    ensure(
+      get.headers.get("x-content-type-options") === "nosniff",
+      `GET do ${testCase.label} sem nosniff`,
+    );
+  }
   const wrongOrigin = await requestJson(codiceBase, "/api/codice/health", {
     headers: { Origin: "https://wrong.example.test" },
   });
