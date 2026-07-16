@@ -133,6 +133,52 @@ npm run build
 npm run dev:local
 ```
 
+## Station Agent headless
+
+### Portas canônicas
+
+| Máquina             | Serviço        | Porta |
+| ------------------- | -------------- | ----: |
+| `kalines-note`      | Héstia Console |  4517 |
+| `tonyusdev-desktop` | Station Agent  |  4518 |
+| `kaline-box`        | Station Agent  |  4519 |
+
+O instalador mantém o Agent em `127.0.0.1` e aceita a porta somente na criação do env file.
+As instalações canônicas são:
+
+```bash
+# Desktop/servidor
+sudo HESTIA_STATION_PORT=4518 npm run station:install
+
+# TV Box
+sudo HESTIA_STATION_PORT=4519 npm run station:install
+```
+
+O env file novo usa `HESTIA_STATION_ORGANIZER_ENABLED=0`. Se ele já existir, o instalador
+preserva seu conteúdo e token. Uma porta solicitada diferente da existente falha e exige edição
+operacional explícita de `/etc/default/hestia-station-agent`.
+
+### Superfície padrão do Agent
+
+Com Bearer válido, o modo monitor-only registra somente:
+
+```http
+GET /api/station/health
+GET /api/station/storage/status
+GET /api/station/services/status
+```
+
+### Organizer no Agent
+
+O código e os contratos do Organizer são preservados, mas suas rotas ficam desativadas por
+padrão. A única ativação válida é `HESTIA_STATION_ORGANIZER_ENABLED=1`; `0` desativa, a variável
+ausente equivale a `0`, e qualquer outro valor — inclusive vazio — impede a inicialização. O
+Organizer não é usado nas instalações atuais e sua ativação exige decisão operacional explícita.
+
+A instalação real no desktop e na TV Box, inclusive serviço systemd, reinício, consumo de RAM e
+estabilidade no aparelho, ainda depende de validação física. A tabela documenta o mapa pretendido;
+não declara a TV Box como funcional ou validada.
+
 ## Instalar como app no Linux Mint Xfce
 
 Alternativa ao `install.sh`: empacota a Héstia como `.deb` com serviço systemd (autostart em

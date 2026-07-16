@@ -4,7 +4,7 @@ import http from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchStationHealth } from "./stationClient.js";
 import { registerStationRoutes } from "./stationRoutes.js";
@@ -68,6 +68,24 @@ function requestWithHost(baseUrl, host) {
 }
 
 describe("Station Agent", () => {
+  it("desativa o Organizer por padrão e aceita somente 0 ou 1", () => {
+    const base = { HESTIA_STATION_TOKEN: token };
+    expect(resolveStationAgentConfig(base).organizerEnabled).toBe(false);
+    expect(
+      resolveStationAgentConfig({ ...base, HESTIA_STATION_ORGANIZER_ENABLED: "0" })
+        .organizerEnabled,
+    ).toBe(false);
+    expect(
+      resolveStationAgentConfig({ ...base, HESTIA_STATION_ORGANIZER_ENABLED: "1" })
+        .organizerEnabled,
+    ).toBe(true);
+    for (const value of ["", "true", "false", "yes", "on", "2", " 1"]) {
+      expect(() =>
+        resolveStationAgentConfig({ ...base, HESTIA_STATION_ORGANIZER_ENABLED: value }),
+      ).toThrow("HESTIA_STATION_ORGANIZER_ENABLED deve ser 0 ou 1");
+    }
+  });
+
   it("falha imediatamente sem token e protege bind não-loopback", () => {
     expect(() => resolveStationAgentConfig({})).toThrow("HESTIA_STATION_TOKEN é obrigatório");
     expect(() =>
@@ -82,6 +100,12 @@ describe("Station Agent", () => {
         HESTIA_STATION_ALLOWED_HOSTS: "*",
       }),
     ).toThrow("não aceita wildcard");
+    expect(() =>
+      resolveStationAgentConfig({
+        HESTIA_STATION_TOKEN: token,
+        HESTIA_STATION_PORT: "0",
+      }),
+    ).toThrow("HESTIA_STATION_PORT deve ser uma porta válida");
   });
 
   it("resolve storage e serviços internos com fallback, allowlist e ordem canônica", () => {
@@ -156,6 +180,63 @@ describe("Station Agent", () => {
     });
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ ok: false, error: "not_found" });
+  });
+
+  it("mantém monitoramento e não registra nem executa o Organizer por padrão", async () => {
+    const organizerProviders = {
+      generateOrganizerPlan: vi.fn(),
+      writePlan: vi.fn(),
+      claimAndApplyOrganizerPlan: vi.fn(),
+      getOrganizerRuns: vi.fn(),
+      getOrganizerRun: vi.fn(),
+      undoOrganizerRun: vi.fn(),
+      redoOrganizerRun: vi.fn(),
+    };
+    const { baseUrl } = await start(
+      { storagePath: "/private/station-storage", services: [] },
+      {
+        ...organizerProviders,
+        getStorageStatus: async () => ({
+          checkedAt: new Date().toISOString(),
+          items: [{ exists: false, status: "missing" }],
+        }),
+        getServicesStatus: async () => ({ items: [] }),
+      },
+    );
+
+    for (const path of [
+      "/api/station/health",
+      "/api/station/storage/status",
+      "/api/station/services/status",
+    ]) {
+      expect((await authenticated(baseUrl, path)).status).toBe(200);
+    }
+
+    for (const [method, path] of [
+      ["POST", "/api/station/organizer/plan"],
+      ["POST", "/api/station/organizer/apply"],
+      ["GET", "/api/station/organizer/runs"],
+      ["GET", "/api/station/organizer/runs/run_1_deadbeef"],
+      ["POST", "/api/station/organizer/runs/run_1_deadbeef/undo"],
+      ["POST", "/api/station/organizer/runs/undo_1_deadbeef/redo"],
+    ]) {
+      const response = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "X-Hestia-Local-Confirm": "organize",
+        },
+        ...(method === "POST" ? { body: "{}" } : {}),
+      });
+      expect(response.status).toBe(404);
+      const body = await response.json();
+      expect(body).toEqual({ ok: false, error: "not_found" });
+      expect(JSON.stringify(body)).not.toContain(token);
+      expect(JSON.stringify(body)).not.toContain("/private/station-storage");
+    }
+    for (const provider of Object.values(organizerProviders))
+      expect(provider).not.toHaveBeenCalled();
   });
 
   it("rejeita Host não permitido pelo HTTP real", async () => {

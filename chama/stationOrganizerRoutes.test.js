@@ -43,6 +43,7 @@ async function fixture(providers) {
       dataDir,
       storageSources: [],
       services: [],
+      organizerEnabled: true,
     },
     providers,
   );

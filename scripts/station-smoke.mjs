@@ -218,6 +218,75 @@ async function main() {
   await utimes(source, old, old);
   await writeFile(sentinel, "sentinel PR39\n");
 
+  const monitorPort = await freePort();
+  const monitorBase = `http://${HOST}:${monitorPort}`;
+  const monitorAgent = startProcess(
+    "Station Agent monitor-only",
+    ["station.js"],
+    cleanEnvironment({
+      NODE_ENV: "test",
+      HOME: join(root, "station"),
+      HESTIA_STATION_HOST: HOST,
+      HESTIA_STATION_PORT: String(monitorPort),
+      HESTIA_STATION_TOKEN: token,
+      HESTIA_STORAGE_PATH: stationStorage,
+      HESTIA_DATA_DIR: stationData,
+    }),
+  );
+  const monitorAuth = { Authorization: `Bearer ${token}` };
+  await waitForHttp(`${monitorBase}/api/station/health`, {
+    headers: monitorAuth,
+    process: monitorAgent,
+    validate: (body) => body?.ok === true && body.service === "hestia-station-agent",
+  });
+  const monitorPlansBefore = await readdir(join(stationData, "organizer", "plans"));
+  const monitorRunsBefore = await readdir(join(stationData, "organizer", "runs"));
+  for (const path of [
+    "/api/station/health",
+    "/api/station/storage/status",
+    "/api/station/services/status",
+  ]) {
+    const result = await requestJson(monitorBase, path, { bearer: token, label: path });
+    ensure(result.response.status === 200, `${path} monitor-only falhou`);
+    assertSanitized(result.raw, [token, root, stationStorage, stationData], path);
+  }
+  for (const [method, path] of [
+    ["POST", "/api/station/organizer/plan"],
+    ["POST", "/api/station/organizer/apply"],
+    ["GET", "/api/station/organizer/runs"],
+    ["GET", "/api/station/organizer/runs/run_1_deadbeef"],
+    ["POST", "/api/station/organizer/runs/run_1_deadbeef/undo"],
+    ["POST", "/api/station/organizer/runs/undo_1_deadbeef/redo"],
+  ]) {
+    const result = await requestJson(monitorBase, path, {
+      method,
+      bearer: token,
+      headers: { "X-Hestia-Local-Confirm": "organize" },
+      ...(method === "POST" ? { body: {} } : {}),
+    });
+    ensure(result.response.status === 404, `${path} monitor-only não retornou 404`);
+    ensure(
+      JSON.stringify(result.body) === JSON.stringify({ ok: false, error: "not_found" }),
+      `${path} monitor-only retornou body inesperado`,
+    );
+    assertSanitized(result.raw, [token, root, stationStorage, stationData], path);
+  }
+  ensure((await readFile(source, "utf8")) === CONTENT, "monitor-only alterou o arquivo fonte");
+  ensure((await readFile(sentinel, "utf8")) === "sentinel PR39\n", "monitor-only alterou sentinel");
+  ensure(
+    JSON.stringify(await readdir(join(stationData, "organizer", "plans"))) ===
+      JSON.stringify(monitorPlansBefore),
+    "monitor-only criou plano do Organizer",
+  );
+  ensure(
+    JSON.stringify(await readdir(join(stationData, "organizer", "runs"))) ===
+      JSON.stringify(monitorRunsBefore),
+    "monitor-only criou run do Organizer",
+  );
+  await stopProcess(monitorAgent);
+  await assertPortsReusable([monitorPort]);
+  console.log("ok: modo monitor-only sem rotas ou escrita do Organizer");
+
   let agent;
   let consoleProcess;
   let ports;
@@ -226,7 +295,7 @@ async function main() {
     const [agentPort, consolePort] = ports;
     await writeFile(
       envFile,
-      `HESTIA_STATION_HOST=${HOST}\nHESTIA_STATION_PORT=${agentPort}\nHESTIA_STATION_TOKEN=${token}\nHESTIA_STORAGE_PATH=${stationStorage}\nHESTIA_DATA_DIR=${stationData}\n`,
+      `HESTIA_STATION_HOST=${HOST}\nHESTIA_STATION_PORT=${agentPort}\nHESTIA_STATION_TOKEN=${token}\nHESTIA_STATION_ORGANIZER_ENABLED=1\nHESTIA_STORAGE_PATH=${stationStorage}\nHESTIA_DATA_DIR=${stationData}\n`,
       { mode: 0o600 },
     );
     agent = startProcess(
@@ -238,6 +307,7 @@ async function main() {
         HESTIA_STATION_HOST: HOST,
         HESTIA_STATION_PORT: String(agentPort),
         HESTIA_STATION_TOKEN: token,
+        HESTIA_STATION_ORGANIZER_ENABLED: "1",
         HESTIA_STORAGE_PATH: stationStorage,
         HESTIA_DATA_DIR: stationData,
       }),

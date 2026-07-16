@@ -3,17 +3,39 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_NAME="hestia-station-agent"
-ENV_FILE="/etc/default/$SERVICE_NAME"
-UNIT_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+ENV_FILE="${HESTIA_STATION_ENV_FILE:-/etc/default/$SERVICE_NAME}"
+UNIT_FILE="${HESTIA_STATION_UNIT_FILE:-/etc/systemd/system/$SERVICE_NAME.service}"
 
 log() { echo "[station-install] $*"; }
 fail() { echo "[station-install] ERRO: $*" >&2; exit 1; }
+
+valid_station_port() {
+  local value="$1"
+  local normalized
+  [[ "$value" =~ ^[0-9]+$ ]] || return 1
+  normalized="$value"
+  while [[ ${#normalized} -gt 1 && "$normalized" == 0* ]]; do
+    normalized="${normalized#0}"
+  done
+  [ ${#normalized} -le 5 ] && [ "$normalized" -ge 1 ] && [ "$normalized" -le 65535 ]
+}
 
 [ "$(id -u)" -eq 0 ] || fail "execute como root (por exemplo, sudo npm run station:install)."
 command -v node >/dev/null 2>&1 || fail "node não encontrado."
 command -v systemctl >/dev/null 2>&1 || fail "systemctl não encontrado."
 NODE_BIN="$(command -v node)"
 [ -x "$NODE_BIN" ] || fail "node não é executável: $NODE_BIN"
+
+PORT_EXPLICIT=0
+if [[ -v HESTIA_STATION_PORT ]]; then
+  PORT_EXPLICIT=1
+  STATION_PORT="$HESTIA_STATION_PORT"
+else
+  STATION_PORT=4518
+fi
+if ! valid_station_port "$STATION_PORT"; then
+  fail "HESTIA_STATION_PORT deve ser um inteiro entre 1 e 65535."
+fi
 
 SERVICE_USER="${HESTIA_STATION_SERVICE_USER:-${SUDO_USER:-}}"
 [ -n "$SERVICE_USER" ] || fail "defina HESTIA_STATION_SERVICE_USER; o serviço nunca roda como root."
@@ -27,12 +49,29 @@ if [ ! -f "$ENV_FILE" ]; then
   install -m 0600 -o root -g root /dev/null "$ENV_FILE"
   {
     echo "HESTIA_STATION_HOST=127.0.0.1"
-    echo "HESTIA_STATION_PORT=4518"
+    echo "HESTIA_STATION_PORT=$STATION_PORT"
     echo "HESTIA_STATION_TOKEN=$TOKEN"
+    echo "HESTIA_STATION_ORGANIZER_ENABLED=0"
     echo "# HESTIA_STATION_ALLOWED_HOSTS=station.example.ts.net"
   } > "$ENV_FILE"
   log "configuração criada em $ENV_FILE"
 else
+  if [ "$PORT_EXPLICIT" -eq 1 ]; then
+    if ! CURRENT_PORT="$(
+      awk -F= '
+        $1 == "HESTIA_STATION_PORT" { count += 1; value = substr($0, index($0, "=") + 1) }
+        END { if (count == 1) print value; else exit 1 }
+      ' "$ENV_FILE"
+    )"; then
+      fail "não foi possível ler HESTIA_STATION_PORT da configuração existente."
+    fi
+    if ! valid_station_port "$CURRENT_PORT"; then
+      fail "HESTIA_STATION_PORT da configuração existente é inválida."
+    fi
+    if [ "$((10#$CURRENT_PORT))" -ne "$((10#$STATION_PORT))" ]; then
+      fail "Configuração existente usa a porta $CURRENT_PORT. Edite $ENV_FILE explicitamente para mudar para $STATION_PORT."
+    fi
+  fi
   log "configuração existente preservada em $ENV_FILE"
 fi
 

@@ -19,12 +19,20 @@ function configError(message) {
   throw new Error(`[Station Agent] ${message}`);
 }
 
+function parseOrganizerEnabled(value) {
+  if (value === undefined) return false;
+  if (value === "0") return false;
+  if (value === "1") return true;
+  configError("HESTIA_STATION_ORGANIZER_ENABLED deve ser 0 ou 1.");
+}
+
 export function resolveStationAgentConfig(env = process.env) {
   const host = env.HESTIA_STATION_HOST?.trim() || "127.0.0.1";
   const portRaw = env.HESTIA_STATION_PORT?.trim() || "4518";
   const port = Number(portRaw);
   const token = env.HESTIA_STATION_TOKEN;
   const allowedHosts = env.HESTIA_STATION_ALLOWED_HOSTS?.trim() || "";
+  const organizerEnabled = parseOrganizerEnabled(env.HESTIA_STATION_ORGANIZER_ENABLED);
   const rawStoragePath =
     env.HESTIA_STORAGE_PATH?.trim() || env.HESTIA_KALINE_ROOT?.trim() || "/KALINE";
   if (!isAbsolute(rawStoragePath)) {
@@ -41,7 +49,7 @@ export function resolveStationAgentConfig(env = process.env) {
   const services = ALLOWED_SERVICES.filter((name) => requestedServices.has(name));
 
   if (!token?.trim()) configError("HESTIA_STATION_TOKEN é obrigatório.");
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
     configError("HESTIA_STATION_PORT deve ser uma porta válida.");
   }
   if (allowedHosts.split(",").some((entry) => entry.includes("*"))) {
@@ -59,6 +67,7 @@ export function resolveStationAgentConfig(env = process.env) {
     dataDir,
     storageSources: sharedConfig.storageSources,
     services,
+    organizerEnabled,
   };
 }
 
@@ -143,15 +152,17 @@ export function createStationAgent(config, providers = {}) {
     publicServices(await readServices(config.services || ALLOWED_SERVICES)),
   );
 
-  registerStationOrganizerRoutes(
-    app,
-    {
-      dataDir: config.dataDir || resolveDataDir(),
-      storagePath: config.storagePath || "/KALINE",
-      storageSources: config.storageSources || [],
-    },
-    providers,
-  );
+  if (config.organizerEnabled === true) {
+    registerStationOrganizerRoutes(
+      app,
+      {
+        dataDir: config.dataDir || resolveDataDir(),
+        storagePath: config.storagePath || "/KALINE",
+        storageSources: config.storageSources || [],
+      },
+      providers,
+    );
+  }
 
   app.setNotFoundHandler((_request, reply) => {
     reply.code(404).send({ ok: false, error: "not_found" });

@@ -25,12 +25,14 @@ describe("Station Doctor config", () => {
 HESTIA_STATION_HOST='127.0.0.1'
 HESTIA_STATION_PORT="4518"
 HESTIA_STATION_TOKEN=$(id)
+HESTIA_STATION_ORGANIZER_ENABLED=1
 UNKNOWN=value
 `),
     ).toEqual({
       HESTIA_STATION_HOST: "127.0.0.1",
       HESTIA_STATION_PORT: "4518",
       HESTIA_STATION_TOKEN: "$(id)",
+      HESTIA_STATION_ORGANIZER_ENABLED: "1",
     });
     expect(() => parseStationEnv("INVALID")).toThrow(/linha 1 inválida/);
     expect(() => parseStationEnv("HESTIA_STATION_PORT=1\nHESTIA_STATION_PORT=2")).toThrow(
