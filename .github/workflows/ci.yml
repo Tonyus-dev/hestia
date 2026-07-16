@@ -26,6 +26,7 @@ jobs:
         run: |
           bash -n scripts/doctor.sh
           bash -n scripts/install-station-agent.sh
+          bash -n scripts/install-station-agent.test.sh
           bash -n scripts/uninstall-station-agent.sh
           bash -n scripts/build-deb.sh
 
@@ -43,6 +44,9 @@ jobs:
 
       - name: Run Station operational smoke
         run: node scripts/station-smoke.mjs
+
+      - name: Run Station installer tests
+        run: bash scripts/install-station-agent.test.sh
 
       - name: Build Debian Package
         run: npm run build-deb
