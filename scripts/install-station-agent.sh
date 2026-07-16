@@ -96,7 +96,7 @@ done
 cp "$SOURCE_DIR/scripts/station-doctor.mjs" "$SOURCE_DIR/scripts/require-node.mjs" "$STAGING/scripts/"
 chown -R "$SERVICE_USER:$SERVICE_GROUP" "$STAGING"
 log "instalando dependências mínimas reproduzivelmente"
-runuser -u "$SERVICE_USER" -- env HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)" npm --prefix "$STAGING" ci --omit=dev --ignore-scripts --no-audit --no-fund
+runuser -u "$SERVICE_USER" -- env -u npm_config_cache -u NPM_CONFIG_CACHE HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)" npm --prefix "$STAGING" ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 install -d -m 0755 -o root -g root "$(dirname -- "$ENV_FILE")" "$(dirname -- "$UNIT_FILE")" "$(dirname -- "$RUNTIME_DIR")"
 if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
@@ -130,6 +130,7 @@ hestia_safe_remove_runtime_path "$NEW_RUNTIME"
 hestia_safe_remove_runtime_path "$PREVIOUS_RUNTIME"
 install -d -m 0755 -o root -g root "$NEW_RUNTIME"
 cp -a "$STAGING/." "$NEW_RUNTIME/"
+chmod 0755 "$NEW_RUNTIME"
 chown -R root:root "$NEW_RUNTIME"
 [ -f "$NEW_RUNTIME/station.js" ] && [ -f "$NEW_RUNTIME/scripts/station-doctor.mjs" ] && [ -d "$NEW_RUNTIME/node_modules/fastify" ] || fail "novo runtime mínimo da Station incompleto."
 node --check "$NEW_RUNTIME/station.js" >/dev/null || fail "novo runtime da Station inválido."
