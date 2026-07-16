@@ -26,12 +26,16 @@ jobs:
         run: |
           bash -n scripts/doctor.sh
           bash -n scripts/install.sh
+          bash -n scripts/install-safety.sh
           bash -n scripts/install.test.sh
           bash -n scripts/uninstall.sh
           bash -n scripts/install-station-agent.sh
           bash -n scripts/install-station-agent.test.sh
           bash -n scripts/uninstall-station-agent.sh
           bash -n scripts/build-deb.sh
+          bash -n scripts/build-deb.test.sh
+          bash -n packaging/debian/postinst
+          bash -n packaging/debian/postinst.test.sh
 
       - name: Run lint
         run: npm run lint
@@ -50,6 +54,11 @@ jobs:
 
       - name: Run Console installer tests
         run: bash scripts/install.test.sh
+
+      - name: Run Debian safety tests
+        run: |
+          bash scripts/build-deb.test.sh
+          bash packaging/debian/postinst.test.sh
 
       - name: Build Debian Package
         run: npm run build-deb

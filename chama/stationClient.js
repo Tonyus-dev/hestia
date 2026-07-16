@@ -280,7 +280,9 @@ function validateCodiceHealth(body) {
   const formats = [...new Set(body.formats)];
   if (
     formats.length !== body.formats.length ||
-    formats.some((format) => !["epub", "pdf"].includes(format))
+    formats.some((format) => !["epub", "pdf", "txt"].includes(format)) ||
+    !formats.includes("epub") ||
+    !formats.includes("pdf")
   )
     return null;
   return {

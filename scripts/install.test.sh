@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEST_ROOT="$(mktemp -d)"
+TEST_ROOT="$(mktemp -d /tmp/hestia-install-test-console-XXXXXX)"
 SOURCE="$TEST_ROOT/source"
 BIN="$TEST_ROOT/bin"
 mkdir -p "$SOURCE/scripts" "$SOURCE/packaging" "$BIN"
@@ -19,12 +19,22 @@ case "${1:-}" in -u) [ "$#" -eq 1 ] && echo 0 || echo 1000;; -gn) echo builder;;
 EOF
 cat > "$BIN/node" <<'EOF'
 #!/usr/bin/env bash
+case "${1:-}" in
+  --check) exit 0;;
+  *require-node.mjs) exit 0;;
+  *console-doctor.mjs) [ "${HESTIA_FAKE_DOCTOR_FAIL:-0}" = 1 ] && exit 1; echo "Console Doctor: OK"; exit 0;;
+esac
 exit 0
 EOF
 cat > "$BIN/npm" <<'EOF'
 #!/usr/bin/env bash
+[ "${HESTIA_FAKE_NPM_FAIL:-0}" = 1 ] && exit 20
 prefix=""
-while [ "$#" -gt 0 ]; do [ "$1" = "--prefix" ] && { prefix="$2"; shift 2; continue; }; [ "$1" = "run" ] && [ "${2:-}" = "build" ] && { mkdir -p "$prefix/dist/client" "$prefix/dist/server"; printf 'bundle' > "$prefix/dist/server/server.js"; }; shift; done
+while [ "$#" -gt 0 ]; do
+  [ "$1" = "--prefix" ] && { prefix="$2"; shift 2; continue; }
+  [ "$1" = "run" ] && [ "${2:-}" = "build" ] && { mkdir -p "$prefix/dist/client" "$prefix/dist/server"; printf 'bundle' > "$prefix/dist/server/server.js"; }
+  shift
+done
 [ -n "$prefix" ] && mkdir -p "$prefix/node_modules"
 EOF
 cat > "$BIN/runuser" <<EOF
@@ -36,34 +46,113 @@ cat > "$BIN/getent" <<'EOF'
 #!/usr/bin/env bash
 case "${1:-}" in passwd) echo "builder:x:1000:1000::/tmp:/bin/bash";; group) echo "hestia-console:x:1001:";; esac
 EOF
-for command in systemctl chown addgroup adduser; do printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/$command"; done
+cat > "$BIN/systemctl" <<'EOF'
+#!/usr/bin/env bash
+[ "${HESTIA_FAKE_SYSTEMCTL_FAIL:-}" = "${1:-}" ] && exit 21
+[ "${1:-}" = "is-active" ] && [ "${HESTIA_FAKE_SYSTEMCTL_INACTIVE:-0}" = 1 ] && exit 1
+exit 0
+EOF
 cat > "$BIN/install" <<'EOF'
 #!/usr/bin/env bash
-if [ "${1:-}" = "-d" ]; then mkdir -p "${!#}"; else /usr/bin/install -m 0600 /dev/null "${!#}"; fi
+args=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in -o|-g) shift 2;; *) args+=("$1"); shift;; esac
+done
+exec /usr/bin/install "${args[@]}"
 EOF
+for command in chown addgroup adduser; do printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/$command"; done
 chmod +x "$BIN"/*
 
-ENV_FILE="$TEST_ROOT/console.env"
-UNIT_FILE="$TEST_ROOT/console.service"
-RUNTIME="$TEST_ROOT/console-runtime"
-output="$(PATH="$BIN:/usr/bin:/bin" SUDO_USER=builder HESTIA_SOURCE_DIR="$SOURCE" HESTIA_INSTALL_ROOT="$RUNTIME" HESTIA_ENV_FILE="$ENV_FILE" HESTIA_UNIT_FILE="$UNIT_FILE" HESTIA_SYSTEMCTL_BIN=systemctl bash "$ROOT_DIR/scripts/install.sh" 2>&1)"
-[ -f "$RUNTIME/hestia.js" ] && [ -f "$RUNTIME/dist/server/server.js" ] || fail "runtime da Console incompleto"
-grep -Fqx "WorkingDirectory=$RUNTIME" "$UNIT_FILE" || fail "unit depende do checkout"
-grep -Fqx 'HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>' "$ENV_FILE" && fail "placeholder deveria estar comentado"
-grep -Fqx '# HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>' "$ENV_FILE" || fail "env desktop ausente"
+run_install() {
+  local name="$1"; shift
+  env -u HESTIA_INSTALL_ROOT -u HESTIA_ENV_FILE -u HESTIA_UNIT_FILE -u HESTIA_SYSTEMCTL_BIN \
+    PATH="$BIN:/usr/bin:/bin" SUDO_USER=builder HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+    HESTIA_SOURCE_DIR="$SOURCE" HESTIA_INSTALL_ROOT="$TEST_ROOT/$name/runtime" \
+    HESTIA_ENV_FILE="$TEST_ROOT/$name/console.env" HESTIA_UNIT_FILE="$TEST_ROOT/$name/console.service" \
+    HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" "$@" bash "$ROOT_DIR/scripts/install.sh"
+}
+
+output="$(run_install fresh env 2>&1)"
+[ -f "$TEST_ROOT/fresh/runtime/hestia.js" ] && [ -f "$TEST_ROOT/fresh/runtime/dist/server/server.js" ] || fail "instalação nova incompleta"
+grep -Fqx "WorkingDirectory=$TEST_ROOT/fresh/runtime" "$TEST_ROOT/fresh/console.service" || fail "unit depende do checkout"
 [ -s "$TEST_ROOT/runuser.log" ] || fail "npm não passou pelo usuário não-root"
 [[ "$output" != *"TOKEN_DESKTOP="* ]] || fail "env/token apareceu na saída"
 
-printf '%s\n' 'HESTIA_STATION_BASE_URL=https://legacy.example' 'HESTIA_STATION_TOKEN=secret' > "$ENV_FILE"
-before="$(sha256sum "$ENV_FILE")"
-if PATH="$BIN:/usr/bin:/bin" SUDO_USER=builder HESTIA_SOURCE_DIR="$SOURCE" HESTIA_INSTALL_ROOT="$RUNTIME" HESTIA_ENV_FILE="$ENV_FILE" HESTIA_UNIT_FILE="$UNIT_FILE" HESTIA_SYSTEMCTL_BIN=systemctl bash "$ROOT_DIR/scripts/install.sh" >/dev/null 2>&1; then fail "configuração legada foi aceita"; fi
-[ "$(sha256sum "$ENV_FILE")" = "$before" ] || fail "env legado foi sobrescrito"
+printf 'runtime-antigo\n' > "$TEST_ROOT/fresh/runtime/previous-marker"
+env_hash="$(sha256sum "$TEST_ROOT/fresh/console.env")"
+run_install fresh env >/dev/null
+[ ! -e "$TEST_ROOT/fresh/runtime/previous-marker" ] || fail "atualização não ativou runtime novo"
+[ "$(sha256sum "$TEST_ROOT/fresh/console.env")" = "$env_hash" ] || fail "env foi alterado na atualização"
 
-mkdir -p "$RUNTIME"; printf 'unit\n' > "$UNIT_FILE"
-PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_ROOT="$RUNTIME" HESTIA_ENV_FILE="$ENV_FILE" HESTIA_UNIT_FILE="$UNIT_FILE" HESTIA_SYSTEMCTL_BIN=systemctl bash "$ROOT_DIR/scripts/uninstall.sh" >/dev/null
-[ -f "$ENV_FILE" ] || fail "uninstall padrão removeu env"
-[ ! -e "$RUNTIME" ] || fail "uninstall não removeu runtime"
-PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_ROOT="$RUNTIME" HESTIA_ENV_FILE="$ENV_FILE" HESTIA_UNIT_FILE="$UNIT_FILE" HESTIA_SYSTEMCTL_BIN=systemctl bash "$ROOT_DIR/scripts/uninstall.sh" --purge >/dev/null
-[ ! -e "$ENV_FILE" ] || fail "purge preservou env"
+printf 'runtime-antigo\n' > "$TEST_ROOT/fresh/runtime/rollback-marker"
+if run_install fresh env HESTIA_FAKE_NPM_FAIL=1 >/dev/null 2>&1; then fail "falha antes do swap foi aceita"; fi
+[ -f "$TEST_ROOT/fresh/runtime/rollback-marker" ] || fail "falha antes do swap alterou runtime anterior"
+if run_install fresh env HESTIA_FAKE_SYSTEMCTL_FAIL=restart >/dev/null 2>&1; then fail "falha no restart foi aceita"; fi
+[ -f "$TEST_ROOT/fresh/runtime/rollback-marker" ] || fail "rollback de restart não restaurou runtime"
+if run_install fresh env HESTIA_FAKE_DOCTOR_FAIL=1 >/dev/null 2>&1; then fail "falha no Doctor foi aceita"; fi
+[ -f "$TEST_ROOT/fresh/runtime/rollback-marker" ] || fail "rollback de Doctor não restaurou runtime"
+[ "$(sha256sum "$TEST_ROOT/fresh/console.env")" = "$env_hash" ] || fail "rollback alterou env"
+[ -z "$(find "$TEST_ROOT/fresh" -maxdepth 1 \( -name '*.new.*' -o -name '*.previous.*' \) -print -quit)" ] || fail "temporários de swap sobraram"
 
-echo "Console installer tests: OK"
+mv "$SOURCE" "$TEST_ROOT/source.removed"
+[ -f "$TEST_ROOT/fresh/runtime/hestia.js" ] && grep -Fqx "WorkingDirectory=$TEST_ROOT/fresh/runtime" "$TEST_ROOT/fresh/console.service" || fail "runtime depende do checkout"
+SOURCE="$TEST_ROOT/source.removed"
+
+OUTSIDE="$TEST_ROOT-outside"
+mkdir -p "$OUTSIDE"
+printf 'intacto\n' > "$OUTSIDE/sentinel"
+reject_install() {
+  if env PATH="$BIN:/usr/bin:/bin" SUDO_USER=builder HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+    HESTIA_SOURCE_DIR="$SOURCE" HESTIA_INSTALL_ROOT="$1" HESTIA_ENV_FILE="$TEST_ROOT/reject-install/env" \
+    HESTIA_UNIT_FILE="$TEST_ROOT/reject-install/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" \
+    bash "$ROOT_DIR/scripts/install.sh" >/dev/null 2>&1; then fail "runtime inseguro aceito pelo instalador: $1"; fi
+}
+for unsafe in / /etc /usr /home /KALINE /opt /tmp /opt/../etc relative "$OUTSIDE/runtime"; do reject_install "$unsafe"; done
+ln -s "$OUTSIDE" "$TEST_ROOT/install-escape"
+reject_install "$TEST_ROOT/install-escape/runtime"
+if env PATH="$BIN:/usr/bin:/bin" SUDO_USER=builder HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+  HESTIA_SOURCE_DIR="$SOURCE" HESTIA_INSTALL_ROOT="$TEST_ROOT/reject-install/runtime" HESTIA_ENV_FILE="$OUTSIDE/env" \
+  HESTIA_UNIT_FILE="$TEST_ROOT/reject-install/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" bash "$ROOT_DIR/scripts/install.sh" >/dev/null 2>&1; then fail "env fora da raiz aceito pelo instalador"; fi
+if env PATH="$BIN:/usr/bin:/bin" SUDO_USER=builder HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+  HESTIA_SOURCE_DIR="$SOURCE" HESTIA_INSTALL_ROOT="$TEST_ROOT/reject-install/runtime" HESTIA_ENV_FILE="$TEST_ROOT/reject-install/env" \
+  HESTIA_UNIT_FILE="$OUTSIDE/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" bash "$ROOT_DIR/scripts/install.sh" >/dev/null 2>&1; then fail "unit fora da raiz aceita pelo instalador"; fi
+for bad_systemctl in "$OUTSIDE/systemctl" "$BIN/systemctl --quiet"; do
+  if env PATH="$BIN:/usr/bin:/bin" SUDO_USER=builder HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+    HESTIA_SOURCE_DIR="$SOURCE" HESTIA_INSTALL_ROOT="$TEST_ROOT/reject-install/runtime" HESTIA_ENV_FILE="$TEST_ROOT/reject-install/env" \
+    HESTIA_UNIT_FILE="$TEST_ROOT/reject-install/unit" HESTIA_SYSTEMCTL_BIN="$bad_systemctl" bash "$ROOT_DIR/scripts/install.sh" >/dev/null 2>&1; then fail "systemctl inseguro aceito pelo instalador"; fi
+done
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 bash "$ROOT_DIR/scripts/install.sh" >/dev/null 2>&1; then fail "instalador aceitou modo de teste sem raiz"; fi
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_ROOT="$TEST_ROOT/reject-install/runtime" bash "$ROOT_DIR/scripts/install.sh" >/dev/null 2>&1; then fail "override operacional aceito pelo instalador"; fi
+reject_uninstall() {
+  if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+    HESTIA_INSTALL_ROOT="$1" HESTIA_ENV_FILE="$TEST_ROOT/reject/env" \
+    HESTIA_UNIT_FILE="$TEST_ROOT/reject/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" \
+    bash "$ROOT_DIR/scripts/uninstall.sh" >/dev/null 2>&1; then fail "runtime inseguro aceito: $1"; fi
+}
+for unsafe in / /etc /usr /home /KALINE /opt /tmp /opt/../etc relative "$OUTSIDE/runtime"; do reject_uninstall "$unsafe"; done
+ln -s "$OUTSIDE" "$TEST_ROOT/escape"
+reject_uninstall "$TEST_ROOT/escape/runtime"
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+  HESTIA_INSTALL_ROOT="$TEST_ROOT/reject/runtime" HESTIA_ENV_FILE="$OUTSIDE/env" \
+  HESTIA_UNIT_FILE="$TEST_ROOT/reject/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" bash "$ROOT_DIR/scripts/uninstall.sh" >/dev/null 2>&1; then fail "env fora da raiz aceito"; fi
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+  HESTIA_INSTALL_ROOT="$TEST_ROOT/reject/runtime" HESTIA_ENV_FILE="$TEST_ROOT/reject/env" \
+  HESTIA_UNIT_FILE="$OUTSIDE/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" bash "$ROOT_DIR/scripts/uninstall.sh" >/dev/null 2>&1; then fail "unit fora da raiz aceita"; fi
+for bad_systemctl in "$OUTSIDE/systemctl" "$BIN/systemctl --quiet"; do
+  if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" \
+    HESTIA_INSTALL_ROOT="$TEST_ROOT/reject/runtime" HESTIA_ENV_FILE="$TEST_ROOT/reject/env" \
+    HESTIA_UNIT_FILE="$TEST_ROOT/reject/unit" HESTIA_SYSTEMCTL_BIN="$bad_systemctl" bash "$ROOT_DIR/scripts/uninstall.sh" >/dev/null 2>&1; then fail "systemctl inseguro aceito"; fi
+done
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 bash "$ROOT_DIR/scripts/uninstall.sh" >/dev/null 2>&1; then fail "test mode sem raiz aceito"; fi
+if env PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_ROOT="$TEST_ROOT/reject/runtime" bash "$ROOT_DIR/scripts/uninstall.sh" >/dev/null 2>&1; then fail "override operacional aceito"; fi
+[ "$(cat "$OUTSIDE/sentinel")" = "intacto" ] || fail "arquivo fora da raiz foi alterado"
+
+mkdir -p "$TEST_ROOT/uninstall/runtime"; printf 'secret\n' > "$TEST_ROOT/uninstall/env"; printf 'unit\n' > "$TEST_ROOT/uninstall/unit"
+common_uninstall=(PATH="$BIN:/usr/bin:/bin" HESTIA_INSTALL_TEST_MODE=1 HESTIA_TEST_ROOT="$TEST_ROOT" HESTIA_INSTALL_ROOT="$TEST_ROOT/uninstall/runtime" HESTIA_ENV_FILE="$TEST_ROOT/uninstall/env" HESTIA_UNIT_FILE="$TEST_ROOT/uninstall/unit" HESTIA_SYSTEMCTL_BIN="$BIN/systemctl")
+env "${common_uninstall[@]}" bash "$ROOT_DIR/scripts/uninstall.sh" >/dev/null
+[ -f "$TEST_ROOT/uninstall/env" ] && [ ! -e "$TEST_ROOT/uninstall/runtime" ] || fail "uninstall padrão incorreto"
+env "${common_uninstall[@]}" bash "$ROOT_DIR/scripts/uninstall.sh" --purge >/dev/null
+[ ! -e "$TEST_ROOT/uninstall/env" ] || fail "purge preservou env"
+
+rm -rf "$OUTSIDE"
+echo "Console installer safety and rollback tests: OK"

@@ -275,7 +275,7 @@ export type StationCodiceHealth = {
   ok: true;
   state: "available";
   libraryAvailable: true;
-  formats: Array<"epub" | "pdf">;
+  formats: Array<"epub" | "pdf" | "txt">;
   checkedAt: string;
 };
 

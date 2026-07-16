@@ -191,4 +191,37 @@ describe("cliente reutilizável e isolado", () => {
       JSON.stringify(await fetchTvboxCodiceHealth({ ...config, stationId: "desktop" })),
     ).not.toContain("station-secret");
   });
+
+  it.each([
+    [["epub", "pdf"], true],
+    [["epub", "pdf", "txt"], true],
+    [["txt", "epub", "pdf"], true],
+    [["epub"], false],
+    [["pdf"], false],
+    [["epub", "pdf", "mobi"], false],
+    [["epub", "pdf", "txt", "txt"], false],
+  ])("valida formatos do Códice %j", async (formats, valid) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          ok: true,
+          schemaVersion: 1,
+          generatedAt: now(),
+          libraryAvailable: true,
+          formats,
+        }),
+      ),
+    );
+    const config = resolveNamedStationConfig("tvbox", {
+      HESTIA_TVBOX_BASE_URL: "https://tvbox.example",
+      HESTIA_TVBOX_TOKEN: "station-secret",
+    });
+    const result = await fetchTvboxCodiceHealth(config);
+    if (valid) {
+      expect(result).toMatchObject({ ok: true, formats });
+    } else {
+      expect(result).toMatchObject({ ok: false, code: "STATION_CONTRACT_MISMATCH" });
+    }
+  });
 });

@@ -7,7 +7,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKG_NAME="hestia-console"
 VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
-ARCH="${HESTIA_DEB_ARCH:-$(dpkg --print-architecture)}"
+if [ "${HESTIA_BUILD_TEST_MODE:-0}" = "1" ]; then
+  if [[ -v HESTIA_DEB_ARCH ]]; then ARCH="$HESTIA_DEB_ARCH"; else ARCH="$(dpkg --print-architecture)"; fi
+  [[ -v HESTIA_DEB_ARCH ]] && echo "[build-deb] TESTE: override altera somente metadata; não valida execução na arquitetura $ARCH."
+elif [ "${HESTIA_BUILD_TEST_MODE:-0}" = "0" ]; then
+  [ -z "${HESTIA_DEB_ARCH+x}" ] || { echo "[build-deb] ERRO: HESTIA_DEB_ARCH é permitido somente com HESTIA_BUILD_TEST_MODE=1." >&2; exit 1; }
+  ARCH="$(dpkg --print-architecture)"
+else
+  echo "[build-deb] ERRO: HESTIA_BUILD_TEST_MODE aceita somente 0 ou 1." >&2
+  exit 1
+fi
+case "$ARCH" in amd64|arm64|armhf|i386) ;; *) echo "[build-deb] ERRO: arquitetura Debian inválida: $ARCH" >&2; exit 1;; esac
 OUT_DIR="$ROOT_DIR/dist-deb"
 STAGING="$ROOT_DIR/.deb-staging"
 DEB_FILE="$OUT_DIR/${PKG_NAME}_${VERSION}_${ARCH}.deb"
@@ -15,6 +25,18 @@ DEB_FILE="$OUT_DIR/${PKG_NAME}_${VERSION}_${ARCH}.deb"
 log() { echo "[build-deb] $*"; }
 
 [ "$(id -u)" -ne 0 ] || { echo "[build-deb] ERRO: não execute npm/build como root." >&2; exit 1; }
+[ "${HESTIA_BUILD_METADATA_ONLY:-0}" = "0" ] || [ "${HESTIA_BUILD_TEST_MODE:-0}" = "1" ] || {
+  echo "[build-deb] ERRO: HESTIA_BUILD_METADATA_ONLY é permitido somente em teste." >&2
+  exit 1
+}
+if [ "${HESTIA_BUILD_METADATA_ONLY:-0}" = "1" ]; then
+  echo "Arquivo de metadata: ${PKG_NAME}_${VERSION}_${ARCH}.deb"
+  sed -e "s/__VERSION__/$VERSION/" -e "s/__ARCH__/$ARCH/" "$ROOT_DIR/packaging/debian/control.template"
+  exit 0
+elif [ "${HESTIA_BUILD_METADATA_ONLY:-0}" != "0" ]; then
+  echo "[build-deb] ERRO: HESTIA_BUILD_METADATA_ONLY aceita somente 0 ou 1." >&2
+  exit 1
+fi
 
 # --- Pré-requisitos: falha rápido com mensagem clara em vez de erro cru de shell. ------
 command -v node >/dev/null 2>&1 || {
@@ -28,6 +50,10 @@ command -v npm >/dev/null 2>&1 || {
 }
 command -v dpkg-deb >/dev/null 2>&1 || {
   echo "[build-deb] ERRO: dpkg-deb não encontrado. No Debian/Mint: sudo apt install dpkg-dev." >&2
+  exit 1
+}
+command -v dpkg >/dev/null 2>&1 || {
+  echo "[build-deb] ERRO: dpkg não encontrado." >&2
   exit 1
 }
 
@@ -77,6 +103,8 @@ cp -r "$ROOT_DIR/chama" "$APP_DIR/"
 find "$APP_DIR/chama" -name "*.test.js" -delete
 cp "$ROOT_DIR/package.json" "$APP_DIR/"
 [ -f "$ROOT_DIR/package-lock.json" ] && cp "$ROOT_DIR/package-lock.json" "$APP_DIR/"
+mkdir -p "$APP_DIR/scripts"
+cp "$ROOT_DIR/scripts/console-doctor.mjs" "$ROOT_DIR/scripts/require-node.mjs" "$ROOT_DIR/scripts/install-safety.sh" "$APP_DIR/scripts/"
 mkdir -p "$(dirname "$APP_DIR/$PUBLIC_DEST")"
 cp -r "$PUBLIC_SRC" "$APP_DIR/$PUBLIC_DEST"
 mkdir -p "$APP_DIR/$SERVER_DEST_DIR"
@@ -125,6 +153,8 @@ cp "$ROOT_DIR/packaging/debian/postrm" "$STAGING/DEBIAN/postrm"
 chmod 0755 "$STAGING/DEBIAN/postinst" "$STAGING/DEBIAN/prerm" "$STAGING/DEBIAN/postrm"
 
 log "empacotando $DEB_FILE"
-dpkg-deb --build --root-owner-group "$STAGING" "$DEB_FILE"
+dpkg-deb --build --root-owner-group -Zgzip "$STAGING" "$DEB_FILE"
+dpkg-deb --info "$DEB_FILE" >/dev/null
+dpkg-deb --contents "$DEB_FILE" >/dev/null
 
 log "pronto: $DEB_FILE"

@@ -60,7 +60,9 @@ sudoedit /etc/default/hestia-station-agent
 sudo npm run station:doctor -- --require-systemd
 ```
 
-Configure `HESTIA_STATION_ORGANIZER_ENABLED=0`, `HESTIA_STATION_CODICE_ENABLED=1`, `HESTIA_STORAGE_PATH=/KALINE`, uma origem CORS exata da Console e os hosts privados permitidos. O instalador não instala LibreOffice nem frontend na Station.
+Configure `HESTIA_STATION_ORGANIZER_ENABLED=0`, `HESTIA_STATION_CODICE_ENABLED=1`, `HESTIA_STORAGE_PATH=/KALINE`, `HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>` e os hosts privados permitidos. EPUB e PDF são obrigatórios; TXT é opcional. O instalador não instala LibreOffice nem frontend na Station.
+
+`HESTIA_CODICE_CORS_ORIGIN` é a origem exata do aplicativo web Códice executado no navegador. A Console Héstia consulta o health server-to-server, não envia `Origin` e não deve ser usada como origem CORS.
 
 ## Tailscale
 
@@ -68,7 +70,11 @@ Instale, autentique e valide Tailscale manualmente. Use apenas IPs/hostnames pri
 
 ## Atualização
 
-Atualize o checkout e execute novamente o mesmo instalador. O runtime em `/opt` é substituído; env, token, porta e feature flags existentes são preservados. O Doctor é obrigatório. O serviço não depende do checkout após a instalação.
+Atualize o checkout e execute novamente o mesmo instalador. Os paths operacionais são fixos em `/opt/hestia-console`, `/opt/hestia-station`, `/etc/default` e `/etc/systemd/system`; overrides existem somente no modo de teste confinado por `HESTIA_TEST_ROOT`. O runtime novo é preparado no mesmo filesystem e ativado por rename. Se restart ou Doctor falhar, o runtime anterior é restaurado. Env, token, porta e feature flags existentes são preservados. O serviço não depende do checkout após a instalação.
+
+O pacote Debian da Console usa somente a arquitetura nativa de `dpkg --print-architecture` em produção. O teste `armhf` da CI valida apenas nome e metadata do pacote, não execução ou build em ARM. O `postinst` falha se Node.js `>=22.13.0`, serviço ativo ou Console Doctor não forem confirmados.
+
+O Organizer permanece disponível apenas como opt-in interno do Agent. As instalações atuais mantêm `HESTIA_STATION_ORGANIZER_ENABLED=0`; a Console não expõe proxy ou interface de escrita.
 
 ## Desinstalação
 

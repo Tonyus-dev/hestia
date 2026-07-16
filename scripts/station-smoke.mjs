@@ -130,13 +130,17 @@ async function main() {
   const tvboxRoot = join(root, "tvbox", "KALINE");
   const epubPath = join(tvboxRoot, "codice", "epub", "fixture.epub");
   const pdfPath = join(tvboxRoot, "codice", "pdf", "fixture.pdf");
+  const txtPath = join(tvboxRoot, "codice", "txt", "fixture.txt");
   const epub = Buffer.from("EPUB sintético PR42\n");
   const pdf = Buffer.from("%PDF sintético PR42\n");
+  const txt = Buffer.from("TXT sintético PR42\n");
   await mkdir(desktopRoot, { recursive: true });
   await mkdir(dirname(epubPath), { recursive: true });
   await mkdir(dirname(pdfPath), { recursive: true });
+  await mkdir(dirname(txtPath), { recursive: true });
   await writeFile(epubPath, epub);
   await writeFile(pdfPath, pdf);
+  await writeFile(txtPath, txt);
 
   const desktopEnv = cleanEnvironment({
     NODE_ENV: "test",
@@ -156,7 +160,7 @@ async function main() {
       HESTIA_STATION_TOKEN: tvboxToken,
       HESTIA_STATION_ORGANIZER_ENABLED: "0",
       HESTIA_STATION_CODICE_ENABLED: "1",
-      HESTIA_CODICE_CORS_ORIGIN: `http://${HOST}:${consolePort}`,
+      HESTIA_CODICE_CORS_ORIGIN: "https://codice-web.example.test",
       HESTIA_STORAGE_PATH: storage,
       HESTIA_DATA_DIR: join(root, "tvbox", "data"),
     });
@@ -195,7 +199,7 @@ async function main() {
   }
   const codiceHealth = await json(consoleBase, "/api/stations/tvbox/codice/health");
   ensure(
-    codiceHealth.response.status === 200 && codiceHealth.body.formats.join(",") === "epub,pdf",
+    codiceHealth.response.status === 200 && codiceHealth.body.formats.join(",") === "epub,pdf,txt",
     "Códice health falhou",
   );
   sanitized(codiceHealth.text, secrets, "Códice health");

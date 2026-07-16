@@ -80,7 +80,7 @@ GET /api/station/storage/status
 GET /api/station/services/status
 ```
 
-O Agent inicia com `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. Não há upload nem import.
+O Agent inicia com `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. EPUB e PDF são obrigatórios e TXT é opcional. `HESTIA_CODICE_CORS_ORIGIN` identifica o aplicativo web Códice no navegador, não a Console server-to-server. Não há upload nem import.
 
 ## Instalação
 
@@ -104,7 +104,7 @@ sudo HESTIA_STATION_PORT=4519 npm run station:install
 
 Os instaladores partem de um clone limpo, executam npm como usuário não-root, instalam runtimes estáveis em `/opt`, preservam env/tokens existentes e exigem Doctor após o start. O runtime da Station usa lockfile próprio e apenas `fastify` como dependência externa.
 
-O `.deb` continua sendo da Console, usa a arquitetura nativa informada por `dpkg --print-architecture` e não é necessário para instalar a Station.
+O `.deb` continua sendo da Console, usa em produção somente a arquitetura nativa informada por `dpkg --print-architecture` e não é necessário para instalar a Station. Metadata `armhf` testada em CI não equivale a execução em ARM.
 
 ## Estado operacional
 
