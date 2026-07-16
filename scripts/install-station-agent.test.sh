@@ -55,6 +55,12 @@ output="$(run_install "$default_env" "$default_unit" env 2>&1)"
 grep -Fqx "HESTIA_STATION_PORT=4518" "$default_env" || fail "porta padrão não é 4518"
 grep -Fqx "HESTIA_STATION_ORGANIZER_ENABLED=0" "$default_env" ||
   fail "env novo não desativa Organizer"
+grep -Fqx "HESTIA_STATION_CODICE_ENABLED=0" "$default_env" ||
+  fail "env novo não desativa Códice"
+grep -Fqx "# HESTIA_CODICE_CORS_ORIGIN=https://codice.example" "$default_env" ||
+  fail "env novo não documenta origem do Códice"
+grep -Fqx "# HESTIA_STATION_ALLOWED_HOSTS=kaline-box.example.ts.net" "$default_env" ||
+  fail "env novo não documenta Host privado"
 [[ "$output" != *"$TOKEN"* ]] || fail "token apareceu na saída"
 
 custom_env="$TEST_ROOT/custom.env"

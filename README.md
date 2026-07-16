@@ -175,6 +175,56 @@ padrão. A única ativação válida é `HESTIA_STATION_ORGANIZER_ENABLED=1`; `0
 ausente equivale a `0`, e qualquer outro valor — inclusive vazio — impede a inicialização. O
 Organizer não é usado nas instalações atuais e sua ativação exige decisão operacional explícita.
 
+### Códice read-only na TV Box
+
+Na `kaline-box`, a capacidade read-only do Station permanece presa a `127.0.0.1:4519` e deve ser
+ativada por edição operacional explícita do env file:
+
+```dotenv
+HESTIA_STATION_PORT=4519
+HESTIA_STATION_ORGANIZER_ENABLED=0
+HESTIA_STATION_CODICE_ENABLED=1
+HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_DO_CODICE>
+HESTIA_STATION_ALLOWED_HOSTS=<HOST_PRIVADO>
+```
+
+A origem CORS é única e exata. Em produção ela deve usar HTTPS; wildcard, credenciais, path, query
+e hash são recusados. O instalador grava `HESTIA_STATION_CODICE_ENABLED=0` em instalações novas e
+nunca ativa ou altera um env file existente.
+
+Rotas expostas quando a flag vale exatamente `1`:
+
+```http
+GET  /api/codice/health
+GET  /api/codice/library
+HEAD /api/codice/books/:bookId
+GET  /api/codice/books/:bookId
+```
+
+A biblioteca é uma cópia de leitura já existente em `/KALINE/codice/{epub,pdf,txt}`; EPUB e PDF
+são obrigatórios e TXT continua opcional. A transferência permanece sendo feita por rsync/SSH.
+A Héstia não sincroniza, importa, converte, apaga, move nem recebe paths do cliente. O Station não
+registra upload ou `POST /api/codice/import`, e os contratos públicos não devolvem paths internos.
+
+O acesso remoto depende de Tailscale Serve configurado fora da Héstia e mantido privado. Este PR
+não configura Tailscale e não integra o Códice web. A API permanece **não validada em ARMv7** até o
+teste físico com EPUB/PDF reais na TV Box.
+
+#### Gate manual da `kaline-box`
+
+- [ ] código e dependências atualizados; env explícito com porta 4519, Organizer 0, Códice 1,
+      origem CORS real e Host privado exato;
+- [ ] serviço systemd habilitado/ativo, reinício preserva configuração e logs não entram em loop;
+- [ ] health, storage e services usam dados reais; Organizer retorna 404;
+- [ ] health/library do Códice listam EPUB e PDF reais sem paths internos;
+- [ ] HEAD funciona e GET preserva checksum de EPUB e PDF reais;
+- [ ] `POST /api/codice/import` retorna 404 e nenhum arquivo é criado ou alterado;
+- [ ] Tailscale Serve aponta privadamente para `127.0.0.1:4519`, não fica público e aplica CORS
+      somente à origem correta;
+- [ ] RAM/CPU observadas, processo estável após reinício e microSD sem escrita inesperada.
+
+Enquanto esse gate físico não for executado: **RESULTADO OPERACIONAL: PENDENTE**.
+
 A instalação real no desktop e na TV Box, inclusive serviço systemd, reinício, consumo de RAM e
 estabilidade no aparelho, ainda depende de validação física. A tabela documenta o mapa pretendido;
 não declara a TV Box como funcional ou validada.

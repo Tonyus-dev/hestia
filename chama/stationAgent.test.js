@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -19,9 +19,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
 const token = "station-test-token";
 const apps = [];
+const tempRoots = [];
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
+  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
 async function start(overrides = {}, providers) {
@@ -84,6 +86,94 @@ describe("Station Agent", () => {
         resolveStationAgentConfig({ ...base, HESTIA_STATION_ORGANIZER_ENABLED: value }),
       ).toThrow("HESTIA_STATION_ORGANIZER_ENABLED deve ser 0 ou 1");
     }
+  });
+
+  it("desativa o Códice por padrão e aceita somente 0 ou 1", () => {
+    const base = { HESTIA_STATION_TOKEN: token };
+    expect(resolveStationAgentConfig(base).codiceEnabled).toBe(false);
+    expect(
+      resolveStationAgentConfig({ ...base, HESTIA_STATION_CODICE_ENABLED: "0" }).codiceEnabled,
+    ).toBe(false);
+    expect(
+      resolveStationAgentConfig({
+        ...base,
+        NODE_ENV: "production",
+        HESTIA_STATION_CODICE_ENABLED: "1",
+        HESTIA_CODICE_CORS_ORIGIN: "https://codice.example.test",
+      }),
+    ).toMatchObject({
+      codiceEnabled: true,
+      codiceCorsOrigin: "https://codice.example.test",
+    });
+    for (const value of ["", "true", "false", "yes", "on", "2", " 1", "1 "]) {
+      expect(() =>
+        resolveStationAgentConfig({ ...base, HESTIA_STATION_CODICE_ENABLED: value }),
+      ).toThrow("HESTIA_STATION_CODICE_ENABLED deve ser 0 ou 1");
+    }
+  });
+
+  it("valida uma única origem exata e segura quando o Códice está habilitado", () => {
+    const base = {
+      HESTIA_STATION_TOKEN: token,
+      HESTIA_STATION_CODICE_ENABLED: "1",
+      NODE_ENV: "production",
+    };
+    for (const origin of [
+      undefined,
+      "",
+      "*",
+      "https://example.com/path",
+      "https://example.com?x=1",
+      "https://example.com#x",
+      "https://user:pass@example.com",
+      "https://one.example,https://two.example",
+      "javascript:alert(1)",
+      "http://example.com",
+      " https://example.com",
+      "https://example.com/",
+    ]) {
+      expect(() =>
+        resolveStationAgentConfig({ ...base, HESTIA_CODICE_CORS_ORIGIN: origin }),
+      ).toThrow(/HESTIA_CODICE_CORS_ORIGIN/);
+    }
+    for (const hostname of ["localhost", "127.0.0.1", "[::1]"]) {
+      expect(
+        resolveStationAgentConfig({
+          ...base,
+          NODE_ENV: "test",
+          HESTIA_CODICE_CORS_ORIGIN: `http://${hostname}`,
+        }).codiceCorsOrigin,
+      ).toBe(`http://${hostname}`);
+    }
+    expect(
+      resolveStationAgentConfig({
+        ...base,
+        NODE_ENV: "development",
+        HESTIA_CODICE_CORS_ORIGIN: "http://localhost",
+      }).codiceCorsOrigin,
+    ).toBe("http://localhost");
+    expect(() =>
+      resolveStationAgentConfig({
+        ...base,
+        NODE_ENV: "test",
+        HESTIA_CODICE_CORS_ORIGIN: "http://192.0.2.10",
+      }),
+    ).toThrow(/exige HTTPS/);
+    expect(() =>
+      resolveStationAgentConfig({
+        ...base,
+        NODE_ENV: "production",
+        HESTIA_CODICE_CORS_ORIGIN: "http://127.0.0.1",
+      }),
+    ).toThrow(/exige HTTPS/);
+    expect(() =>
+      resolveStationAgentConfig({
+        ...base,
+        HESTIA_STATION_HOST: "0.0.0.0",
+        HESTIA_STATION_ALLOWED_HOSTS: "station.example.test",
+        HESTIA_CODICE_CORS_ORIGIN: "https://codice.example.test",
+      }),
+    ).toThrow(/exige HESTIA_STATION_HOST em loopback/);
   });
 
   it("falha imediatamente sem token e protege bind não-loopback", () => {
@@ -237,6 +327,114 @@ describe("Station Agent", () => {
     }
     for (const provider of Object.values(organizerProviders))
       expect(provider).not.toHaveBeenCalled();
+  });
+
+  it("mantém o Códice ausente por padrão sem exigir Bearer nesse namespace", async () => {
+    const { baseUrl } = await start();
+    for (const [method, path] of [
+      ["GET", "/api/codice/health"],
+      ["GET", "/api/codice/library"],
+      ["POST", "/api/codice/import"],
+    ]) {
+      const response = await fetch(`${baseUrl}${path}`, { method });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ ok: false, error: "not_found" });
+    }
+    expect((await authenticated(baseUrl, "/api/station/health")).status).toBe(200);
+    expect((await fetch(`${baseUrl}/api/station/health`)).status).toBe(401);
+  });
+
+  it("expõe somente leitura com bytes idênticos, IDs opacos e CORS exato", async () => {
+    const root = await mkdtemp(join(tmpdir(), "hestia-station-codice-"));
+    tempRoots.push(root);
+    const epub = Buffer.from("bytes epub de teste\n");
+    const pdf = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x74, 0x65, 0x73, 0x74, 0x65]);
+    await mkdir(join(root, "codice", "epub"), { recursive: true });
+    await mkdir(join(root, "codice", "pdf"), { recursive: true });
+    await writeFile(join(root, "codice", "epub", "Livro Teste.epub"), epub);
+    await writeFile(join(root, "codice", "pdf", "Documento.pdf"), pdf);
+    await writeFile(join(root, "codice", "pdf", "ignorado.exe"), "ignore");
+    const origin = "https://codice.example.test";
+    const { baseUrl } = await start({
+      storagePath: root,
+      codiceEnabled: true,
+      codiceCorsOrigin: origin,
+      organizerEnabled: false,
+      services: [],
+    });
+    const health = await fetch(`${baseUrl}/api/codice/health`);
+    expect(health.status).toBe(200);
+    expect(await health.json()).toMatchObject({
+      ok: true,
+      schemaVersion: 1,
+      libraryAvailable: true,
+      formats: ["epub", "pdf"],
+    });
+    expect(health.headers.get("access-control-allow-origin")).toBeNull();
+
+    const libraryResponse = await fetch(`${baseUrl}/api/codice/library`, {
+      headers: { Origin: origin },
+    });
+    expect(libraryResponse.status).toBe(200);
+    expect(libraryResponse.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(libraryResponse.headers.get("vary")).toContain("Origin");
+    const library = await libraryResponse.json();
+    expect(library.books).toHaveLength(2);
+    expect(library.books.map((book) => book.format).sort()).toEqual(["epub", "pdf"]);
+    const serialized = JSON.stringify(library);
+    expect(serialized).not.toContain(root);
+    expect(serialized).not.toContain("_fullPath");
+    expect(serialized).not.toContain("_relPath");
+    expect(serialized).not.toContain(token);
+    for (const book of library.books) {
+      expect(book.id).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(book.id).not.toContain("/");
+      expect(book.id).not.toContain(book.name);
+    }
+
+    const epubBook = library.books.find((book) => book.format === "epub");
+    const head = await fetch(`${baseUrl}${epubBook.url}`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe("application/epub+zip");
+    expect(head.headers.get("content-length")).toBe(String(epub.length));
+    expect(await head.text()).toBe("");
+    const get = await fetch(`${baseUrl}${epubBook.url}`);
+    expect(get.status).toBe(200);
+    expect(Buffer.from(await get.arrayBuffer())).toEqual(epub);
+    expect(get.headers.get("cache-control")).toBe("private, no-store");
+    expect(get.headers.get("x-content-type-options")).toBe("nosniff");
+
+    const wrongOrigin = await fetch(`${baseUrl}/api/codice/health`, {
+      headers: { Origin: "https://wrong.example" },
+    });
+    expect(wrongOrigin.status).toBe(403);
+    expect(await wrongOrigin.json()).toEqual({ ok: false, error: "origin_not_allowed" });
+    const preflight = await fetch(`${baseUrl}/api/codice/library`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: origin,
+        "Access-Control-Request-Private-Network": "true",
+      },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(preflight.headers.get("access-control-allow-methods")).toBe("GET, HEAD, OPTIONS");
+    expect(preflight.headers.get("access-control-allow-private-network")).toBe("true");
+    expect(preflight.headers.get("access-control-allow-headers")).not.toContain("Authorization");
+    expect((await fetch(`${baseUrl}/api/codice/library`, { method: "OPTIONS" })).status).toBe(403);
+
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      const response = await fetch(`${baseUrl}/api/codice/import`, {
+        method,
+        headers: { Origin: origin },
+      });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ ok: false, error: "not_found" });
+    }
+    expect((await fetch(`${baseUrl}/api/station/health`)).status).toBe(401);
+    expect((await authenticated(baseUrl, "/api/station/health")).status).toBe(200);
+    expect((await fetch(`${baseUrl}/api/station/organizer/runs`)).status).toBe(401);
+    expect((await authenticated(baseUrl, "/api/station/organizer/runs")).status).toBe(404);
   });
 
   it("rejeita Host não permitido pelo HTTP real", async () => {

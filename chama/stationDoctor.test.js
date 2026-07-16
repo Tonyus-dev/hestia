@@ -26,6 +26,8 @@ HESTIA_STATION_HOST='127.0.0.1'
 HESTIA_STATION_PORT="4518"
 HESTIA_STATION_TOKEN=$(id)
 HESTIA_STATION_ORGANIZER_ENABLED=1
+HESTIA_STATION_CODICE_ENABLED=1
+HESTIA_CODICE_CORS_ORIGIN=https://codice.example.test
 UNKNOWN=value
 `),
     ).toEqual({
@@ -33,6 +35,8 @@ UNKNOWN=value
       HESTIA_STATION_PORT: "4518",
       HESTIA_STATION_TOKEN: "$(id)",
       HESTIA_STATION_ORGANIZER_ENABLED: "1",
+      HESTIA_STATION_CODICE_ENABLED: "1",
+      HESTIA_CODICE_CORS_ORIGIN: "https://codice.example.test",
     });
     expect(() => parseStationEnv("INVALID")).toThrow(/linha 1 inválida/);
     expect(() => parseStationEnv("HESTIA_STATION_PORT=1\nHESTIA_STATION_PORT=2")).toThrow(
@@ -99,5 +103,52 @@ describe("Station Doctor operacional", () => {
     expect(result.lines).toContain("ok: health respondeu");
     expect(result.lines.at(-1)).toBe("Station Doctor: OK COM AVISOS");
     expect(result.lines.join("\n")).not.toContain(token);
+  });
+
+  it("valida health, CORS e formatos do Códice sem expor token ou livros", async () => {
+    const root = await mkdtemp(join(tmpdir(), "hestia-station-doctor-codice-"));
+    cleanup.push(() => rm(root, { recursive: true, force: true }));
+    const storagePath = join(root, "KALINE");
+    const dataDir = join(root, "data");
+    await mkdir(join(storagePath, "codice", "epub"), { recursive: true });
+    await mkdir(join(storagePath, "codice", "pdf"), { recursive: true });
+    await writeFile(join(storagePath, "codice", "epub", "segredo.epub"), "bytes");
+    await writeFile(join(storagePath, "codice", "pdf", "segredo.pdf"), "bytes");
+    const token = "doctor-codice-secret";
+    const origin = "https://codice.example.test";
+    const app = await startStationAgent({
+      host: "127.0.0.1",
+      port: 0,
+      token,
+      allowedHosts: "",
+      storagePath,
+      dataDir,
+      storageSources: [],
+      services: [],
+      codiceEnabled: true,
+      codiceCorsOrigin: origin,
+    });
+    cleanup.unshift(() => app.close());
+    const port = app.server.address().port;
+    const envFile = join(root, "station.env");
+    await writeFile(
+      envFile,
+      `HESTIA_STATION_HOST=127.0.0.1\nHESTIA_STATION_PORT=${port}\nHESTIA_STATION_TOKEN=${token}\nHESTIA_STATION_CODICE_ENABLED=1\nHESTIA_CODICE_CORS_ORIGIN=${origin}\nHESTIA_STORAGE_PATH=${storagePath}\nHESTIA_DATA_DIR=${dataDir}\n`,
+    );
+    const missingSystemctl = async () => {
+      const error = new Error("missing");
+      error.code = "ENOENT";
+      throw error;
+    };
+    const result = await runStationDoctor(
+      { envFile, timeoutMs: 5000 },
+      { processEnv: { NODE_ENV: "production" }, execFile: missingSystemctl },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.lines).toContain("ok: Códice read-only respondeu");
+    expect(result.lines).toContain("ok: CORS do Códice válido");
+    expect(result.lines).toContain("ok: formatos epub,pdf");
+    expect(result.lines.join("\n")).not.toContain(token);
+    expect(result.lines.join("\n")).not.toContain("segredo");
   });
 });

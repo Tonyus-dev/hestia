@@ -17,6 +17,8 @@ const RECOGNIZED_KEYS = new Set([
   "HESTIA_STATION_PORT",
   "HESTIA_STATION_TOKEN",
   "HESTIA_STATION_ORGANIZER_ENABLED",
+  "HESTIA_STATION_CODICE_ENABLED",
+  "HESTIA_CODICE_CORS_ORIGIN",
   "HESTIA_STATION_ALLOWED_HOSTS",
   "HESTIA_STORAGE_PATH",
   "HESTIA_KALINE_ROOT",
@@ -219,6 +221,46 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
     for (const item of services.services.services) {
       if (item.status === "active") ok(`${item.id} ativo`);
       else warn(`${item.id} ${item.status}`);
+    }
+  }
+
+  if (config.codiceEnabled) {
+    let response;
+    let body;
+    try {
+      response = await fetch(`http://${localHost(config.host)}:${config.port}/api/codice/health`, {
+        headers: { Accept: "application/json", Origin: config.codiceCorsOrigin },
+        redirect: "manual",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      body = await response.json();
+    } catch {
+      bad("Códice read-only falhou");
+      return finish();
+    }
+    const validContract =
+      response.status === 200 &&
+      body?.ok === true &&
+      body.schemaVersion === 1 &&
+      body.libraryAvailable === true &&
+      Array.isArray(body.formats);
+    if (!validContract) {
+      bad(
+        response.status === 503 ? "biblioteca do Códice indisponível" : "Códice read-only falhou",
+      );
+      return finish();
+    }
+    ok("Códice read-only respondeu");
+    if (response.headers.get("access-control-allow-origin") === config.codiceCorsOrigin) {
+      ok("CORS do Códice válido");
+    } else {
+      bad("CORS do Códice inválido");
+    }
+    const formats = body.formats.filter((format) => ["epub", "pdf", "txt"].includes(format));
+    if (!formats.includes("epub") || !formats.includes("pdf")) {
+      bad("biblioteca do Códice indisponível");
+    } else {
+      ok(`formatos ${formats.join(",")}`);
     }
   }
   return finish();

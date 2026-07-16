@@ -271,6 +271,18 @@ async function main() {
     );
     assertSanitized(result.raw, [token, root, stationStorage, stationData], path);
   }
+  for (const [method, path] of [
+    ["GET", "/api/codice/health"],
+    ["GET", "/api/codice/library"],
+    ["POST", "/api/codice/import"],
+  ]) {
+    const result = await requestJson(monitorBase, path, { method });
+    ensure(result.response.status === 404, `${path} desativado não retornou 404`);
+    ensure(
+      JSON.stringify(result.body) === JSON.stringify({ ok: false, error: "not_found" }),
+      `${path} desativado retornou body inesperado`,
+    );
+  }
   ensure((await readFile(source, "utf8")) === CONTENT, "monitor-only alterou o arquivo fonte");
   ensure((await readFile(sentinel, "utf8")) === "sentinel PR39\n", "monitor-only alterou sentinel");
   ensure(
@@ -286,6 +298,114 @@ async function main() {
   await stopProcess(monitorAgent);
   await assertPortsReusable([monitorPort]);
   console.log("ok: modo monitor-only sem rotas ou escrita do Organizer");
+
+  const codiceStorage = join(root, "codice-station", "KALINE");
+  const codiceData = join(root, "codice-station", "data");
+  const epubPath = join(codiceStorage, "codice", "epub", "teste.epub");
+  const pdfPath = join(codiceStorage, "codice", "pdf", "teste.pdf");
+  const epubBytes = Buffer.from("bytes epub do smoke\n");
+  const pdfBytes = Buffer.from("%PDF-bytes-smoke\n");
+  await mkdir(dirname(epubPath), { recursive: true });
+  await mkdir(dirname(pdfPath), { recursive: true });
+  await mkdir(codiceData, { recursive: true });
+  await writeFile(epubPath, epubBytes);
+  await writeFile(pdfPath, pdfBytes);
+  const codicePort = await freePort();
+  const codiceBase = `http://${HOST}:${codicePort}`;
+  const codiceOrigin = "https://codice.example.test";
+  const codiceEnvFile = join(root, "codice-station.env");
+  await writeFile(
+    codiceEnvFile,
+    `HESTIA_STATION_HOST=${HOST}\nHESTIA_STATION_PORT=${codicePort}\nHESTIA_STATION_TOKEN=${token}\nHESTIA_STATION_ORGANIZER_ENABLED=0\nHESTIA_STATION_CODICE_ENABLED=1\nHESTIA_CODICE_CORS_ORIGIN=${codiceOrigin}\nHESTIA_STORAGE_PATH=${codiceStorage}\nHESTIA_DATA_DIR=${codiceData}\n`,
+    { mode: 0o600 },
+  );
+  const codiceAgent = startProcess(
+    "Station Agent Códice read-only",
+    ["station.js"],
+    cleanEnvironment({
+      NODE_ENV: "production",
+      HOME: join(root, "codice-station"),
+      HESTIA_STATION_HOST: HOST,
+      HESTIA_STATION_PORT: String(codicePort),
+      HESTIA_STATION_TOKEN: token,
+      HESTIA_STATION_ORGANIZER_ENABLED: "0",
+      HESTIA_STATION_CODICE_ENABLED: "1",
+      HESTIA_CODICE_CORS_ORIGIN: codiceOrigin,
+      HESTIA_STORAGE_PATH: codiceStorage,
+      HESTIA_DATA_DIR: codiceData,
+    }),
+  );
+  await waitForHttp(`${codiceBase}/api/station/health`, {
+    headers: monitorAuth,
+    process: codiceAgent,
+    validate: (body) => body?.ok === true && body.service === "hestia-station-agent",
+  });
+  const codiceHealth = await requestJson(codiceBase, "/api/codice/health", {
+    headers: { Origin: codiceOrigin },
+  });
+  ensure(codiceHealth.response.status === 200, "health do Códice falhou");
+  ensure(codiceHealth.body.libraryAvailable === true, "biblioteca do Códice indisponível");
+  ensure(
+    codiceHealth.response.headers.get("access-control-allow-origin") === codiceOrigin,
+    "CORS do health do Códice inválido",
+  );
+  const codiceDoctor = await runCommand(
+    "Station Doctor Códice",
+    ["scripts/station-doctor.mjs", "--env-file", codiceEnvFile, "--timeout-ms", "10000"],
+    cleanEnvironment({ NODE_ENV: "production", HOME: join(root, "codice-station") }),
+  );
+  ensure(
+    codiceDoctor.stdout.toString("utf8").includes("ok: formatos epub,pdf"),
+    "Doctor não validou formatos do Códice",
+  );
+  assertSanitized(codiceDoctor.stdout.toString("utf8"), [token, root], "Doctor Códice");
+  const codiceLibrary = await requestJson(codiceBase, "/api/codice/library");
+  ensure(codiceLibrary.response.status === 200, "library do Códice falhou");
+  ensure(codiceLibrary.body.books?.length === 2, "library do Códice não listou EPUB/PDF");
+  assertSanitized(codiceLibrary.raw, [token, root, codiceStorage, codiceData], "library Códice");
+  const epubBook = codiceLibrary.body.books.find((book) => book.format === "epub");
+  ensure(epubBook, "EPUB ausente da library");
+  const head = await fetch(`${codiceBase}${epubBook.url}`, { method: "HEAD" });
+  ensure(head.status === 200, "HEAD do EPUB falhou");
+  ensure(
+    head.headers.get("content-length") === String(epubBytes.length),
+    "HEAD com tamanho errado",
+  );
+  ensure((await head.text()) === "", "HEAD devolveu body");
+  const get = await fetch(`${codiceBase}${epubBook.url}`);
+  ensure(get.status === 200, "GET do EPUB falhou");
+  ensure(Buffer.from(await get.arrayBuffer()).equals(epubBytes), "GET alterou bytes do EPUB");
+  const wrongOrigin = await requestJson(codiceBase, "/api/codice/health", {
+    headers: { Origin: "https://wrong.example.test" },
+  });
+  ensure(wrongOrigin.response.status === 403, "origem incorreta não foi bloqueada");
+  const preflight = await fetch(`${codiceBase}/api/codice/library`, {
+    method: "OPTIONS",
+    headers: { Origin: codiceOrigin },
+  });
+  ensure(preflight.status === 204, "preflight correto não retornou 204");
+  const importResult = await requestJson(codiceBase, "/api/codice/import", {
+    method: "POST",
+    headers: { Origin: codiceOrigin },
+  });
+  ensure(importResult.response.status === 404, "POST import não retornou 404");
+  const organizerDisabled = await requestJson(codiceBase, "/api/station/organizer/runs", {
+    bearer: token,
+  });
+  ensure(organizerDisabled.response.status === 404, "Organizer não permaneceu desativado");
+  ensure((await readFile(epubPath)).equals(epubBytes), "smoke alterou EPUB");
+  ensure((await readFile(pdfPath)).equals(pdfBytes), "smoke alterou PDF");
+  ensure(
+    JSON.stringify((await readdir(dirname(epubPath))).sort()) === JSON.stringify(["teste.epub"]),
+    "smoke criou arquivo inesperado em codice/epub",
+  );
+  ensure(
+    JSON.stringify((await readdir(dirname(pdfPath))).sort()) === JSON.stringify(["teste.pdf"]),
+    "smoke criou arquivo inesperado em codice/pdf",
+  );
+  await stopProcess(codiceAgent);
+  await assertPortsReusable([codicePort]);
+  console.log("ok: Códice read-only real sem autenticação administrativa ou escrita");
 
   let agent;
   let consoleProcess;
