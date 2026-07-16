@@ -30,7 +30,7 @@ node "$SOURCE_DIR/scripts/require-node.mjs" || fail "versão do Node incompatív
 BUILD_USER="${SUDO_USER:-}"
 [ -n "$BUILD_USER" ] && [ "$(id -u "$BUILD_USER")" -ne 0 ] || fail "execute via sudo a partir de um usuário não-root."
 BUILD_HOME="$(getent passwd "$BUILD_USER" | cut -d: -f6)"
-run_as_builder() { runuser -u "$BUILD_USER" -- env HOME="$BUILD_HOME" "$@"; }
+run_as_builder() { runuser -u "$BUILD_USER" -- env -u npm_config_cache -u NPM_CONFIG_CACHE HOME="$BUILD_HOME" "$@"; }
 
 if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
   hestia_assert_regular_config_file "$ENV_FILE"
@@ -126,6 +126,7 @@ hestia_safe_remove_runtime_path "$NEW_RUNTIME"
 hestia_safe_remove_runtime_path "$PREVIOUS_RUNTIME"
 install -d -m 0755 -o root -g root "$NEW_RUNTIME"
 cp -a "$STAGING/." "$NEW_RUNTIME/"
+chmod 0755 "$NEW_RUNTIME"
 chown -R root:root "$NEW_RUNTIME"
 [ -f "$NEW_RUNTIME/hestia.js" ] && [ -f "$NEW_RUNTIME/scripts/console-doctor.mjs" ] && [ -d "$NEW_RUNTIME/dist/server" ] || fail "novo runtime da Console incompleto."
 node --check "$NEW_RUNTIME/hestia.js" >/dev/null || fail "novo runtime da Console inválido."

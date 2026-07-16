@@ -31,6 +31,7 @@ EOF
 cat > "$BIN/npm" <<'EOF'
 #!/usr/bin/env bash
 [ "${HESTIA_FAKE_NPM_FAIL:-0}" = 1 ] && exit 20
+if [[ -v npm_config_cache || -v NPM_CONFIG_CACHE ]]; then exit 22; fi
 prefix=""
 while [ "$#" -gt 0 ]; do [ "$1" = "--prefix" ] && { prefix="$2"; shift 2; continue; }; shift; done
 [ -n "$prefix" ] && mkdir -p "$prefix/node_modules/fastify"
@@ -67,13 +68,14 @@ run_install() {
     HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" "$@" bash "$ROOT_DIR/scripts/install-station-agent.sh"
 }
 
-output="$(run_install desktop env 2>&1)"
+output="$(run_install desktop env npm_config_cache=/root/.npm NPM_CONFIG_CACHE=/root/.npm 2>&1)"
 grep -Fqx 'HESTIA_STATION_PORT=4518' "$TEST_ROOT/desktop/station.env" || fail "porta padrão incorreta"
 grep -Fqx 'HESTIA_STATION_ORGANIZER_ENABLED=0' "$TEST_ROOT/desktop/station.env" || fail "Organizer não foi desativado"
 grep -Fqx 'HESTIA_STATION_CODICE_ENABLED=0' "$TEST_ROOT/desktop/station.env" || fail "Códice não foi desativado"
 grep -Fqx '# HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>' "$TEST_ROOT/desktop/station.env" || fail "placeholder CORS incorreto"
 grep -Fq "WorkingDirectory=$TEST_ROOT/desktop/runtime" "$TEST_ROOT/desktop/station.service" || fail "unit depende do checkout"
 [ -f "$TEST_ROOT/desktop/runtime/station.js" ] && [ -d "$TEST_ROOT/desktop/runtime/node_modules/fastify" ] || fail "runtime mínimo não instalado"
+[ "$(stat -c '%a' "$TEST_ROOT/desktop/runtime")" = 755 ] || fail "runtime final não possui modo 755"
 [ ! -e "$TEST_ROOT/desktop/runtime/src" ] && [ ! -e "$TEST_ROOT/desktop/runtime/dist" ] || fail "frontend foi copiado"
 [[ "$output" != *"$TOKEN"* ]] || fail "token vazou"
 

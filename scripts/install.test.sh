@@ -29,6 +29,7 @@ EOF
 cat > "$BIN/npm" <<'EOF'
 #!/usr/bin/env bash
 [ "${HESTIA_FAKE_NPM_FAIL:-0}" = 1 ] && exit 20
+if [[ -v npm_config_cache || -v NPM_CONFIG_CACHE ]]; then exit 22; fi
 prefix=""
 while [ "$#" -gt 0 ]; do
   [ "$1" = "--prefix" ] && { prefix="$2"; shift 2; continue; }
@@ -72,8 +73,9 @@ run_install() {
     HESTIA_SYSTEMCTL_BIN="$BIN/systemctl" "$@" bash "$ROOT_DIR/scripts/install.sh"
 }
 
-output="$(run_install fresh env 2>&1)"
+output="$(run_install fresh env npm_config_cache=/root/.npm NPM_CONFIG_CACHE=/root/.npm 2>&1)"
 [ -f "$TEST_ROOT/fresh/runtime/hestia.js" ] && [ -f "$TEST_ROOT/fresh/runtime/dist/server/server.js" ] || fail "instalação nova incompleta"
+[ "$(stat -c '%a' "$TEST_ROOT/fresh/runtime")" = 755 ] || fail "runtime final não possui modo 755"
 grep -Fqx "WorkingDirectory=$TEST_ROOT/fresh/runtime" "$TEST_ROOT/fresh/console.service" || fail "unit depende do checkout"
 [ -s "$TEST_ROOT/runuser.log" ] || fail "npm não passou pelo usuário não-root"
 [[ "$output" != *"TOKEN_DESKTOP="* ]] || fail "env/token apareceu na saída"
