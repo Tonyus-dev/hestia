@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REAL_NODE="$(command -v node)"
 TEST_ROOT="$(mktemp -d /tmp/hestia-install-test-station-XXXXXX)"
 SOURCE="$TEST_ROOT/source"
 BIN="$TEST_ROOT/bin"
@@ -80,12 +81,12 @@ grep -Fq "WorkingDirectory=$TEST_ROOT/desktop/runtime" "$TEST_ROOT/desktop/stati
 [ ! -e "$TEST_ROOT/desktop/runtime/src" ] && [ ! -e "$TEST_ROOT/desktop/runtime/dist" ] || fail "frontend foi copiado"
 [[ "$output" != *"$TOKEN"* ]] || fail "token vazou"
 [[ "$output" != *"sb_publishable_"* ]] || fail "configuração sensível apareceu no log"
-/usr/bin/node --input-type=module -e "await import('file://$TEST_ROOT/desktop/runtime/chama/codiceAuth.js')" || fail "runtime não importou codiceAuth.js"
+"$REAL_NODE" --input-type=module -e "await import('file://$TEST_ROOT/desktop/runtime/chama/codiceAuth.js')" || fail "runtime não importou codiceAuth.js"
 rm -rf "$TEST_ROOT/desktop/runtime/node_modules"
 ln -s "$ROOT_DIR/node_modules" "$TEST_ROOT/desktop/runtime/node_modules"
-RUNTIME_PORT="$(/usr/bin/node -e 'const s=require("node:net").createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})')"
+RUNTIME_PORT="$("$REAL_NODE" -e 'const s=require("node:net").createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})')"
 env NODE_ENV=test HESTIA_STATION_HOST=127.0.0.1 HESTIA_STATION_PORT="$RUNTIME_PORT" HESTIA_STATION_TOKEN="$TOKEN" \
-  /usr/bin/node "$TEST_ROOT/desktop/runtime/station.js" > "$TEST_ROOT/runtime-import.log" 2>&1 &
+  "$REAL_NODE" "$TEST_ROOT/desktop/runtime/station.js" > "$TEST_ROOT/runtime-import.log" 2>&1 &
 RUNTIME_PID=$!
 RUNTIME_READY=0
 for _attempt in 1 2 3 4 5 6 7 8 9 10; do
