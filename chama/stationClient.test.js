@@ -4,6 +4,9 @@ import {
   fetchStationServicesStatus,
   fetchStationStorageStatus,
   fetchTvboxCodiceHealth,
+  fetchTvboxCodiceLibrary,
+  fetchDesktopOrganizerPlan,
+  fetchDesktopOrganizerRuns,
   hasLegacyStationConfig,
   resolveNamedStationConfig,
 } from "./stationClient.js";
@@ -223,5 +226,75 @@ describe("cliente reutilizável e isolado", () => {
     } else {
       expect(result).toMatchObject({ ok: false, code: "STATION_CONTRACT_MISMATCH" });
     }
+  });
+
+  it("valida o contrato da library sem inventar metadados", async () => {
+    const id = "a".repeat(43);
+    const body = {
+      schemaVersion: 1,
+      generatedAt: now(),
+      truncated: false,
+      limit: 5000,
+      books: [
+        {
+          id,
+          name: "fixture.pdf",
+          title: "fixture",
+          author: null,
+          format: "pdf",
+          size: 4,
+          modifiedAt: now(),
+          url: `/api/codice/books/${id}`,
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(body)),
+    );
+    const config = resolveNamedStationConfig("tvbox", {
+      HESTIA_TVBOX_BASE_URL: "https://tvbox.example",
+      HESTIA_TVBOX_TOKEN: "secret",
+    });
+    await expect(fetchTvboxCodiceLibrary(config)).resolves.toEqual(body);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ ...body, schemaVersion: 2 })),
+    );
+    await expect(fetchTvboxCodiceLibrary(config)).resolves.toMatchObject({
+      ok: false,
+      code: "STATION_CONTRACT_MISMATCH",
+    });
+  });
+
+  it("Organizer usa apenas desktop, autenticação e confirmação server-side", async () => {
+    const calls = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, init) => {
+        calls.push({ url: String(url), init });
+        return json(
+          String(url).endsWith("/plan")
+            ? {
+                ok: true,
+                schemaVersion: 1,
+                checkedAt: now(),
+                plan: { dryRun: true, items: [], summary: {} },
+              }
+            : { ok: true, schemaVersion: 1, checkedAt: now(), items: [] },
+        );
+      }),
+    );
+    const desktop = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    expect((await fetchDesktopOrganizerPlan(desktop)).ok).toBe(true);
+    expect((await fetchDesktopOrganizerRuns(desktop)).ok).toBe(true);
+    expect(calls[0].init.headers.Authorization).toBe("Bearer desktop-token");
+    expect(calls[0].init.headers["X-Hestia-Local-Confirm"]).toBe("organize");
+    await expect(
+      fetchDesktopOrganizerPlan({ ...desktop, stationId: "tvbox" }),
+    ).resolves.toMatchObject({ ok: false, code: "STATION_MISCONFIGURED" });
   });
 });

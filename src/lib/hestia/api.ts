@@ -190,7 +190,8 @@ export type LlmHealth = {
   runtime: string;
   models: string[];
   allowedModels: string[];
-  defaultModel: string;
+  availableModels: string[];
+  defaultModel: string | null;
   timeoutMs: number;
   error?: string;
   detail?: string;
@@ -277,6 +278,46 @@ export type StationCodiceHealth = {
   libraryAvailable: true;
   formats: Array<"epub" | "pdf" | "txt">;
   checkedAt: string;
+};
+
+export type OrganizerPlan = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  plan: {
+    planId: string;
+    generatedAt: string;
+    dryRun: true;
+    requiresExtraConfirmation: boolean;
+    planned: number;
+    items: Array<{
+      id: string;
+      source: { kind: string; label: string; relativePath: string };
+      target: { relativePath: string };
+      action: string;
+      reason: string | null;
+      risk: string;
+      status: string;
+      size: number;
+      ignoredReason: string | null;
+    }>;
+    summary: {
+      total: number;
+      planned: number;
+      conflicts: number;
+      ignored: number;
+      quarantined: number;
+      byExtension: Record<string, number>;
+      byTargetArea: Record<string, number>;
+    };
+  };
+};
+
+export type OrganizerRuns = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  items: Array<{ runId: string; status: string }>;
 };
 
 export type Config = {
@@ -520,6 +561,8 @@ async function safePost<T>(
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
   llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
+  llmChat: (message: string, model: string) =>
+    safePost<LlmChatResult>("/api/llm/chat", { message, model, facet: "kaline" }, {}, 90000),
   hermesStatus: () => safeFetch<HermesStatus>("/api/hermes/status"),
   server: () => safeFetch<ServerStatus>("/api/server/status"),
   hardwareStatus: () => safeFetch<HardwareStatus>("/api/hardware/status"),
@@ -537,6 +580,11 @@ export const hestiaApi = {
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
+  tvboxCodiceLibrary: () => safeFetch<CodiceLibrary>("/api/stations/tvbox/codice/library"),
+  tvboxCodiceBookUrl: (bookId: string) =>
+    hestiaApi.absoluteUrl(`/api/stations/tvbox/codice/books/${encodeURIComponent(bookId)}`),
+  desktopOrganizerPlan: () => safePost<OrganizerPlan>("/api/stations/desktop/organizer/plan", {}),
+  desktopOrganizerRuns: () => safeFetch<OrganizerRuns>("/api/stations/desktop/organizer/runs"),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
