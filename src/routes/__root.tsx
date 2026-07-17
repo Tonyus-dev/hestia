@@ -13,7 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
-import { InstallPromptProvider } from "@/components/hestia/InstallPromptContext";
+import { InstallPromptProvider } from "@/components/hestia/InstallPromptProvider";
 
 function NotFoundComponent() {
   return (

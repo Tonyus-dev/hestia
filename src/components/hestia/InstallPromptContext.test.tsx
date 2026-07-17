@@ -3,7 +3,8 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InstallHestiaButton } from "./InstallHestiaButton";
-import { InstallPromptProvider, type InstallPromptEvent } from "./InstallPromptContext";
+import { type InstallPromptEvent } from "./InstallPromptContext";
+import { InstallPromptProvider } from "./InstallPromptProvider";
 
 function installEvent(outcome: "accepted" | "dismissed" = "accepted") {
   const event = new Event("beforeinstallprompt", { cancelable: true }) as InstallPromptEvent;

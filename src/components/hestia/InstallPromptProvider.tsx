@@ -1,16 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-export type InstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-};
-
-type InstallPromptState = {
-  promptEvent: InstallPromptEvent | null;
-  install: () => Promise<"accepted" | "dismissed" | null>;
-};
-
-const InstallPromptContext = createContext<InstallPromptState | null>(null);
+import {
+  InstallPromptContext,
+  type InstallPromptEvent,
+  type InstallPromptState,
+} from "./InstallPromptContext";
 
 function isStandalone() {
   return (
@@ -53,10 +47,4 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
   );
 
   return <InstallPromptContext.Provider value={value}>{children}</InstallPromptContext.Provider>;
-}
-
-export function useInstallPrompt() {
-  const value = useContext(InstallPromptContext);
-  if (!value) throw new Error("useInstallPrompt requer InstallPromptProvider");
-  return value;
 }
