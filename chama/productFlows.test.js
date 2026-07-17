@@ -34,14 +34,6 @@ describe("fluxos de produto da Console", () => {
     expect(existsSync(join(root, "public/service-worker.js"))).toBe(false);
   });
 
-  it("Códice ativo usa somente a API da TV Box e não expõe importação", () => {
-    const route = readFileSync(join(root, "src/routes/_station.codice.tsx"), "utf8");
-    expect(route).toContain("hestiaApi.tvboxCodiceLibrary");
-    expect(route).toContain("hestiaApi.tvboxCodiceBookUrl");
-    for (const legacy of ["hestiaLegacyApi", "codiceImport", "LibreOffice", ".docx", "FileUp"])
-      expect(route).not.toContain(legacy);
-  });
-
   it("Kaline Rede abre fluxos na Console e mantém APIs somente copiáveis", () => {
     const rede = readFileSync(join(root, "public/rede/index.html"), "utf8");
     expect(rede).toMatch(/route:\s*"\/codice"/);

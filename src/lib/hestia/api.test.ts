@@ -295,22 +295,17 @@ describe("hestiaApi — fluxos remotos fixos", () => {
     vi.restoreAllMocks();
   });
 
-  it("usa rotas fixas para Códice e Organizer sem aceitar destino", async () => {
+  it("usa rotas fixas para Organizer sem aceitar destino", async () => {
     const fetchSpy = mockFetch(
       () => new Response(JSON.stringify({ ok: true, items: [], books: [] }), { status: 200 }),
     );
-    await hestiaApi.tvboxCodiceLibrary();
     await hestiaApi.desktopOrganizerRuns();
     await hestiaApi.desktopOrganizerPlan();
     expect(fetchSpy.mock.calls.map((call) => String(call[0]))).toEqual([
-      "http://localhost:8080/api/stations/tvbox/codice/library",
       "http://localhost:8080/api/stations/desktop/organizer/runs",
       "http://localhost:8080/api/stations/desktop/organizer/plan",
     ]);
-    expect(hestiaApi.tvboxCodiceBookUrl("abc/../segredo")).toContain(
-      "/api/stations/tvbox/codice/books/abc%2F..%2Fsegredo",
-    );
-    expect(JSON.parse(String(fetchSpy.mock.calls[2][1]?.body))).toEqual({});
+    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toEqual({});
   });
 });
 

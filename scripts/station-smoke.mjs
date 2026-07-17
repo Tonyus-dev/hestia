@@ -214,6 +214,8 @@ async function main() {
   sanitized(codiceHealth.text, secrets, "Códice health");
   for (const path of [
     "/api/stations/desktop/codice/health",
+    "/api/stations/tvbox/codice/library",
+    "/api/stations/tvbox/codice/books/inexistente",
     "/api/stations/outro/health",
     "/api/station/health",
     "/api/station/organizer/runs",
@@ -258,16 +260,15 @@ async function main() {
     "token do desktop autenticou na TV Box",
   );
 
-  const library = await json(consoleBase, "/api/stations/tvbox/codice/library");
-  ensure(library.response.status === 200, "Códice library pela Console falhou");
+  const library = await json(tvboxBase, "/api/codice/library");
+  ensure(library.response.status === 200, "Códice library na Station falhou");
   sanitized(library.text, secrets, "Códice library");
   for (const [format, bytes] of [
     ["epub", epub],
     ["pdf", pdf],
   ]) {
     const book = library.body.books.find((item) => item.format === format);
-    const proxyPath = `/api/stations/tvbox/codice/books/${book.id}`;
-    const head = await fetch(`${consoleBase}${proxyPath}`, { method: "HEAD" });
+    const head = await fetch(`${tvboxBase}${book.url}`, { method: "HEAD" });
     ensure(
       head.status === 200 && (await head.arrayBuffer()).byteLength === 0,
       `${format} HEAD falhou`,
@@ -276,9 +277,8 @@ async function main() {
       Number(head.headers.get("content-length")) === bytes.length,
       `${format} HEAD perdeu tamanho`,
     );
-    const response = await fetch(`${consoleBase}${proxyPath}`);
+    const response = await fetch(`${tvboxBase}${book.url}`);
     ensure(Buffer.from(await response.arrayBuffer()).equals(bytes), `${format} foi alterado`);
-    ensure(response.headers.get("cache-control") === "no-store", `${format} permitiu cache`);
   }
   ensure(
     (await readFile(epubPath)).equals(epub) && (await readFile(pdfPath)).equals(pdf),
@@ -288,7 +288,7 @@ async function main() {
   await unlink(txtPath);
   ensure(
     (
-      await fetch(`${consoleBase}/api/stations/tvbox/codice/books/${removedBook.id}`, {
+      await fetch(`${tvboxBase}/api/codice/books/${removedBook.id}`, {
         redirect: "manual",
       })
     ).status === 404,
@@ -340,7 +340,7 @@ async function main() {
   await rm(root, { recursive: true, force: true });
   root = undefined;
   console.log(
-    "Station Smoke: OK — Console + desktop + TV Box, Organizer dry-run e Códice streaming read-only",
+    "Station Smoke: OK — Console + desktop + TV Box, Organizer dry-run e Códice read-only direto na Station",
   );
 }
 

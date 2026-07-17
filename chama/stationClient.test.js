@@ -4,7 +4,6 @@ import {
   fetchStationServicesStatus,
   fetchStationStorageStatus,
   fetchTvboxCodiceHealth,
-  fetchTvboxCodiceLibrary,
   fetchDesktopOrganizerPlan,
   fetchDesktopOrganizerRuns,
   hasLegacyStationConfig,
@@ -226,45 +225,6 @@ describe("cliente reutilizável e isolado", () => {
     } else {
       expect(result).toMatchObject({ ok: false, code: "STATION_CONTRACT_MISMATCH" });
     }
-  });
-
-  it("valida o contrato da library sem inventar metadados", async () => {
-    const id = "a".repeat(43);
-    const body = {
-      schemaVersion: 1,
-      generatedAt: now(),
-      truncated: false,
-      limit: 5000,
-      books: [
-        {
-          id,
-          name: "fixture.pdf",
-          title: "fixture",
-          author: null,
-          format: "pdf",
-          size: 4,
-          modifiedAt: now(),
-          url: `/api/codice/books/${id}`,
-        },
-      ],
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(body)),
-    );
-    const config = resolveNamedStationConfig("tvbox", {
-      HESTIA_TVBOX_BASE_URL: "https://tvbox.example",
-      HESTIA_TVBOX_TOKEN: "secret",
-    });
-    await expect(fetchTvboxCodiceLibrary(config)).resolves.toEqual(body);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ ...body, schemaVersion: 2 })),
-    );
-    await expect(fetchTvboxCodiceLibrary(config)).resolves.toMatchObject({
-      ok: false,
-      code: "STATION_CONTRACT_MISMATCH",
-    });
   });
 
   it("Organizer usa apenas desktop, autenticação e confirmação server-side", async () => {

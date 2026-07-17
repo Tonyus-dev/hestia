@@ -37,25 +37,6 @@ const codice = {
   libraryAvailable: true,
   formats: ["epub", "pdf"],
 };
-const bookId = "a".repeat(43);
-const library = {
-  schemaVersion: 1,
-  generatedAt: checkedAt,
-  truncated: false,
-  limit: 5000,
-  books: [
-    {
-      id: bookId,
-      name: "fixture.epub",
-      title: "fixture",
-      author: null,
-      format: "epub",
-      size: 5,
-      modifiedAt: checkedAt,
-      url: `/api/codice/books/${bookId}`,
-    },
-  ],
-};
 const organizerPlan = {
   ok: true,
   schemaVersion: 1,
@@ -105,60 +86,6 @@ describe("rotas plurais da Console", () => {
     expect(
       (await server.inject({ method: "POST", url: "/api/station/organizer/plan" })).statusCode,
     ).toBe(404);
-  });
-
-  it("proxya library, HEAD e GET da TV Box sem token, path arbitrário ou buffer alterado", async () => {
-    const calls = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url, init = {}) => {
-        calls.push({ url: String(url), init });
-        const path = new URL(url).pathname;
-        if (path.endsWith("/library")) return response(library);
-        return new Response(init.method === "HEAD" ? null : new Uint8Array([0, 1, 2, 255]), {
-          status: 200,
-          headers: {
-            "content-type": "application/epub+zip",
-            "content-length": "4",
-            "content-disposition": 'inline; filename="fixture.epub"',
-            etag: path.includes("safe-header") ? "etag-sem-aspas" : '"safe"',
-          },
-        });
-      }),
-    );
-    const server = app({
-      NODE_ENV: "test",
-      HESTIA_TVBOX_BASE_URL: "http://127.0.0.1:4519",
-      HESTIA_TVBOX_TOKEN: "tvbox-secret",
-    });
-    const listed = await server.inject("/api/stations/tvbox/codice/library");
-    expect(listed.statusCode).toBe(200);
-    expect(listed.json().books[0].id).toBe(bookId);
-    const head = await server.inject({
-      method: "HEAD",
-      url: `/api/stations/tvbox/codice/books/${bookId}`,
-    });
-    expect(head.statusCode).toBe(200);
-    expect(head.body).toBe("");
-    expect(head.headers["content-type"]).toBe("application/epub+zip");
-    const get = await server.inject(`/api/stations/tvbox/codice/books/${bookId}`);
-    expect(get.statusCode).toBe(200);
-    expect([...get.rawPayload]).toEqual([0, 1, 2, 255]);
-    expect(get.headers["cache-control"]).toBe("no-store");
-    expect(get.headers.etag).toBe('"safe"');
-    expect(calls.every(({ init }) => !init.headers?.Authorization)).toBe(true);
-    expect(calls.every(({ url }) => !url.includes("tvbox-secret"))).toBe(true);
-    const before = calls.length;
-    expect(
-      (await server.inject("/api/stations/tvbox/codice/books/../../etc/passwd")).statusCode,
-    ).not.toBe(200);
-    expect(calls).toHaveLength(before);
-
-    const unsafeHeader = await server.inject(
-      `/api/stations/tvbox/codice/books/${"safe-header".padEnd(43, "a")}`,
-    );
-    expect(unsafeHeader.statusCode).toBe(200);
-    expect(unsafeHeader.headers.etag).toBeUndefined();
   });
 
   it("proxya apenas plan e runs do Organizer desktop com Bearer server-side", async () => {

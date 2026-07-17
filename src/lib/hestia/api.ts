@@ -580,9 +580,6 @@ export const hestiaApi = {
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
-  tvboxCodiceLibrary: () => safeFetch<CodiceLibrary>("/api/stations/tvbox/codice/library"),
-  tvboxCodiceBookUrl: (bookId: string) =>
-    hestiaApi.absoluteUrl(`/api/stations/tvbox/codice/books/${encodeURIComponent(bookId)}`),
   desktopOrganizerPlan: () => safePost<OrganizerPlan>("/api/stations/desktop/organizer/plan", {}),
   desktopOrganizerRuns: () => safeFetch<OrganizerRuns>("/api/stations/desktop/organizer/runs"),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */

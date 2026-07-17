@@ -32,11 +32,9 @@ const HEALTH_PATH = "/api/station/health";
 const STORAGE_PATH = "/api/station/storage/status";
 const SERVICES_PATH = "/api/station/services/status";
 const CODICE_HEALTH_PATH = "/api/codice/health";
-const CODICE_LIBRARY_PATH = "/api/codice/library";
 const ORGANIZER_PLAN_PATH = "/api/station/organizer/plan";
 const ORGANIZER_RUNS_PATH = "/api/station/organizer/runs";
 const MAX_BODY_BYTES = 64 * 1024;
-const MAX_LIBRARY_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_ORGANIZER_BODY_BYTES = 4 * 1024 * 1024;
 const SERVICE = "hestia-station-agent";
 const STORAGE_STATUSES = new Set(["ok", "missing", "unavailable"]);
@@ -299,57 +297,6 @@ function validateCodiceHealth(body) {
   };
 }
 
-function validateCodiceLibrary(body) {
-  if (
-    !isPlainObject(body) ||
-    body.schemaVersion !== 1 ||
-    !isValidIsoDate(body.generatedAt) ||
-    typeof body.truncated !== "boolean" ||
-    !Number.isInteger(body.limit) ||
-    body.limit < 0 ||
-    !Array.isArray(body.books)
-  )
-    return null;
-  const books = [];
-  const seen = new Set();
-  for (const book of body.books) {
-    if (
-      !isPlainObject(book) ||
-      typeof book.id !== "string" ||
-      !/^[A-Za-z0-9_-]{43}$/.test(book.id) ||
-      seen.has(book.id) ||
-      typeof book.name !== "string" ||
-      !book.name ||
-      typeof book.title !== "string" ||
-      !book.title ||
-      (book.author !== null && typeof book.author !== "string") ||
-      !["epub", "pdf", "txt"].includes(book.format) ||
-      !validNonNegativeNumber(book.size) ||
-      !isValidIsoDate(book.modifiedAt) ||
-      book.url !== `/api/codice/books/${book.id}`
-    )
-      return null;
-    seen.add(book.id);
-    books.push({
-      id: book.id,
-      name: book.name,
-      title: book.title,
-      author: book.author,
-      format: book.format,
-      size: book.size,
-      modifiedAt: book.modifiedAt,
-      url: book.url,
-    });
-  }
-  return {
-    schemaVersion: 1,
-    generatedAt: body.generatedAt,
-    truncated: body.truncated,
-    limit: body.limit,
-    books,
-  };
-}
-
 function validateOrganizerPlan(body) {
   if (
     !isPlainObject(body) ||
@@ -600,66 +547,6 @@ export async function fetchTvboxCodiceHealth(stationConfig) {
     );
   } finally {
     clearTimeout(timer);
-  }
-}
-
-export async function fetchTvboxCodiceLibrary(stationConfig) {
-  if (stationConfig?.stationId !== "tvbox")
-    return failure("misconfigured", STATION_CODES.MISCONFIGURED);
-  const result = await fetchJsonResource(
-    CODICE_LIBRARY_PATH,
-    validateCodiceLibrary,
-    stationConfig,
-    {
-      maxBytes: MAX_LIBRARY_BODY_BYTES,
-    },
-  );
-  if (!result.ok) return result;
-  return result.resource;
-}
-
-export function isValidCodiceBookId(bookId) {
-  return typeof bookId === "string" && /^[A-Za-z0-9_-]{43}$/.test(bookId);
-}
-
-export async function fetchTvboxCodiceBook(bookId, method, stationConfig) {
-  const cfg = stationConfig;
-  if (cfg?.stationId !== "tvbox" || !isValidCodiceBookId(bookId))
-    return failure("misconfigured", STATION_CODES.MISCONFIGURED);
-  if (!cfg.configured) return failure("not_configured", STATION_CODES.NOT_CONFIGURED);
-  if (!cfg.valid) return failure("misconfigured", cfg.errorCode || STATION_CODES.MISCONFIGURED);
-  if (method !== "GET" && method !== "HEAD") throw new TypeError("método Códice inválido");
-  const path = `/api/codice/books/${bookId}`;
-  const finalUrl = new URL(path, cfg.baseUrl);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
-  try {
-    const response = await fetch(finalUrl, {
-      method,
-      redirect: "manual",
-      signal: controller.signal,
-    });
-    if (response.status >= 300 && response.status < 400) {
-      clearTimeout(timer);
-      return failure("incompatible", STATION_CODES.REDIRECT_REJECTED);
-    }
-    return {
-      ok: true,
-      response,
-      cleanup() {
-        clearTimeout(timer);
-      },
-      abort() {
-        controller.abort();
-        clearTimeout(timer);
-      },
-    };
-  } catch (error) {
-    clearTimeout(timer);
-    return failure(
-      "unavailable",
-      controller.signal.aborted ? STATION_CODES.TIMEOUT : STATION_CODES.UNAVAILABLE,
-    );
   }
 }
 
