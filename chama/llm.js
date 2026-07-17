@@ -1,7 +1,13 @@
 import { config } from "./config.js";
 
-export const ALLOWED_MODELS = ["qwen2.5:0.5b", "qwen3.5-0.8b", "qwen3.5-0.8b:latest"];
-export const DEFAULT_MODEL = "qwen3.5-0.8b";
+export const ALLOWED_MODELS = [
+  "qwen2.5:3b",
+  "qwen2.5:1.5b",
+  "qwen2.5:0.5b",
+  "qwen3.5-0.8b",
+  "qwen3.5-0.8b:latest",
+];
+export const DEFAULT_MODEL = "qwen2.5:3b";
 
 const OLLAMA_UNAVAILABLE_DETAIL = "Ollama não respondeu em 127.0.0.1:11434";
 const OLLAMA_TIMEOUT_DETAIL = "Tempo esgotado ao consultar o Ollama local";
@@ -94,12 +100,15 @@ export async function getLlmHealth() {
     const models = Array.isArray(data.models)
       ? data.models.map((m) => m?.name).filter((name) => typeof name === "string")
       : [];
+    const availableModels = ALLOWED_MODELS.filter((model) => models.includes(model));
+    const defaultModel = availableModels[0] || null;
     return {
       ok: true,
       runtime: "ollama",
       models,
       allowedModels: ALLOWED_MODELS,
-      defaultModel: DEFAULT_MODEL,
+      availableModels,
+      defaultModel,
       timeoutMs: healthTimeoutMs(),
       checkedAt: checkedAt(),
     };
@@ -109,7 +118,8 @@ export async function getLlmHealth() {
       runtime: "ollama",
       models: [],
       allowedModels: ALLOWED_MODELS,
-      defaultModel: DEFAULT_MODEL,
+      availableModels: [],
+      defaultModel: null,
       timeoutMs: healthTimeoutMs(),
       error: "Ollama indisponível",
       detail: err?.code === "ELLM_TIMEOUT" ? OLLAMA_TIMEOUT_DETAIL : OLLAMA_UNAVAILABLE_DETAIL,
