@@ -385,6 +385,7 @@ export type StorageScan = {
 };
 
 const DEFAULT_TIMEOUT_MS = 3500;
+const ORGANIZER_UI_TIMEOUT_MS = 610_000;
 const CHAMA_PORT = 4517;
 
 /**
@@ -588,7 +589,13 @@ export const hestiaApi = {
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
-  desktopOrganizerPlan: () => safePost<OrganizerPlan>("/api/stations/desktop/organizer/plan", {}),
+  desktopOrganizerPlan: () =>
+    safePost<OrganizerPlan>(
+      "/api/stations/desktop/organizer/plan",
+      {},
+      {},
+      ORGANIZER_UI_TIMEOUT_MS,
+    ),
   desktopOrganizerRuns: () => safeFetch<OrganizerRuns>("/api/stations/desktop/organizer/runs"),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
