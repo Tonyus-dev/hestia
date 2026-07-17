@@ -18,6 +18,14 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
 const token = "station-test-token";
+const userToken = "supabase-user-token";
+const allowedUserId = "11111111-1111-4111-8111-111111111111";
+const codiceOrigin = "https://codice.example.test";
+const codiceRuntime = {
+  codiceSupabaseUrl: "https://project.example",
+  codiceSupabasePublishableKey: "sb_publishable_synthetic_test_key",
+  codiceAllowedUserIds: new Set([allowedUserId]),
+};
 const apps = [];
 const tempRoots = [];
 
@@ -26,16 +34,20 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function start(overrides = {}, providers) {
+async function start(overrides = {}, providers = {}) {
   const app = await startStationAgent(
     {
       host: "127.0.0.1",
       port: 0,
       token,
       allowedHosts: "",
+      ...codiceRuntime,
       ...overrides,
     },
-    providers,
+    {
+      fetch: providers.fetch || (async () => Response.json({ id: allowedUserId }, { status: 200 })),
+      ...providers,
+    },
   );
   apps.push(app);
   const { port } = app.server.address();
@@ -100,6 +112,9 @@ describe("Station Agent", () => {
         NODE_ENV: "production",
         HESTIA_STATION_CODICE_ENABLED: "1",
         HESTIA_CODICE_CORS_ORIGIN: "https://codice.example.test",
+        HESTIA_CODICE_SUPABASE_URL: "https://project.example",
+        HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+        HESTIA_CODICE_ALLOWED_USER_IDS: allowedUserId,
       }),
     ).toMatchObject({
       codiceEnabled: true,
@@ -117,6 +132,9 @@ describe("Station Agent", () => {
       HESTIA_STATION_TOKEN: token,
       HESTIA_STATION_CODICE_ENABLED: "1",
       NODE_ENV: "production",
+      HESTIA_CODICE_SUPABASE_URL: "https://project.example",
+      HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+      HESTIA_CODICE_ALLOWED_USER_IDS: allowedUserId,
     };
     for (const origin of [
       undefined,
@@ -174,6 +192,57 @@ describe("Station Agent", () => {
         HESTIA_CODICE_CORS_ORIGIN: "https://codice.example.test",
       }),
     ).toThrow(/exige HESTIA_STATION_HOST em loopback/);
+  });
+
+  it("exige e valida a configuração Supabase e a allowlist por inteiro", () => {
+    const base = {
+      HESTIA_STATION_TOKEN: token,
+      HESTIA_STATION_CODICE_ENABLED: "1",
+      HESTIA_CODICE_CORS_ORIGIN: codiceOrigin,
+      HESTIA_CODICE_SUPABASE_URL: "https://project.example",
+      HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+      HESTIA_CODICE_ALLOWED_USER_IDS: `${allowedUserId}, ${allowedUserId}`,
+      NODE_ENV: "production",
+    };
+    const resolved = resolveStationAgentConfig(base);
+    expect(resolved.codiceSupabaseUrl).toBe("https://project.example");
+    expect([...resolved.codiceAllowedUserIds]).toEqual([allowedUserId]);
+    for (const key of [
+      "HESTIA_CODICE_SUPABASE_URL",
+      "HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY",
+      "HESTIA_CODICE_ALLOWED_USER_IDS",
+    ]) {
+      expect(() => resolveStationAgentConfig({ ...base, [key]: undefined })).toThrow(key);
+    }
+    for (const url of [
+      "https://project.example/auth/v1",
+      "https://project.example?x=1",
+      "https://project.example#x",
+      "https://user:pass@project.example",
+      "http://project.example",
+    ]) {
+      expect(() => resolveStationAgentConfig({ ...base, HESTIA_CODICE_SUPABASE_URL: url })).toThrow(
+        /HESTIA_CODICE_SUPABASE_URL/,
+      );
+    }
+    for (const hostname of ["localhost", "127.0.0.1", "[::1]"]) {
+      expect(
+        resolveStationAgentConfig({
+          ...base,
+          NODE_ENV: "test",
+          HESTIA_CODICE_SUPABASE_URL: `http://${hostname}`,
+        }).codiceSupabaseUrl,
+      ).toBe(`http://${hostname}`);
+    }
+    for (const key of ["sb_secret_test", "service_role", "legacy-jwt", "publishable"])
+      expect(() =>
+        resolveStationAgentConfig({ ...base, HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY: key }),
+      ).toThrow(/sb_publishable_/);
+    for (const ids of ["", "*", `${allowedUserId},`, `not-a-uuid,${allowedUserId}`])
+      expect(() =>
+        resolveStationAgentConfig({ ...base, HESTIA_CODICE_ALLOWED_USER_IDS: ids }),
+      ).toThrow(/HESTIA_CODICE_ALLOWED_USER_IDS/);
+    expect(resolveStationAgentConfig({ HESTIA_STATION_TOKEN: token }).codiceEnabled).toBe(false);
   });
 
   it("falha imediatamente sem token e protege bind não-loopback", () => {
@@ -355,7 +424,7 @@ describe("Station Agent", () => {
     await writeFile(join(root, "codice", "epub", "Livro Teste.epub"), epub);
     await writeFile(join(root, "codice", "pdf", "Documento.pdf"), pdf);
     await writeFile(join(root, "codice", "pdf", "ignorado.exe"), "ignore");
-    const origin = "https://codice.example.test";
+    const origin = codiceOrigin;
     const { baseUrl } = await start({
       storagePath: root,
       codiceEnabled: true,
@@ -364,24 +433,17 @@ describe("Station Agent", () => {
       services: [],
     });
     const health = await fetch(`${baseUrl}/api/codice/health`);
-    expect(health.status).toBe(200);
-    expect(await health.json()).toMatchObject({
-      ok: true,
-      schemaVersion: 1,
-      libraryAvailable: true,
-      formats: ["epub", "pdf"],
-    });
-    expect(health.headers.get("access-control-allow-origin")).toBeNull();
+    expect(health.status).toBe(403);
 
     const corsHealth = await fetch(`${baseUrl}/api/codice/health`, {
-      headers: { Origin: origin },
+      headers: { Origin: origin, Authorization: `Bearer ${userToken}` },
     });
     expect(corsHealth.status).toBe(200);
     expect(corsHealth.headers.get("access-control-allow-origin")).toBe(origin);
     expect(corsHealth.headers.get("access-control-allow-credentials")).toBeNull();
 
     const libraryResponse = await fetch(`${baseUrl}/api/codice/library`, {
-      headers: { Origin: origin },
+      headers: { Origin: origin, Authorization: `Bearer ${userToken}` },
     });
     expect(libraryResponse.status).toBe(200);
     expect(libraryResponse.headers.get("access-control-allow-origin")).toBe(origin);
@@ -409,7 +471,7 @@ describe("Station Agent", () => {
       expect(book).toBeDefined();
       const head = await fetch(`${baseUrl}${book.url}`, {
         method: "HEAD",
-        headers: { Origin: origin },
+        headers: { Origin: origin, Authorization: `Bearer ${userToken}` },
       });
       expect(head.status).toBe(200);
       expect(await head.text()).toBe("");
@@ -417,7 +479,9 @@ describe("Station Agent", () => {
       expect(head.headers.get("content-length")).toBe(String(testCase.bytes.length));
       expect(head.headers.get("access-control-allow-credentials")).toBeNull();
 
-      const get = await fetch(`${baseUrl}${book.url}`, { headers: { Origin: origin } });
+      const get = await fetch(`${baseUrl}${book.url}`, {
+        headers: { Origin: origin, Authorization: `Bearer ${userToken}` },
+      });
       expect(get.status).toBe(200);
       expect(Buffer.from(await get.arrayBuffer())).toEqual(testCase.bytes);
       expect(get.headers.get("cache-control")).toBe("private, no-store");
@@ -441,14 +505,16 @@ describe("Station Agent", () => {
     expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
     expect(preflight.headers.get("access-control-allow-methods")).toBe("GET, HEAD, OPTIONS");
     expect(preflight.headers.get("access-control-allow-private-network")).toBe("true");
-    expect(preflight.headers.get("access-control-allow-headers")).not.toContain("Authorization");
+    expect(preflight.headers.get("access-control-allow-headers")).toBe(
+      "Authorization, Content-Type",
+    );
     expect(preflight.headers.get("access-control-allow-credentials")).toBeNull();
     expect((await fetch(`${baseUrl}/api/codice/library`, { method: "OPTIONS" })).status).toBe(403);
 
     for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
       const response = await fetch(`${baseUrl}/api/codice/import`, {
         method,
-        headers: { Origin: origin },
+        headers: { Origin: origin, Authorization: `Bearer ${userToken}` },
       });
       expect(response.status).toBe(404);
       expect(await response.json()).toEqual({ ok: false, error: "not_found" });
@@ -457,6 +523,55 @@ describe("Station Agent", () => {
     expect((await authenticated(baseUrl, "/api/station/health")).status).toBe(200);
     expect((await fetch(`${baseUrl}/api/station/organizer/runs`)).status).toBe(401);
     expect((await authenticated(baseUrl, "/api/station/organizer/runs")).status).toBe(404);
+  });
+
+  it("isola Supabase Auth do token administrativo e reutiliza o health interno", async () => {
+    const authFetch = vi.fn(async (_url, init) => {
+      if (init.headers.Authorization === `Bearer ${userToken}`)
+        return Response.json({ id: allowedUserId });
+      if (init.headers.Authorization === "Bearer denied-token")
+        return Response.json({ id: "22222222-2222-4222-8222-222222222222" });
+      return new Response(null, { status: 401 });
+    });
+    const root = await mkdtemp(join(tmpdir(), "hestia-station-auth-"));
+    tempRoots.push(root);
+    await mkdir(join(root, "codice", "epub"), { recursive: true });
+    await mkdir(join(root, "codice", "pdf"), { recursive: true });
+    await writeFile(join(root, "codice", "epub", "fixture.epub"), "epub");
+    await writeFile(join(root, "codice", "pdf", "fixture.pdf"), "pdf");
+    const { baseUrl } = await start(
+      { storagePath: root, codiceEnabled: true, codiceCorsOrigin: codiceOrigin },
+      { fetch: authFetch },
+    );
+    const codice = (authorization) =>
+      fetch(`${baseUrl}/api/codice/health`, {
+        headers: {
+          Origin: codiceOrigin,
+          ...(authorization ? { Authorization: authorization } : {}),
+        },
+      });
+    for (const authorization of [undefined, "Basic x", "Bearer", `Bearer ${token}`]) {
+      const response = await codice(authorization);
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toBe("Bearer");
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(response.headers.get("vary")).toContain("Origin");
+    }
+    expect((await codice("Bearer denied-token")).status).toBe(403);
+    expect((await codice(`Bearer ${userToken}`)).status).toBe(200);
+    const internal = await authenticated(baseUrl, "/api/station/codice/health");
+    expect(internal.status).toBe(200);
+    expect(authFetch).toHaveBeenCalledTimes(3);
+    expect((await fetch(`${baseUrl}/api/station/codice/health`)).status).toBe(401);
+    expect(
+      (
+        await fetch(`${baseUrl}/api/station/health`, {
+          headers: { Authorization: `Bearer ${userToken}` },
+        })
+      ).status,
+    ).toBe(403);
+    for (const path of ["/api/station/codice/library", "/api/station/codice/books/x"])
+      expect((await authenticated(baseUrl, path)).status).toBe(404);
   });
 
   it("rejeita Host não permitido pelo HTTP real", async () => {

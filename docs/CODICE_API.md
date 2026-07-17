@@ -4,7 +4,7 @@ A API do Códice é uma extensão de leitura (read-only) embutida na Héstia que
 
 ## Endpoints
 
-Todas as rotas requerem que o request passe pela validação de Host Header da Héstia.
+Todas as rotas públicas requerem Host válido, `Origin` exata, Bearer Supabase válido e `user.id` presente na allowlist explícita da Station. O Auth server é consultado com uma chave `sb_publishable_`; chaves secret/service-role e JWTs legados de API não são aceitos como configuração.
 
 ### 1. `GET /api/codice/health`
 
@@ -53,5 +53,11 @@ Verifica a presença e o tamanho do livro sem baixá-lo.
 ## Segurança
 
 - Não expõe árvores de diretórios (ignora sub-pastas vazias e caminhos complexos).
-- CORS bloqueado por padrão; habilitado de forma customizada apontando para `HESTIA_CODICE_CORS_ORIGIN`.
+- CORS aceita somente `HESTIA_CODICE_CORS_ORIGIN`, sem wildcard ou credentials.
+- Respostas privadas usam `Cache-Control: private, no-store` e `Vary: Origin`.
+- `OPTIONS` valida CORS sem exigir ou consultar um usuário Supabase.
+- `GET /api/station/codice/health` é uma rota interna de monitoramento protegida exclusivamente pelo token da Station. Console e Doctor usam essa rota; ela não expõe library nem books.
 - Nega qualquer tentativa de symlink fora dos domínios da pasta canônica `/KALINE/codice`.
+- Entrega somente arquivos completos. Não anuncia nem implementa Range, `206 Partial Content`, upload, import ou escrita.
+
+Esta API autenticada não deve ser implantada antes de o cliente Kódice enviar o Bearer Supabase. A implantação precisa ser coordenada entre Station e cliente.

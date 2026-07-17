@@ -3,11 +3,13 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, unlink, utimes, writeFile } from "node:fs/promises";
 import net from "node:net";
+import http from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 const HOST = "127.0.0.1";
 const processes = [];
+const servers = [];
 let root;
 
 function ensure(value, message) {
@@ -116,17 +118,57 @@ async function reusable(ports) {
   }
 }
 
+async function startAuthServer(port, allowedUserId, deniedUserId) {
+  const server = http.createServer((request, response) => {
+    if (request.method !== "GET" || request.url !== "/auth/v1/user") {
+      response.writeHead(404).end();
+      return;
+    }
+    if (request.headers.apikey !== "sb_publishable_synthetic_smoke_key") {
+      response.writeHead(401).end();
+      return;
+    }
+    const authorization = request.headers.authorization;
+    if (authorization === "Bearer unavailable-token") {
+      request.socket.destroy();
+      return;
+    }
+    if (authorization === "Bearer allowed-user-token") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ id: allowedUserId }));
+      return;
+    }
+    if (authorization === "Bearer denied-user-token") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ id: deniedUserId }));
+      return;
+    }
+    response.writeHead(401).end();
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, HOST, resolve);
+  });
+  servers.push(server);
+  return server;
+}
+
 async function main() {
   root = await mkdtemp(join(tmpdir(), "hestia-dual-smoke-"));
   const desktopToken = randomBytes(32).toString("hex");
   const tvboxToken = randomBytes(32).toString("hex");
-  const [consolePort, desktopPort, tvboxPort] = await Promise.all([
+  const [consolePort, desktopPort, tvboxPort, authPort] = await Promise.all([
+    freePort(),
     freePort(),
     freePort(),
     freePort(),
   ]);
-  const ports = [consolePort, desktopPort, tvboxPort];
-  ensure(new Set(ports).size === 3, "portas do smoke colidiram");
+  const ports = [consolePort, desktopPort, tvboxPort, authPort];
+  ensure(new Set(ports).size === 4, "portas do smoke colidiram");
+  const allowedUserId = "11111111-1111-4111-8111-111111111111";
+  const deniedUserId = "22222222-2222-4222-8222-222222222222";
+  const codiceOrigin = "https://codice-web.example.test";
+  await startAuthServer(authPort, allowedUserId, deniedUserId);
   const desktopRoot = join(root, "desktop", "KALINE");
   const tvboxRoot = join(root, "tvbox", "KALINE");
   const epubPath = join(tvboxRoot, "codice", "epub", "fixture.epub");
@@ -166,7 +208,10 @@ async function main() {
       HESTIA_STATION_TOKEN: tvboxToken,
       HESTIA_STATION_ORGANIZER_ENABLED: "0",
       HESTIA_STATION_CODICE_ENABLED: "1",
-      HESTIA_CODICE_CORS_ORIGIN: "https://codice-web.example.test",
+      HESTIA_CODICE_CORS_ORIGIN: codiceOrigin,
+      HESTIA_CODICE_SUPABASE_URL: `http://${HOST}:${authPort}`,
+      HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic_smoke_key",
+      HESTIA_CODICE_ALLOWED_USER_IDS: allowedUserId,
       HESTIA_STORAGE_PATH: storage,
       HESTIA_DATA_DIR: join(root, "tvbox", "data"),
     });
@@ -260,7 +305,50 @@ async function main() {
     "token do desktop autenticou na TV Box",
   );
 
-  const library = await json(tvboxBase, "/api/codice/library");
+  const codiceHeaders = { Origin: codiceOrigin, Authorization: "Bearer allowed-user-token" };
+  const preflight = await fetch(`${tvboxBase}/api/codice/health`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: codiceOrigin,
+      "Access-Control-Request-Method": "GET",
+      "Access-Control-Request-Headers": "authorization",
+    },
+  });
+  ensure(preflight.status === 204, "preflight do Códice falhou");
+  ensure(
+    preflight.headers.get("access-control-allow-origin") === codiceOrigin &&
+      preflight.headers.get("access-control-allow-headers") === "Authorization, Content-Type" &&
+      !preflight.headers.has("access-control-allow-credentials") &&
+      !preflight.headers.has("accept-ranges") &&
+      !preflight.headers.has("content-range"),
+    "preflight anunciou CORS ou Range inseguro",
+  );
+  for (const [authorization, status, error] of [
+    [undefined, 401, "authentication_required"],
+    ["Bearer invalid-user-token", 401, "authentication_failed"],
+    ["Bearer denied-user-token", 403, "authorization_failed"],
+    ["Bearer unavailable-token", 503, "authentication_unavailable"],
+    [`Bearer ${tvboxToken}`, 401, "authentication_failed"],
+  ]) {
+    const headers = { Origin: codiceOrigin };
+    if (authorization) headers.Authorization = authorization;
+    const result = await json(tvboxBase, "/api/codice/health", { headers });
+    ensure(
+      result.response.status === status && result.body.error === error,
+      `matriz Auth falhou: ${error}`,
+    );
+  }
+  ensure(
+    (await json(tvboxBase, "/api/station/codice/health", { token: tvboxToken })).response.status ===
+      200,
+    "health interno do Códice falhou",
+  );
+  ensure(
+    (await json(tvboxBase, "/api/station/codice/health", { token: "allowed-user-token" })).response
+      .status === 403,
+    "Bearer Supabase abriu rota administrativa",
+  );
+  const library = await json(tvboxBase, "/api/codice/library", { headers: codiceHeaders });
   ensure(library.response.status === 200, "Códice library na Station falhou");
   sanitized(library.text, secrets, "Códice library");
   for (const [format, bytes] of [
@@ -268,7 +356,7 @@ async function main() {
     ["pdf", pdf],
   ]) {
     const book = library.body.books.find((item) => item.format === format);
-    const head = await fetch(`${tvboxBase}${book.url}`, { method: "HEAD" });
+    const head = await fetch(`${tvboxBase}${book.url}`, { method: "HEAD", headers: codiceHeaders });
     ensure(
       head.status === 200 && (await head.arrayBuffer()).byteLength === 0,
       `${format} HEAD falhou`,
@@ -277,7 +365,7 @@ async function main() {
       Number(head.headers.get("content-length")) === bytes.length,
       `${format} HEAD perdeu tamanho`,
     );
-    const response = await fetch(`${tvboxBase}${book.url}`);
+    const response = await fetch(`${tvboxBase}${book.url}`, { headers: codiceHeaders });
     ensure(Buffer.from(await response.arrayBuffer()).equals(bytes), `${format} foi alterado`);
   }
   ensure(
@@ -290,6 +378,7 @@ async function main() {
     (
       await fetch(`${tvboxBase}/api/codice/books/${removedBook.id}`, {
         redirect: "manual",
+        headers: codiceHeaders,
       })
     ).status === 404,
     "livro removido entre listagem e abertura não retornou 404",
@@ -334,13 +423,14 @@ async function main() {
   await stop(desktop);
   await stop(tvbox);
   await stop(consoleProcess);
+  for (const server of servers.splice(0)) await new Promise((resolve) => server.close(resolve));
   await reusable(ports);
   for (const item of processes)
     ensure(!item.stderr, `${item.name} escreveu em stderr: ${item.stderr}`);
   await rm(root, { recursive: true, force: true });
   root = undefined;
   console.log(
-    "Station Smoke: OK — Console + desktop + TV Box, Organizer dry-run e Códice read-only direto na Station",
+    "Station Smoke: OK — Console + desktop + TV Box, Organizer dry-run e Códice autenticado com health interno",
   );
 }
 
@@ -353,5 +443,6 @@ try {
   process.exitCode = 1;
 } finally {
   for (const item of processes) await stop(item);
+  for (const server of servers.splice(0)) await new Promise((resolve) => server.close(resolve));
   if (root) await rm(root, { recursive: true, force: true });
 }

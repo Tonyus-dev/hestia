@@ -90,7 +90,7 @@ cp "$SOURCE_DIR/packaging/station-runtime/package.json" "$STAGING/package.json"
 cp "$SOURCE_DIR/packaging/station-runtime/package-lock.json" "$STAGING/package-lock.json"
 cp "$SOURCE_DIR/station.js" "$STAGING/station.js"
 mkdir -p "$STAGING/chama" "$STAGING/scripts"
-for file in codice.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do
+for file in codice.js codiceAuth.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do
   cp "$SOURCE_DIR/chama/$file" "$STAGING/chama/$file"
 done
 cp "$SOURCE_DIR/scripts/station-doctor.mjs" "$SOURCE_DIR/scripts/require-node.mjs" "$STAGING/scripts/"
@@ -112,6 +112,12 @@ if [ ! -e "$ENV_FILE" ]; then
     echo "HESTIA_STATION_ORGANIZER_ENABLED=0"
     echo "HESTIA_STATION_CODICE_ENABLED=0"
     echo "# HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>"
+    echo "# Autenticação do aplicativo Kódice. Obrigatória apenas quando"
+    echo "# HESTIA_STATION_CODICE_ENABLED=1."
+    echo "#"
+    echo "# HESTIA_CODICE_SUPABASE_URL=https://<PROJETO>.supabase.co"
+    echo "# HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<CHAVE>"
+    echo "# HESTIA_CODICE_ALLOWED_USER_IDS=<UUID_SUPABASE>"
     echo "# HESTIA_STATION_ALLOWED_HOSTS=<HOST_PRIVADO>"
   } > "$ENV_FILE"
   log "configuração criada em $ENV_FILE"

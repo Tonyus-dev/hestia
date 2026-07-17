@@ -35,7 +35,7 @@ const MAX_ORGANIZER_TIMEOUT_MS = 600000;
 const HEALTH_PATH = "/api/station/health";
 const STORAGE_PATH = "/api/station/storage/status";
 const SERVICES_PATH = "/api/station/services/status";
-const CODICE_HEALTH_PATH = "/api/codice/health";
+const CODICE_HEALTH_PATH = "/api/station/codice/health";
 const ORGANIZER_PLAN_PATH = "/api/station/organizer/plan";
 const ORGANIZER_RUNS_PATH = "/api/station/organizer/runs";
 const MAX_BODY_BYTES = 64 * 1024;
@@ -699,7 +699,7 @@ export async function fetchTvboxCodiceHealth(stationConfig) {
   try {
     const response = await fetch(new URL(CODICE_HEALTH_PATH, cfg.baseUrl), {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", Authorization: `Bearer ${cfg.token}` },
       redirect: "manual",
       signal: controller.signal,
     });

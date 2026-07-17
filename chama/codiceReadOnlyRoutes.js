@@ -7,10 +7,10 @@ import {
   openVerifiedCodiceBook,
 } from "./codice.js";
 
-export function registerCodiceReadOnlyRoutes(app, config) {
-  app.get("/api/codice/health", async (_req, reply) => {
+export function createCodiceHealthHandler(storageRoot) {
+  return async function codiceHealthHandler(_req, reply) {
     try {
-      return await getCodiceHealth(config.storageRoot);
+      return await getCodiceHealth(storageRoot);
     } catch (err) {
       if (isCodiceLibraryUnavailableError(err)) {
         reply.code(503).send({
@@ -28,7 +28,11 @@ export function registerCodiceReadOnlyRoutes(app, config) {
         at: new Date().toISOString(),
       });
     }
-  });
+  };
+}
+
+export function registerCodiceReadOnlyRoutes(app, config) {
+  app.get("/api/codice/health", config.healthHandler || createCodiceHealthHandler(config.storageRoot));
 
   app.get("/api/codice/library", async (_req, reply) => {
     try {

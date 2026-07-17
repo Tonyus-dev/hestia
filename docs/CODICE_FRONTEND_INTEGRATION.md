@@ -18,8 +18,11 @@ VITE_HESTIA_BASE_URL=https://sua-maquina.tailnet-exemplo.ts.net
 No servidor da **Héstia** (backend), as seguintes variáveis devem estar presentes:
 
 ```bash
-export HESTIA_ALLOWED_HOSTS="sua-maquina.tailnet-exemplo.ts.net"
+export HESTIA_STATION_ALLOWED_HOSTS="<HOST_PRIVADO>"
 export HESTIA_CODICE_CORS_ORIGIN="https://seu-codice.app" # URL do seu frontend
+export HESTIA_CODICE_SUPABASE_URL="https://<PROJETO>.supabase.co"
+export HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_<CHAVE>"
+export HESTIA_CODICE_ALLOWED_USER_IDS="<UUID_SUPABASE>"
 ```
 
 ---
@@ -38,7 +41,7 @@ export const getHestiaBaseUrl = () => {
   return configured.trim().replace(/\/+$/, "");
 };
 
-async function fetchHestiaJson(path, timeoutMs = 8000) {
+async function fetchHestiaJson(path, accessToken, timeoutMs = 8000) {
   const baseUrl = getHestiaBaseUrl();
   if (!baseUrl) throw new Error("HESTIA_NOT_CONFIGURED");
 
@@ -51,6 +54,7 @@ async function fetchHestiaJson(path, timeoutMs = 8000) {
       method: "GET",
       mode: "cors",
       cache: "no-store", // Evita cache indevido no browser
+      headers: { Authorization: `Bearer ${accessToken}` },
       signal: controller.signal,
     });
 
@@ -70,8 +74,8 @@ async function fetchHestiaJson(path, timeoutMs = 8000) {
 A Héstia só deve ser testada e consultada quando o usuário interagir com a fonte **Estação** no aplicativo. Nunca bloqueie o Códice caso a Héstia esteja offline.
 
 ```javascript
-export async function fetchHestiaLibrary() {
-  const data = await fetchHestiaJson("/api/codice/library");
+export async function fetchHestiaLibrary(accessToken) {
+  const data = await fetchHestiaJson("/api/codice/library", accessToken);
 
   if (data?.schemaVersion !== 1 || !Array.isArray(data.books)) {
     throw new Error("HESTIA_LIBRARY_INVALID");
@@ -86,7 +90,7 @@ export async function fetchHestiaLibrary() {
 O arquivo só deve ser aceito se pertencer aos mimetypes definidos, e deve ser entregue integralmente como Buffer ao renderizador.
 
 ```javascript
-export async function fetchHestiaBook(book) {
+export async function fetchHestiaBook(book, accessToken) {
   const baseUrl = getHestiaBaseUrl();
   const base = new URL(`${baseUrl}/`);
   const url = new URL(book.url, base);
@@ -99,6 +103,7 @@ export async function fetchHestiaBook(book) {
     method: "GET",
     mode: "cors",
     cache: "no-store",
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!response.ok) {
@@ -152,7 +157,9 @@ if (book.format === "epub") {
    ```
    Verifique o status com `tailscale serve status`. Não utilize o Funnel, o serviço é restrito à sua Tailnet.
 4. **CORS e Autenticação**:
-   CORS autoriza apenas o Frontend web originário. A segurança de identidade provém da ACL da Tailnet, impedindo fisicamente acessos externos aos seus livros. O Tailscale realiza o tunneling HTTPS transparente.
+   CORS autoriza apenas a origem exata do frontend. A identidade é validada pelo Supabase Auth e o `user.id` precisa constar na allowlist da Station. A Tailnet continua sendo uma camada de rede, não substitui autenticação ou autorização.
+
+Este guia descreve a integração futura. O cliente Kódice atual ainda não envia o Bearer; por isso, a Station autenticada não deve ser implantada isoladamente. A API continua sem Range e sem upload/import.
 
 ### Resumo do Fluxo
 

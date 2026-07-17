@@ -81,9 +81,12 @@ Com Bearer válido:
 GET /api/station/health
 GET /api/station/storage/status
 GET /api/station/services/status
+GET /api/station/codice/health
 ```
 
-O Agent inicia com `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. EPUB e PDF são obrigatórios e TXT é opcional. `HESTIA_CODICE_CORS_ORIGIN` identifica o aplicativo web Códice no navegador, não a Console server-to-server. Não há upload nem import.
+O Agent inicia com `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. As rotas públicas `/api/codice/*` exigem Bearer Supabase válido, `user.id` na allowlist `HESTIA_CODICE_ALLOWED_USER_IDS` e a origem exata configurada. Somente chave `sb_publishable_` é aceita; service-role não é usada. Console e Doctor monitoram apenas `GET /api/station/codice/health` com o token da Station, sem JWT de usuário. EPUB e PDF são obrigatórios e TXT é opcional. Não há Range, resposta 206, upload, import ou escrita.
+
+Esta proteção não deve ser implantada isoladamente: o cliente Kódice ainda precisa ser atualizado para enviar o Bearer Supabase, e a implantação deve ser coordenada com essa mudança.
 
 ## Instalação
 

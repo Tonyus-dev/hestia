@@ -20,6 +20,9 @@ const RECOGNIZED_KEYS = new Set([
   "HESTIA_STATION_ORGANIZER_ENABLED",
   "HESTIA_STATION_CODICE_ENABLED",
   "HESTIA_CODICE_CORS_ORIGIN",
+  "HESTIA_CODICE_SUPABASE_URL",
+  "HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY",
+  "HESTIA_CODICE_ALLOWED_USER_IDS",
   "HESTIA_STATION_ALLOWED_HOSTS",
   "HESTIA_STORAGE_PATH",
   "HESTIA_KALINE_ROOT",
@@ -261,11 +264,14 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
     let response;
     let body;
     try {
-      response = await fetch(`http://${localHost(config.host)}:${config.port}/api/codice/health`, {
-        headers: { Accept: "application/json", Origin: config.codiceCorsOrigin },
-        redirect: "manual",
-        signal: AbortSignal.timeout(timeoutMs),
-      });
+      response = await fetch(
+        `http://${localHost(config.host)}:${config.port}/api/station/codice/health`,
+        {
+          headers: { Accept: "application/json", Authorization: `Bearer ${config.token}` },
+          redirect: "manual",
+          signal: AbortSignal.timeout(timeoutMs),
+        },
+      );
       body = await response.json();
     } catch {
       bad("Códice read-only falhou");
@@ -284,7 +290,31 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
       return finish();
     }
     ok("Códice read-only respondeu");
-    if (response.headers.get("access-control-allow-origin") === config.codiceCorsOrigin) {
+    let preflight;
+    try {
+      preflight = await fetch(`http://${localHost(config.host)}:${config.port}/api/codice/health`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: config.codiceCorsOrigin,
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "authorization",
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch {
+      bad("CORS do Códice inválido");
+      return finish();
+    }
+    const allowHeaders = preflight.headers.get("access-control-allow-headers") || "";
+    const corsValid =
+      preflight.status === 204 &&
+      preflight.headers.get("access-control-allow-origin") === config.codiceCorsOrigin &&
+      allowHeaders.split(",").some((value) => value.trim().toLowerCase() === "authorization") &&
+      preflight.headers.get("access-control-allow-credentials") === null &&
+      preflight.headers.get("accept-ranges") === null &&
+      preflight.headers.get("content-range") === null;
+    if (corsValid) {
       ok("CORS do Códice válido");
     } else {
       bad("CORS do Códice inválido");

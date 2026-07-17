@@ -12,7 +12,7 @@ cp "$ROOT_DIR/station.js" "$SOURCE/"
 cp "$ROOT_DIR/packaging/station-runtime/package.json" "$ROOT_DIR/packaging/station-runtime/package-lock.json" "$SOURCE/packaging/station-runtime/"
 cp "$ROOT_DIR/packaging/hestia-station-agent.service.in" "$SOURCE/packaging/"
 cp "$ROOT_DIR/scripts/station-doctor.mjs" "$ROOT_DIR/scripts/require-node.mjs" "$SOURCE/scripts/"
-for file in codice.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do cp "$ROOT_DIR/chama/$file" "$SOURCE/chama/$file"; done
+for file in codice.js codiceAuth.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do cp "$ROOT_DIR/chama/$file" "$SOURCE/chama/$file"; done
 fail() { echo "[station-install-test] ERRO: $*" >&2; exit 1; }
 
 cat > "$BIN/id" <<'EOF'
@@ -75,9 +75,26 @@ grep -Fqx 'HESTIA_STATION_CODICE_ENABLED=0' "$TEST_ROOT/desktop/station.env" || 
 grep -Fqx '# HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>' "$TEST_ROOT/desktop/station.env" || fail "placeholder CORS incorreto"
 grep -Fq "WorkingDirectory=$TEST_ROOT/desktop/runtime" "$TEST_ROOT/desktop/station.service" || fail "unit depende do checkout"
 [ -f "$TEST_ROOT/desktop/runtime/station.js" ] && [ -d "$TEST_ROOT/desktop/runtime/node_modules/fastify" ] || fail "runtime mínimo não instalado"
+[ -f "$TEST_ROOT/desktop/runtime/chama/codiceAuth.js" ] || fail "helper de autenticação não instalado"
 [ "$(stat -c '%a' "$TEST_ROOT/desktop/runtime")" = 755 ] || fail "runtime final não possui modo 755"
 [ ! -e "$TEST_ROOT/desktop/runtime/src" ] && [ ! -e "$TEST_ROOT/desktop/runtime/dist" ] || fail "frontend foi copiado"
 [[ "$output" != *"$TOKEN"* ]] || fail "token vazou"
+[[ "$output" != *"sb_publishable_"* ]] || fail "configuração sensível apareceu no log"
+/usr/bin/node --input-type=module -e "await import('file://$TEST_ROOT/desktop/runtime/chama/codiceAuth.js')" || fail "runtime não importou codiceAuth.js"
+rm -rf "$TEST_ROOT/desktop/runtime/node_modules"
+ln -s "$ROOT_DIR/node_modules" "$TEST_ROOT/desktop/runtime/node_modules"
+RUNTIME_PORT="$(/usr/bin/node -e 'const s=require("node:net").createServer();s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port));s.close()})')"
+env NODE_ENV=test HESTIA_STATION_HOST=127.0.0.1 HESTIA_STATION_PORT="$RUNTIME_PORT" HESTIA_STATION_TOKEN="$TOKEN" \
+  /usr/bin/node "$TEST_ROOT/desktop/runtime/station.js" > "$TEST_ROOT/runtime-import.log" 2>&1 &
+RUNTIME_PID=$!
+RUNTIME_READY=0
+for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -fsS -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:$RUNTIME_PORT/api/station/health" >/dev/null 2>&1; then RUNTIME_READY=1; break; fi
+  sleep 0.1
+done
+kill -TERM "$RUNTIME_PID" 2>/dev/null || true
+wait "$RUNTIME_PID" 2>/dev/null || true
+[ "$RUNTIME_READY" -eq 1 ] || { sed "s/$TOKEN/[REDACTED]/g" "$TEST_ROOT/runtime-import.log" >&2; fail "runtime instalado não importou station.js"; }
 
 run_install tvbox env HESTIA_STATION_PORT=4519 >/dev/null
 grep -Fqx 'HESTIA_STATION_PORT=4519' "$TEST_ROOT/tvbox/station.env" || fail "porta TV Box incorreta"

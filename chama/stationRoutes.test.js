@@ -77,7 +77,7 @@ describe("rotas plurais da Console", () => {
       "fetch",
       vi.fn(async (url) => {
         const path = new URL(url).pathname;
-        if (path.endsWith("/health") && path.startsWith("/api/codice")) return response(codice);
+        if (path.endsWith("/health") && (path.startsWith("/api/codice") || path.startsWith("/api/station/codice"))) return response(codice);
         if (path.endsWith("/health")) return response(health);
         if (path.includes("/storage/")) return response(storage);
         return response(services);
