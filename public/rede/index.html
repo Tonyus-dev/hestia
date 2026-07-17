@@ -443,13 +443,13 @@
       role: "Arquivos e armazenamento principal.",
       sshUser: "tonyus-dev",
       addrKey: "srv.station",
-      addrLabel: "Station",
+      addrLabel: "API Station",
       actions: [
-        { kind:"open",  key:"srv.station", label:"Abrir Station", primary:true },
+        { kind:"openConsole", route:"/", label:"Abrir na Héstia", primary:true },
         { kind:"open",  key:"srv.files",   label:"Abrir arquivos" },
         { kind:"wol",   label:"Acordar servidor" },
         { kind:"ssh",   cmd:"ssh tonyus-dev@tonyusdev-desktop", label:"Copiar comando SSH" },
-        { kind:"copyAddr", key:"srv.station", label:"Copiar endereço" },
+        { kind:"copyAddr", key:"srv.station", label:"Copiar endereço da API" },
       ],
     },
     {
@@ -459,21 +459,20 @@
       role: "Station leve e biblioteca de leitura.",
       sshUser: "tonyus-dev",
       addrKey: "tv.station",
-      addrLabel: "Station",
+      addrLabel: "API Station",
       actions: [
-        { kind:"open",  key:"tv.station", label:"Abrir Station", primary:true },
-        { kind:"open",  key:"tv.codice",  label:"Abrir Códice (somente leitura)" },
+        { kind:"openConsole", route:"/", label:"Abrir na Héstia", primary:true },
+        { kind:"openConsole", route:"/codice", label:"Abrir Códice" },
         { kind:"ssh",   cmd:"ssh tonyus-dev@kaline-box", label:"Copiar comando SSH" },
-        { kind:"copyAddr", key:"tv.station", label:"Copiar endereço" },
+        { kind:"copyAddr", key:"tv.station", label:"Copiar endereço da API" },
       ],
     },
   ];
 
   const QUICK = [
-    { key:"note.hestia", label:"Héstia Console",   sub:"Notebook" },
-    { key:"srv.station", label:"Station",           sub:"Servidor" },
-    { key:"tv.station",  label:"Station",           sub:"TV Box" },
-    { key:"tv.codice",   label:"Códice",            sub:"TV Box · somente leitura" },
+    { key:"note.hestia", route:"/", label:"Héstia Console", sub:"Notebook" },
+    { key:"note.hestia", route:"/codice", label:"Códice", sub:"TV Box · somente leitura" },
+    { key:"note.hestia", route:"/organizador", label:"Organizador", sub:"Servidor · dry-run" },
     { key:"srv.files",   label:"Arquivos",          sub:"Servidor · pasta compartilhada" },
   ];
 
@@ -575,6 +574,13 @@
     return icon("open");
   }
 
+  function consoleUrl(route) {
+    const base = state["note.hestia"];
+    const checked = validate(base);
+    if (!base || !checked.ok || /^smb:/i.test(base)) return "";
+    try { return new URL(route, base).toString(); } catch { return ""; }
+  }
+
   // ---- Rendering
   const cardsGrid = document.getElementById("cards-grid");
   const quickGrid = document.getElementById("quick-grid");
@@ -601,6 +607,12 @@
         : `<div class="addr"><span class="muted">Configure o endereço para acessar</span></div>`;
 
       const actionsHtml = m.actions.map(a => {
+        if (a.kind === "openConsole") {
+          const url = consoleUrl(a.route);
+          const label = url ? a.label : "Configure a Héstia";
+          const cls = a.primary ? "btn primary" : "btn";
+          return `<button type="button" class="${cls}" data-action="openConsole" data-route="${esc(a.route)}" ${url?"":"disabled aria-disabled=\"true\""}>${icon("hestia")}<span>${esc(label)}</span></button>`;
+        }
         if (a.kind === "open") {
           const url = state[a.key];
           const ok = url && validate(url).ok;
@@ -644,7 +656,7 @@
 
   function renderQuick() {
     quickGrid.innerHTML = QUICK.map(q => {
-      const url = state[q.key];
+      const url = q.route ? consoleUrl(q.route) : state[q.key];
       const ok = url && validate(url).ok;
       const label = ok ? "Abrir" : "Configure o endereço";
       return `
@@ -656,7 +668,7 @@
               <span>${esc(q.sub)}</span>
             </div>
           </div>
-          <button type="button" class="btn small" data-action="open" data-key="${q.key}" ${ok?"":"disabled aria-disabled=\"true\""}>${esc(label)}</button>
+          <button type="button" class="btn small" data-action="${q.route ? "openConsole" : "open"}" data-key="${q.key}" ${q.route ? `data-route="${esc(q.route)}"` : ""} ${ok?"":"disabled aria-disabled=\"true\""}>${esc(label)}</button>
         </div>
       `;
     }).join("");
@@ -779,6 +791,8 @@
     if (action === "open") {
       const key = btn.getAttribute("data-key");
       openUrl(state[key]);
+    } else if (action === "openConsole") {
+      openUrl(consoleUrl(btn.getAttribute("data-route") || "/"));
     } else if (action === "ssh") {
       const cmd = btn.getAttribute("data-cmd");
       const ok = await copyText(cmd);
