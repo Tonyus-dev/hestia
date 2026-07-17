@@ -17,10 +17,17 @@ function authenticate(fetchImpl, authorization = "Bearer user-token") {
 }
 
 describe("Kódice Supabase Auth", () => {
-  it.each([undefined, "", "Basic token", "Bearer", "Bearer    ", "Bearer one two", ["Bearer one"]])(
-    "rejeita Bearer ausente ou ambíguo: %j",
-    (value) => expect(extractBearer(value)).toBeNull(),
-  );
+  it.each([
+    undefined,
+    "",
+    "Basic token",
+    "Bearer",
+    "Bearer    ",
+    "Bearer one two",
+    "Bearer one,Bearertwo",
+    "Bearer one, Bearer two",
+    ["Bearer one"],
+  ])("rejeita Bearer ausente ou ambíguo: %j", (value) => expect(extractBearer(value)).toBeNull());
 
   it("consulta o Auth server com a publishable key e o Bearer recebidos", async () => {
     const fetchImpl = vi.fn(async () => Response.json({ id: allowedId }));
@@ -48,7 +55,7 @@ describe("Kódice Supabase Auth", () => {
     });
   });
 
-  it.each([429, 400, 404, 500, 503])(
+  it.each([302, 400, 404, 429, 500, 503])(
     "classifica status inesperado %i como indisponibilidade",
     async (status) => {
       await expect(authenticate(async () => new Response(null, { status }))).resolves.toEqual({
@@ -61,6 +68,7 @@ describe("Kódice Supabase Auth", () => {
 
   it.each([
     ["rede", async () => Promise.reject(new Error("network secret"))],
+    ["timeout", async () => Promise.reject(new DOMException("timeout secret", "TimeoutError"))],
     ["redirect", async () => Promise.reject(new TypeError("redirect"))],
     ["JSON inválido", async () => new Response("not-json")],
     ["id ausente", async () => Response.json({ email: "private@example.test" })],
@@ -70,5 +78,14 @@ describe("Kódice Supabase Auth", () => {
     expect(result).toEqual({ ok: false, status: 503, error: "authentication_unavailable" });
     expect(JSON.stringify(result)).not.toContain("secret");
     expect(JSON.stringify(result)).not.toContain("private@example.test");
+  });
+
+  it("não registra token, chave ou erro remoto", async () => {
+    const spies = ["log", "warn", "error"].map((method) => vi.spyOn(console, method));
+    const result = await authenticate(async () =>
+      Promise.reject(new Error(`remote ${publishableKey} user-token`)),
+    );
+    expect(result.error).toBe("authentication_unavailable");
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
   });
 });

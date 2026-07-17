@@ -32,7 +32,10 @@ export function createCodiceHealthHandler(storageRoot) {
 }
 
 export function registerCodiceReadOnlyRoutes(app, config) {
-  app.get("/api/codice/health", config.healthHandler || createCodiceHealthHandler(config.storageRoot));
+  app.get(
+    "/api/codice/health",
+    config.healthHandler || createCodiceHealthHandler(config.storageRoot),
+  );
 
   app.get("/api/codice/library", async (_req, reply) => {
     try {

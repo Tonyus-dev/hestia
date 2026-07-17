@@ -550,6 +550,12 @@ describe("Station Agent", () => {
           ...(authorization ? { Authorization: authorization } : {}),
         },
       });
+    const preflight = await fetch(`${baseUrl}/api/codice/health`, {
+      method: "OPTIONS",
+      headers: { Origin: codiceOrigin },
+    });
+    expect(preflight.status).toBe(204);
+    expect(authFetch).not.toHaveBeenCalled();
     for (const authorization of [undefined, "Basic x", "Bearer", `Bearer ${token}`]) {
       const response = await codice(authorization);
       expect(response.status).toBe(401);
@@ -559,9 +565,15 @@ describe("Station Agent", () => {
     }
     expect((await codice("Bearer denied-token")).status).toBe(403);
     expect((await codice(`Bearer ${userToken}`)).status).toBe(200);
+    for (const path of ["/api/codice/library", "/api/codice/books/invalid-id"]) {
+      const response = await fetch(`${baseUrl}${path}`, {
+        headers: { Origin: codiceOrigin, Authorization: `Bearer ${token}` },
+      });
+      expect(response.status).toBe(401);
+    }
     const internal = await authenticated(baseUrl, "/api/station/codice/health");
     expect(internal.status).toBe(200);
-    expect(authFetch).toHaveBeenCalledTimes(3);
+    expect(authFetch).toHaveBeenCalledTimes(5);
     expect((await fetch(`${baseUrl}/api/station/codice/health`)).status).toBe(401);
     expect(
       (

@@ -7,7 +7,7 @@ export function isValidCodiceUserId(value) {
 
 export function extractBearer(authorization) {
   if (typeof authorization !== "string") return null;
-  const match = /^Bearer ([^\s]+)$/.exec(authorization);
+  const match = /^Bearer ([^\s,]+)$/.exec(authorization);
   return match?.[1] || null;
 }
 
