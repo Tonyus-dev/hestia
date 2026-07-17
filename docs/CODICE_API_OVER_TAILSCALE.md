@@ -27,7 +27,7 @@ Como a Héstia precisa ser acessada pelo Códice de diferentes dispositivos auto
 
 3. **Controle de Acesso em Camadas**:
    - **Acesso à Rede (Tailscale)**: Apenas dispositivos conectados e autorizados na mesma Tailnet privada podem resolver e alcançar a URL gerada pelo Tailscale Serve.
-   - **Host Guard**: O Host Guard da Héstia valida o cabeçalho `Host` (e `X-Forwarded-Host`) contra os domínios permitidos, blindando a API contra DNS Rebinding.
+   - **Host Guard**: valida o cabeçalho `Host` contra os hosts explicitamente permitidos, reduzindo o risco de DNS rebinding.
    - **CORS Estrito**: Controla e restringe quais origens web executadas no navegador (como a interface web do Códice) podem fazer chamadas de API (`fetch`) à Héstia. Note que o CORS atua no nível do navegador e não serve como autenticação direta de rede.
    - **Supabase Auth + allowlist**: Toda rota pública `/api/codice/*` exige um Bearer de usuário validado pelo Auth server e o `user.id` precisa estar explicitamente autorizado. O token da Station serve apenas às rotas administrativas.
 

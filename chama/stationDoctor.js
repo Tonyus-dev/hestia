@@ -198,7 +198,10 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
     else warn(`arquivo de configuração inseguro: ${issues.join(", ")}`);
   }
 
-  const agentEnv = mergeStationEnv(processEnv, fileEnv);
+  const agentEnv = {
+    ...mergeStationEnv(processEnv, fileEnv),
+    NODE_ENV: processEnv.NODE_ENV,
+  };
   let config;
   try {
     config = resolveStationAgentConfig(agentEnv);

@@ -4,7 +4,9 @@ A API do Códice é uma extensão de leitura (read-only) embutida na Héstia que
 
 ## Endpoints
 
-Todas as rotas públicas requerem Host válido, `Origin` exata, Bearer Supabase válido e `user.id` presente na allowlist explícita da Station. O Auth server é consultado com uma chave `sb_publishable_`; chaves secret/service-role e JWTs legados de API não são aceitos como configuração.
+As requisições públicas `GET` e `HEAD` exigem Host válido, `Origin` exata, Bearer Supabase válido e `user.id` presente na allowlist explícita da Station. O Auth server é consultado com uma chave `sb_publishable_`; chaves secret/service-role e JWTs legados de API não são aceitos como configuração.
+
+As requisições `OPTIONS` validam somente o preflight CORS, não exigem Bearer e não consultam o Supabase.
 
 ### 1. `GET /api/codice/health`
 
