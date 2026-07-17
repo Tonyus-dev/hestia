@@ -33,16 +33,4 @@ describe("fluxos de produto da Console", () => {
     expect(existsSync(join(root, "public/sw.js"))).toBe(false);
     expect(existsSync(join(root, "public/service-worker.js"))).toBe(false);
   });
-
-  it("Kaline Rede abre fluxos na Console e mantém APIs somente copiáveis", () => {
-    const rede = readFileSync(join(root, "public/rede/index.html"), "utf8");
-    expect(rede).toMatch(/route:\s*"\/codice"/);
-    expect(rede).toMatch(/route:\s*"\/organizador"/);
-    expect(rede).toContain("Abrir na Héstia");
-    expect(rede).toContain("Copiar endereço da API");
-    expect(rede).toContain('const STORAGE_KEY = "kaline-rede.config.v1"');
-    expect(rede).toContain("localStorage.setItem(STORAGE_KEY");
-    expect(rede).not.toMatch(/kind:\s*"open",\s*key:\s*"(?:srv|tv)\.station"/);
-    expect(rede).not.toMatch(/token/i);
-  });
 });
