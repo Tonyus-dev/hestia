@@ -7,6 +7,7 @@ import {
   fetchDesktopOrganizerPlan,
   fetchDesktopOrganizerRuns,
   hasLegacyStationConfig,
+  resolveOrganizerTimeout,
   resolveNamedStationConfig,
 } from "./stationClient.js";
 
@@ -44,8 +45,67 @@ const services = () => ({
   checkedAt: now(),
   services: [{ id: "tailscaled", active: true, status: "active" }],
 });
+const organizerPlan = () => ({
+  ok: true,
+  schemaVersion: 1,
+  checkedAt: now(),
+  ignoredTopLevel: "omitido",
+  plan: {
+    planId: "plan_123_abcdef12",
+    generatedAt: now(),
+    dryRun: true,
+    requiresExtraConfirmation: false,
+    largePlanThreshold: 500,
+    planned: 1,
+    items: [
+      {
+        id: "123e4567-e89b-42d3-a456-426614174000",
+        source: { kind: "entrada", label: "Entrada manual", relativePath: "documento.pdf" },
+        target: { relativePath: "codice/pdf/2026/07/documento.pdf" },
+        action: "move",
+        reason: "pdf para biblioteca",
+        risk: "low",
+        status: "planned",
+        size: 42,
+        mtimeIso: now(),
+        ignoredReason: null,
+        unknown: "omitido",
+      },
+    ],
+    summary: {
+      total: 1,
+      planned: 1,
+      conflicts: 0,
+      ignored: 0,
+      quarantined: 0,
+      byExtension: { ".pdf": 1 },
+      byTargetArea: { "codice/pdf": 1 },
+      rules: { fallback: "entrada/revisar" },
+    },
+  },
+});
+const organizerRuns = () => ({
+  ok: true,
+  schemaVersion: 1,
+  checkedAt: now(),
+  ignoredTopLevel: true,
+  items: [
+    {
+      runId: "org_123_abcdef12",
+      status: "applied",
+      undoOf: null,
+      undoneBy: "undo_124_abcdef13",
+      redoOf: null,
+      redoneBy: null,
+      unknown: "omitido",
+    },
+  ],
+});
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("configuração explícita das duas Stations", () => {
   it("cobre nenhuma, apenas uma, ambas e combinações incompletas", () => {
@@ -94,6 +154,15 @@ describe("configuração explícita das duas Stations", () => {
     const secret = "legacy-secret";
     expect(hasLegacyStationConfig({ HESTIA_STATION_TOKEN: secret })).toBe(true);
     expect(JSON.stringify(resolveNamedStationConfig("desktop", {}))).not.toContain(secret);
+  });
+
+  it("resolve o timeout dedicado do Organizer com padrão e limites estritos", () => {
+    expect(resolveOrganizerTimeout()).toBe(120000);
+    expect(resolveOrganizerTimeout("5000")).toBe(5000);
+    expect(resolveOrganizerTimeout("600000")).toBe(600000);
+    for (const invalid of ["", "4999", "600001", "1.5", "invalido"]) {
+      expect(resolveOrganizerTimeout(invalid)).toBe(120000);
+    }
   });
 });
 
@@ -233,16 +302,7 @@ describe("cliente reutilizável e isolado", () => {
       "fetch",
       vi.fn(async (url, init) => {
         calls.push({ url: String(url), init });
-        return json(
-          String(url).endsWith("/plan")
-            ? {
-                ok: true,
-                schemaVersion: 1,
-                checkedAt: now(),
-                plan: { dryRun: true, items: [], summary: {} },
-              }
-            : { ok: true, schemaVersion: 1, checkedAt: now(), items: [] },
-        );
+        return json(String(url).endsWith("/plan") ? organizerPlan() : organizerRuns());
       }),
     );
     const desktop = resolveNamedStationConfig("desktop", {
@@ -253,8 +313,134 @@ describe("cliente reutilizável e isolado", () => {
     expect((await fetchDesktopOrganizerRuns(desktop)).ok).toBe(true);
     expect(calls[0].init.headers.Authorization).toBe("Bearer desktop-token");
     expect(calls[0].init.headers["X-Hestia-Local-Confirm"]).toBe("organize");
+    expect(calls[0].init.headers).not.toHaveProperty("token");
     await expect(
       fetchDesktopOrganizerPlan({ ...desktop, stationId: "tvbox" }),
     ).resolves.toMatchObject({ ok: false, code: "STATION_MISCONFIGURED" });
+  });
+
+  it("reconstrói plano e runs somente com campos conhecidos", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) => json(String(url).endsWith("/plan") ? organizerPlan() : organizerRuns())),
+    );
+    const desktop = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    const plan = await fetchDesktopOrganizerPlan(desktop);
+    const runs = await fetchDesktopOrganizerRuns(desktop);
+    expect(plan).not.toHaveProperty("ignoredTopLevel");
+    expect(plan.plan).not.toHaveProperty("largePlanThreshold");
+    expect(plan.plan.summary).not.toHaveProperty("rules");
+    expect(plan.plan.items[0]).not.toHaveProperty("unknown");
+    expect(runs).not.toHaveProperty("ignoredTopLevel");
+    expect(runs.items[0]).not.toHaveProperty("unknown");
+    expect(runs.items[0]).toEqual({
+      runId: "org_123_abcdef12",
+      status: "applied",
+      undoOf: null,
+      undoneBy: "undo_124_abcdef13",
+      redoOf: null,
+      redoneBy: null,
+    });
+  });
+
+  it.each([
+    ["planId", (body) => (body.plan.planId = "../plan")],
+    ["generatedAt", (body) => (body.plan.generatedAt = "ontem")],
+    ["dryRun", (body) => (body.plan.dryRun = false)],
+    ["requiresExtraConfirmation", (body) => (body.plan.requiresExtraConfirmation = "não")],
+    ["planned", (body) => (body.plan.planned = -1)],
+    ["item id", (body) => (body.plan.items[0].id = "item")],
+    ["source kind", (body) => (body.plan.items[0].source.kind = "ruim\0")],
+    ["source label", (body) => (body.plan.items[0].source.label = "")],
+    ["source path", (body) => (body.plan.items[0].source.relativePath = "../segredo")],
+    ["target path", (body) => (body.plan.items[0].target.relativePath = "/segredo")],
+    ["action", (body) => (body.plan.items[0].action = "delete")],
+    ["reason", (body) => (body.plan.items[0].reason = 42)],
+    ["risk", (body) => (body.plan.items[0].risk = "critical")],
+    ["status", (body) => (body.plan.items[0].status = "applied")],
+    ["size", (body) => (body.plan.items[0].size = -1)],
+    ["mtimeIso", (body) => (body.plan.items[0].mtimeIso = "agora")],
+    ["ignoredReason", (body) => (body.plan.items[0].ignoredReason = 1)],
+    ["summary count", (body) => (body.plan.summary.conflicts = -1)],
+    ["summary map", (body) => (body.plan.summary.byExtension[".pdf"] = 1.5)],
+    ["dangerous extra", (body) => (body.plan.token = "segredo")],
+    ["absolute extra", (body) => (body.plan.debug = "C:\\segredo")],
+  ])("rejeita contrato de plano inválido: %s", async (_name, mutate) => {
+    const body = organizerPlan();
+    mutate(body);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(body)),
+    );
+    const desktop = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    await expect(fetchDesktopOrganizerPlan(desktop)).resolves.toMatchObject({
+      ok: false,
+      code: "STATION_CONTRACT_MISMATCH",
+    });
+  });
+
+  it("rejeita runs parciais, status inválido e dados perigosos", async () => {
+    const desktop = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    for (const mutate of [
+      (body) => (body.items[0].runId = "run"),
+      (body) => (body.items[0].status = "running"),
+      (body) => (body.items[0].undoOf = "invalido"),
+      (body) => (body.items[0].sourcePath = "/privado"),
+      (body) => (body.items[0].note = "controle\n"),
+    ]) {
+      const body = organizerRuns();
+      mutate(body);
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => json(body)),
+      );
+      await expect(fetchDesktopOrganizerRuns(desktop)).resolves.toMatchObject({
+        ok: false,
+        code: "STATION_CONTRACT_MISMATCH",
+      });
+    }
+  });
+
+  it("plan não aborta em 5s, respeita timeout dedicado e health mantém o timeout normal", async () => {
+    vi.useFakeTimers();
+    const signals = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (_url, init) =>
+          await new Promise((_resolve, reject) => {
+            signals.push(init.signal);
+            init.signal.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError")),
+            );
+          }),
+      ),
+    );
+    const desktop = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+      HESTIA_STATION_TIMEOUT_MS: "1000",
+      HESTIA_ORGANIZER_TIMEOUT_MS: "6000",
+    });
+    const planPromise = fetchDesktopOrganizerPlan(desktop);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(signals[0].aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(planPromise).resolves.toMatchObject({ code: "STATION_TIMEOUT" });
+
+    const healthPromise = fetchStationHealth(desktop);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(signals[1].aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(healthPromise).resolves.toMatchObject({ code: "STATION_TIMEOUT" });
   });
 });

@@ -123,13 +123,19 @@ function OrganizerPage() {
                   aplicado.
                 </p>
               )}
-              <ul className="mt-4 space-y-2 text-xs text-[color:var(--kaline-muted)]">
-                {planState.data.plan.items.slice(0, 20).map((item) => (
-                  <li key={item.id} className="rounded border border-white/5 p-2 font-mono">
-                    {item.source.relativePath} → {item.target.relativePath} · {item.status}
-                  </li>
-                ))}
-              </ul>
+              {planState.data.plan.items.length === 0 ? (
+                <p className="mt-4 text-sm text-[color:var(--kaline-muted)]">
+                  Nenhuma ação proposta.
+                </p>
+              ) : (
+                <ul className="mt-4 space-y-2 text-xs text-[color:var(--kaline-muted)]">
+                  {planState.data.plan.items.slice(0, 20).map((item) => (
+                    <li key={item.id} className="rounded border border-white/5 p-2 font-mono">
+                      {item.source.relativePath} → {item.target.relativePath} · {item.status}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </section>

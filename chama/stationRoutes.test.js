@@ -41,7 +41,23 @@ const organizerPlan = {
   ok: true,
   schemaVersion: 1,
   checkedAt,
-  plan: { dryRun: true, items: [], summary: {} },
+  plan: {
+    planId: "plan_123_abcdef12",
+    generatedAt: checkedAt,
+    dryRun: true,
+    requiresExtraConfirmation: false,
+    planned: 0,
+    items: [],
+    summary: {
+      total: 0,
+      planned: 0,
+      conflicts: 0,
+      ignored: 0,
+      quarantined: 0,
+      byExtension: {},
+      byTargetArea: {},
+    },
+  },
 };
 const organizerRuns = { ok: true, schemaVersion: 1, checkedAt, items: [] };
 const response = (body) =>

@@ -49,9 +49,12 @@ HESTIA_DESKTOP_TOKEN=<TOKEN_DESKTOP>
 HESTIA_TVBOX_BASE_URL=https://<TVBOX_PRIVADA>
 HESTIA_TVBOX_TOKEN=<TOKEN_TVBOX>
 HESTIA_STATION_TIMEOUT_MS=5000
+HESTIA_ORGANIZER_TIMEOUT_MS=120000
 ```
 
 As variáveis legadas singulares não são migradas nem usadas pelo runtime. O Doctor rejeita sua presença com uma orientação de correção. Tokens e URLs ficam somente no processo server-side e nunca são devolvidos ao navegador.
+
+`HESTIA_ORGANIZER_TIMEOUT_MS` aceita de 5000 a 600000 ms e vale somente para gerar o plano. A leitura curta de runs e os endpoints de health, storage, services e connection continuam usando `HESTIA_STATION_TIMEOUT_MS`.
 
 ## API da Console para as Stations
 

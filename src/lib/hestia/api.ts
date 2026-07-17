@@ -299,6 +299,7 @@ export type OrganizerPlan = {
       risk: string;
       status: string;
       size: number;
+      mtimeIso?: string | null;
       ignoredReason: string | null;
     }>;
     summary: {
@@ -317,7 +318,14 @@ export type OrganizerRuns = {
   ok: true;
   schemaVersion: 1;
   checkedAt: string;
-  items: Array<{ runId: string; status: string }>;
+  items: Array<{
+    runId: string;
+    status: string;
+    undoOf: string | null;
+    undoneBy: string | null;
+    redoOf: string | null;
+    redoneBy: string | null;
+  }>;
 };
 
 export type Config = {
