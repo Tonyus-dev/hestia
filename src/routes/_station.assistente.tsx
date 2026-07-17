@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { hestiaApi, hestiaLegacyApi } from "@/lib/hestia/api";
+import { hestiaApi } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
 
@@ -24,7 +24,7 @@ type Message = {
 function AssistentePage() {
   const { state: llmState, retry, refreshing } = useApi(hestiaApi.llmHealth);
 
-  const [selectedModel, setSelectedModel] = useState("qwen3.5-0.8b");
+  const [selectedModel, setSelectedModel] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,19 +33,13 @@ function AssistentePage() {
   // Define o modelo padrão após carregar a saúde da LLM
   useEffect(() => {
     if (llmState.status === "ok") {
-      const defaultM = llmState.data.defaultModel || "qwen3.5-0.8b";
-      // Se o padrão ou o primeiro modelo disponível estiver na lista, seleciona
-      if (llmState.data.models.includes(defaultM)) {
-        setSelectedModel(defaultM);
-      } else if (llmState.data.models.length > 0) {
-        setSelectedModel(llmState.data.models[0]);
-      }
+      setSelectedModel(llmState.data.defaultModel || llmState.data.availableModels[0] || "");
     }
-  }, [llmState.status]);
+  }, [llmState]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!chatInput.trim() || loading) return;
+    if (!chatInput.trim() || loading || !selectedModel) return;
 
     const userMsg = chatInput.trim();
     setChatInput("");
@@ -53,7 +47,7 @@ function AssistentePage() {
     setLoading(true);
     setError(null);
 
-    const result = await hestiaLegacyApi.llmChat(userMsg, selectedModel);
+    const result = await hestiaApi.llmChat(userMsg, selectedModel);
     setLoading(false);
 
     if (result.status === "ok" && result.data.ok) {
@@ -103,13 +97,13 @@ function AssistentePage() {
             <h2 className="kaline-eyebrow">Modelos Ativos no Ollama</h2>
 
             <div className="space-y-3">
-              {llmState.data.models.length === 0 ? (
+              {llmState.data.availableModels.length === 0 ? (
                 <div className="text-[12px] text-[color:var(--kaline-ember)]">
-                  Nenhum modelo compatível encontrado no Ollama local. Garanta que baixou
-                  `qwen2.5:0.5b` ou `qwen3.5-0.8b`.
+                  Nenhum modelo instalado no Ollama está permitido pela Héstia. O envio permanece
+                  desativado.
                 </div>
               ) : (
-                llmState.data.models.map((model) => (
+                llmState.data.availableModels.map((model) => (
                   <button
                     key={model}
                     onClick={() => setSelectedModel(model)}
@@ -223,12 +217,12 @@ function AssistentePage() {
                 placeholder={
                   loading ? "Aguardando resposta..." : "Digite sua mensagem para o modelo..."
                 }
-                disabled={loading || llmState.data.models.length === 0}
+                disabled={loading || llmState.data.availableModels.length === 0}
                 className="flex-1 rounded border border-[color:var(--kaline-border-copper)] bg-transparent px-3 py-2 text-[12px] text-[color:var(--kaline-text)] placeholder-[color:var(--kaline-faint)] focus:outline-none focus:border-[color:var(--kaline-copper)] disabled:opacity-50"
               />
               <button
                 type="submit"
-                disabled={loading || !chatInput.trim() || llmState.data.models.length === 0}
+                disabled={loading || !chatInput.trim() || !selectedModel}
                 className="px-4 py-2 rounded bg-[color:var(--kaline-copper)] text-[color:var(--kaline-surface)] text-[11px] uppercase tracking-wider font-semibold hover:opacity-90 transition disabled:opacity-40"
               >
                 Enviar

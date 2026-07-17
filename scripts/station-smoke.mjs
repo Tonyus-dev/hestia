@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, unlink, utimes, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -73,6 +73,7 @@ async function json(base, path, options = {}) {
   const response = await fetch(`${base}${path}`, {
     method: options.method || "GET",
     headers,
+    ...(options.body === undefined ? {} : { body: options.body }),
     redirect: "manual",
     signal: AbortSignal.timeout(10_000),
   });
@@ -131,23 +132,28 @@ async function main() {
   const epubPath = join(tvboxRoot, "codice", "epub", "fixture.epub");
   const pdfPath = join(tvboxRoot, "codice", "pdf", "fixture.pdf");
   const txtPath = join(tvboxRoot, "codice", "txt", "fixture.txt");
+  const organizerSource = join(desktopRoot, "entrada", "manual", "organizar.txt");
   const epub = Buffer.from("EPUB sintético PR42\n");
   const pdf = Buffer.from("%PDF sintético PR42\n");
   const txt = Buffer.from("TXT sintético PR42\n");
   await mkdir(desktopRoot, { recursive: true });
+  await mkdir(dirname(organizerSource), { recursive: true });
   await mkdir(dirname(epubPath), { recursive: true });
   await mkdir(dirname(pdfPath), { recursive: true });
   await mkdir(dirname(txtPath), { recursive: true });
   await writeFile(epubPath, epub);
   await writeFile(pdfPath, pdf);
   await writeFile(txtPath, txt);
+  await writeFile(organizerSource, "Organizer dry-run\n");
+  const old = new Date(Date.now() - 120_000);
+  await utimes(organizerSource, old, old);
 
   const desktopEnv = cleanEnvironment({
     NODE_ENV: "test",
     HESTIA_STATION_HOST: HOST,
     HESTIA_STATION_PORT: String(desktopPort),
     HESTIA_STATION_TOKEN: desktopToken,
-    HESTIA_STATION_ORGANIZER_ENABLED: "0",
+    HESTIA_STATION_ORGANIZER_ENABLED: "1",
     HESTIA_STATION_CODICE_ENABLED: "0",
     HESTIA_STORAGE_PATH: desktopRoot,
     HESTIA_DATA_DIR: join(root, "desktop", "data"),
@@ -188,6 +194,9 @@ async function main() {
   await wait(tvboxBase, "/api/station/health", { token: tvboxToken, process: tvbox });
   await wait(consoleBase, "/api/health", { process: consoleProcess });
   ensure((await fetch(`${consoleBase}/`)).status === 200, "interface da Console não abriu");
+  for (const path of ["/codice", "/organizador", "/config", "/manifest.webmanifest", "/rede/"]) {
+    ensure((await fetch(`${consoleBase}${path}`)).status === 200, `${path} não abriu`);
+  }
 
   const secrets = [root, desktopToken, tvboxToken, desktopBase, tvboxBase];
   for (const id of ["desktop", "tvbox"]) {
@@ -205,22 +214,39 @@ async function main() {
   sanitized(codiceHealth.text, secrets, "Códice health");
   for (const path of [
     "/api/stations/desktop/codice/health",
+    "/api/stations/tvbox/codice/library",
+    "/api/stations/tvbox/codice/books/inexistente",
     "/api/stations/outro/health",
     "/api/station/health",
     "/api/station/organizer/runs",
   ]) {
     ensure((await json(consoleBase, path)).response.status === 404, `${path} deveria ser 404`);
   }
-  for (const base of [desktopBase, tvboxBase]) {
-    ensure(
-      (
-        await json(base, "/api/station/organizer/runs", {
-          token: base === desktopBase ? desktopToken : tvboxToken,
-        })
-      ).response.status === 404,
-      "Organizer existe no Agent",
-    );
-  }
+  ensure(
+    (await json(tvboxBase, "/api/station/organizer/runs", { token: tvboxToken })).response
+      .status === 404,
+    "Organizer existe na TV Box",
+  );
+  const organizerPlan = await json(consoleBase, "/api/stations/desktop/organizer/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  ensure(
+    organizerPlan.response.status === 200 && organizerPlan.body.plan.dryRun === true,
+    `Organizer plan pela Console falhou (${organizerPlan.response.status} ${organizerPlan.body.code || organizerPlan.body.error || "sem código"})`,
+  );
+  ensure(organizerPlan.body.plan.summary.planned > 0, "Organizer não propôs ação real");
+  sanitized(organizerPlan.text, secrets, "Organizer plan");
+  ensure(
+    (await readFile(organizerSource, "utf8")) === "Organizer dry-run\n",
+    "Organizer dry-run alterou arquivo",
+  );
+  const organizerRuns = await json(consoleBase, "/api/stations/desktop/organizer/runs");
+  ensure(
+    organizerRuns.response.status === 200 && Array.isArray(organizerRuns.body.items),
+    "Organizer runs pela Console falhou",
+  );
   ensure(
     (await json(desktopBase, "/api/codice/health")).response.status === 404,
     "Códice existe no desktop",
@@ -235,17 +261,38 @@ async function main() {
   );
 
   const library = await json(tvboxBase, "/api/codice/library");
+  ensure(library.response.status === 200, "Códice library na Station falhou");
+  sanitized(library.text, secrets, "Códice library");
   for (const [format, bytes] of [
     ["epub", epub],
     ["pdf", pdf],
   ]) {
     const book = library.body.books.find((item) => item.format === format);
+    const head = await fetch(`${tvboxBase}${book.url}`, { method: "HEAD" });
+    ensure(
+      head.status === 200 && (await head.arrayBuffer()).byteLength === 0,
+      `${format} HEAD falhou`,
+    );
+    ensure(
+      Number(head.headers.get("content-length")) === bytes.length,
+      `${format} HEAD perdeu tamanho`,
+    );
     const response = await fetch(`${tvboxBase}${book.url}`);
     ensure(Buffer.from(await response.arrayBuffer()).equals(bytes), `${format} foi alterado`);
   }
   ensure(
     (await readFile(epubPath)).equals(epub) && (await readFile(pdfPath)).equals(pdf),
     "fixtures foram modificadas",
+  );
+  const removedBook = library.body.books.find((item) => item.format === "txt");
+  await unlink(txtPath);
+  ensure(
+    (
+      await fetch(`${tvboxBase}/api/codice/books/${removedBook.id}`, {
+        redirect: "manual",
+      })
+    ).status === 404,
+    "livro removido entre listagem e abertura não retornou 404",
   );
 
   await stop(desktop);
@@ -292,7 +339,9 @@ async function main() {
     ensure(!item.stderr, `${item.name} escreveu em stderr: ${item.stderr}`);
   await rm(root, { recursive: true, force: true });
   root = undefined;
-  console.log("Station Smoke: OK — Console + desktop + TV Box, degradação e Códice read-only");
+  console.log(
+    "Station Smoke: OK — Console + desktop + TV Box, Organizer dry-run e Códice read-only direto na Station",
+  );
 }
 
 try {

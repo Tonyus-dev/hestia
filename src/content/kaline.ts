@@ -11,6 +11,7 @@ export type NavItem = {
     | "/config"
     | "/endpoints"
     | "/codice"
+    | "/organizador"
     | "/assistente";
   label: string;
   hint?: string;
@@ -20,7 +21,7 @@ export const nav: NavItem[] = [
   { to: "/", label: "Painel", hint: "cockpit" },
   { to: "/sistema", label: "Sistema", hint: "hardware real" },
   { to: "/storage", label: "Storage", hint: "/KALINE" },
-  { to: "/codice", label: "Códice", hint: "leis e epubs" },
+  { to: "/organizador", label: "Organizador", hint: "dry-run remoto" },
   { to: "/assistente", label: "Assistente", hint: "chat llm" },
   { to: "/servicos", label: "Serviços", hint: "status real" },
   { to: "/historico", label: "Histórico", hint: "runs e eventos" },

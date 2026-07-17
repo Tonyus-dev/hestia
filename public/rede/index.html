@@ -373,8 +373,8 @@
             <span class="err" data-err="tv.station" aria-live="polite"></span>
           </div>
           <div class="field">
-            <label for="cfg-tv-codice">URL do Códice (somente leitura)</label>
-            <input id="cfg-tv-codice" data-cfg="tv.codice" placeholder="https://kaline-box.<TAILNET>.ts.net/codice" spellcheck="false" autocomplete="off" />
+            <label for="cfg-tv-codice">Códice Web App</label>
+            <input id="cfg-tv-codice" data-cfg="tv.codice" placeholder="https://&lt;CODICE_WEB_APP&gt;" spellcheck="false" autocomplete="off" />
             <span class="err" data-err="tv.codice" aria-live="polite"></span>
           </div>
         </div>
@@ -443,13 +443,13 @@
       role: "Arquivos e armazenamento principal.",
       sshUser: "tonyus-dev",
       addrKey: "srv.station",
-      addrLabel: "Station",
+      addrLabel: "API Station",
       actions: [
-        { kind:"open",  key:"srv.station", label:"Abrir Station", primary:true },
+        { kind:"openConsole", route:"/", label:"Abrir na Héstia", primary:true },
         { kind:"open",  key:"srv.files",   label:"Abrir arquivos" },
         { kind:"wol",   label:"Acordar servidor" },
         { kind:"ssh",   cmd:"ssh tonyus-dev@tonyusdev-desktop", label:"Copiar comando SSH" },
-        { kind:"copyAddr", key:"srv.station", label:"Copiar endereço" },
+        { kind:"copyAddr", key:"srv.station", label:"Copiar endereço da API" },
       ],
     },
     {
@@ -459,21 +459,20 @@
       role: "Station leve e biblioteca de leitura.",
       sshUser: "tonyus-dev",
       addrKey: "tv.station",
-      addrLabel: "Station",
+      addrLabel: "API Station",
       actions: [
-        { kind:"open",  key:"tv.station", label:"Abrir Station", primary:true },
-        { kind:"open",  key:"tv.codice",  label:"Abrir Códice (somente leitura)" },
+        { kind:"openConsole", route:"/", label:"Abrir na Héstia", primary:true },
+        { kind:"open", key:"tv.codice", label:"Códice Web App", configLabel:"Configure o Códice Web App" },
         { kind:"ssh",   cmd:"ssh tonyus-dev@kaline-box", label:"Copiar comando SSH" },
-        { kind:"copyAddr", key:"tv.station", label:"Copiar endereço" },
+        { kind:"copyAddr", key:"tv.station", label:"Copiar endereço da API" },
       ],
     },
   ];
 
   const QUICK = [
-    { key:"note.hestia", label:"Héstia Console",   sub:"Notebook" },
-    { key:"srv.station", label:"Station",           sub:"Servidor" },
-    { key:"tv.station",  label:"Station",           sub:"TV Box" },
-    { key:"tv.codice",   label:"Códice",            sub:"TV Box · somente leitura" },
+    { key:"note.hestia", route:"/", label:"Héstia Console", sub:"Notebook" },
+    { key:"tv.codice", label:"Códice Web App", sub:"Aplicativo independente", configLabel:"Configure o Códice Web App" },
+    { key:"note.hestia", route:"/organizador", label:"Organizador", sub:"Servidor · dry-run" },
     { key:"srv.files",   label:"Arquivos",          sub:"Servidor · pasta compartilhada" },
   ];
 
@@ -493,7 +492,7 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return { ...DEFAULTS };
       const parsed = JSON.parse(raw);
-      return { ...DEFAULTS, ...parsed };
+      return Object.fromEntries(Object.keys(DEFAULTS).map(key => [key, typeof parsed[key] === "string" ? parsed[key] : ""]));
     } catch { return { ...DEFAULTS }; }
   }
   function save() {
@@ -501,7 +500,7 @@
   }
 
   // ---- Validation (syntax only)
-  function validate(url) {
+  function validate(url, key) {
     if (!url) return { ok:true, empty:true };
     const s = String(url).trim();
     if (!s) return { ok:true, empty:true };
@@ -520,6 +519,18 @@
 
     if (!(isHttps || isHttpLocal || isSmb)) {
       return { ok:false, msg:"Use https://, http://localhost, http://127.0.0.1 ou smb://." };
+    }
+
+    if (key === "tv.codice") {
+      if (isSmb) return { ok:false, msg:"O Códice Web App deve usar HTTP local ou HTTPS." };
+      try {
+        const parsed = new URL(s);
+        if (/^\/api(?:\/|$)/i.test(parsed.pathname)) {
+          return { ok:false, msg:"Use a URL do Códice Web App, não uma rota de API." };
+        }
+      } catch {
+        return { ok:false, msg:"URL do Códice Web App inválida." };
+      }
     }
 
     // Reject embedded credentials (user:pass@)
@@ -575,21 +586,28 @@
     return icon("open");
   }
 
+  function consoleUrl(route) {
+    const base = state["note.hestia"];
+    const checked = validate(base, "note.hestia");
+    if (!base || !checked.ok || /^smb:/i.test(base)) return "";
+    try { return new URL(route, base).toString(); } catch { return ""; }
+  }
+
   // ---- Rendering
   const cardsGrid = document.getElementById("cards-grid");
   const quickGrid = document.getElementById("quick-grid");
 
   function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 
-  function statusFor(value){
+  function statusFor(value, key){
     const raw = (value == null ? "" : String(value)).trim();
     if (!raw) return { cls:"", label:"Não configurado", title:"Nenhum endereço configurado" };
-    const v = validate(raw);
+    const v = validate(raw, key);
     if (v.ok) return { cls:"ok", label:"Endereço configurado", title:"Endereço configurado localmente. Não indica que o aparelho respondeu." };
     return { cls:"err", label:"URL inválida", title:"O endereço informado não é uma URL válida." };
   }
   function statusHtml(key, value){
-    const s = statusFor(value);
+    const s = statusFor(value, key);
     return `<span class="status ${s.cls}" data-status-key="${key}" title="${esc(s.title)}"><span class="dot"></span>${esc(s.label)}</span>`;
   }
 
@@ -601,10 +619,16 @@
         : `<div class="addr"><span class="muted">Configure o endereço para acessar</span></div>`;
 
       const actionsHtml = m.actions.map(a => {
+        if (a.kind === "openConsole") {
+          const url = consoleUrl(a.route);
+          const label = url ? a.label : "Configure a Héstia";
+          const cls = a.primary ? "btn primary" : "btn";
+          return `<button type="button" class="${cls}" data-action="openConsole" data-route="${esc(a.route)}" ${url?"":"disabled aria-disabled=\"true\""}>${icon("hestia")}<span>${esc(label)}</span></button>`;
+        }
         if (a.kind === "open") {
           const url = state[a.key];
-          const ok = url && validate(url).ok;
-          const label = ok ? a.label : "Configure o endereço";
+          const ok = url && validate(url, a.key).ok;
+          const label = ok ? a.label : (a.configLabel || "Configure o endereço");
           const cls = a.primary ? "btn primary" : "btn";
           return `<button type="button" class="${cls}" data-action="open" data-key="${a.key}" ${ok?"":"disabled aria-disabled=\"true\""}>${icon("open")}<span>${esc(label)}</span></button>`;
         }
@@ -644,9 +668,9 @@
 
   function renderQuick() {
     quickGrid.innerHTML = QUICK.map(q => {
-      const url = state[q.key];
-      const ok = url && validate(url).ok;
-      const label = ok ? "Abrir" : "Configure o endereço";
+      const url = q.route ? consoleUrl(q.route) : state[q.key];
+      const ok = url && validate(url, q.route ? "note.hestia" : q.key).ok;
+      const label = ok ? "Abrir" : (q.configLabel || "Configure o endereço");
       return `
         <div class="qa">
           <div class="l">
@@ -656,7 +680,7 @@
               <span>${esc(q.sub)}</span>
             </div>
           </div>
-          <button type="button" class="btn small" data-action="open" data-key="${q.key}" ${ok?"":"disabled aria-disabled=\"true\""}>${esc(label)}</button>
+          <button type="button" class="btn small" data-action="${q.route ? "openConsole" : "open"}" data-key="${q.key}" ${q.route ? `data-route="${esc(q.route)}"` : ""} ${ok?"":"disabled aria-disabled=\"true\""}>${esc(label)}</button>
         </div>
       `;
     }).join("");
@@ -717,9 +741,9 @@
     }
   }
 
-  function openUrl(url) {
+  function openUrl(url, key) {
     if (!url) return;
-    const v = validate(url);
+    const v = validate(url, key);
     if (!v.ok) { feedback("Endereço inválido.", "warn"); return; }
     if (/^smb:\/\//i.test(url)) {
       confirmSmb(url);
@@ -778,7 +802,9 @@
 
     if (action === "open") {
       const key = btn.getAttribute("data-key");
-      openUrl(state[key]);
+      openUrl(state[key], key);
+    } else if (action === "openConsole") {
+      openUrl(consoleUrl(btn.getAttribute("data-route") || "/"), "note.hestia");
     } else if (action === "ssh") {
       const cmd = btn.getAttribute("data-cmd");
       const ok = await copyText(cmd);
@@ -802,7 +828,7 @@
     inputs.forEach(inp => {
       const k = inp.getAttribute("data-cfg");
       const raw = inp.value.trim();
-      const v = validate(raw);
+      const v = validate(raw, k);
       if (!v.ok) { setError(k, v.msg); hasError = true; }
       else { clearError(k); next[k] = raw; }
     });
@@ -826,12 +852,12 @@
     inp.addEventListener("input", () => {
       const k = inp.getAttribute("data-cfg");
       const raw = inp.value.trim();
-      const v = validate(raw);
+      const v = validate(raw, k);
       setError(k, v.ok ? "" : v.msg);
       // Live-reflect the card status pill for this key (visual only).
       const pill = document.querySelector(`.status[data-status-key="${k}"]`);
       if (pill) {
-        const s = statusFor(raw);
+        const s = statusFor(raw, k);
         pill.className = `status${s.cls ? " " + s.cls : ""}`;
         pill.setAttribute("title", s.title);
         pill.innerHTML = `<span class="dot"></span>${esc(s.label)}`;

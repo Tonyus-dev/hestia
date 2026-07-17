@@ -4,6 +4,7 @@ import { useApi } from "@/lib/hestia/useApi";
 import { HESTIA } from "@/content/kaline";
 import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
 import { Row } from "@/components/hestia/shared/Row";
+import { InstallHestiaButton } from "@/components/hestia/InstallHestiaButton";
 
 export const Route = createFileRoute("/_station/config")({
   head: () => ({
@@ -30,11 +31,14 @@ function ConfigPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="kaline-eyebrow">/config</p>
-        <h1 className="kaline-serif text-3xl md:text-4xl text-[color:var(--kaline-text)]">
-          Configuração da Chama
-        </h1>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="kaline-eyebrow">/config</p>
+          <h1 className="kaline-serif text-3xl md:text-4xl text-[color:var(--kaline-text)]">
+            Configuração da Chama
+          </h1>
+        </div>
+        <InstallHestiaButton />
       </header>
 
       {state.status === "loading" && (

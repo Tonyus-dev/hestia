@@ -32,6 +32,7 @@ if [ ! -e "$ENV_FILE" ]; then
 # HESTIA_TVBOX_BASE_URL=https://<TVBOX_PRIVADA>
 # HESTIA_TVBOX_TOKEN=<TOKEN_TVBOX>
 HESTIA_STATION_TIMEOUT_MS=5000
+HESTIA_ORGANIZER_TIMEOUT_MS=120000
 
 # Allowed Host headers (comma-separated, exact values, no wildcards)
 # HESTIA_ALLOWED_HOSTS=hestia.exemplo.ts.net,hestia.exemplo.ts.net:443

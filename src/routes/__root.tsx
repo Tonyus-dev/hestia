@@ -10,10 +10,10 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import kaApple from "../assets/ka-apple.png";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
+import { InstallPromptProvider } from "@/components/hestia/InstallPromptProvider";
 
 function NotFoundComponent() {
   return (
@@ -85,6 +85,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Console local modo protegido da Héstia, com Chama Local embutida para medir saúde, hardware, logs, configuração e serviços do notebook.",
       },
       { name: "author", content: "Estação Kaline" },
+      { name: "theme-color", content: "#191415" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { property: "og:title", content: "Héstia Console — Interface local da Héstia" },
       {
         property: "og:description",
@@ -99,9 +103,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         rel: "icon",
         type: "image/png",
-        href: kaApple,
+        href: "/icons/hestia-192.png",
       },
-      { rel: "apple-touch-icon", href: kaApple },
+      { rel: "apple-touch-icon", href: "/icons/hestia-192.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -134,22 +139,24 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={300}>
-        <Outlet />
-        <Toaster
-          theme="dark"
-          position="bottom-right"
-          toastOptions={{
-            style: {
-              background: "var(--kaline-surface)",
-              border: "1px solid var(--kaline-border-copper)",
-              color: "var(--kaline-text)",
-              fontFamily: "var(--font-mono, ui-monospace, monospace)",
-              fontSize: "12.5px",
-            },
-          }}
-        />
-      </TooltipProvider>
+      <InstallPromptProvider>
+        <TooltipProvider delayDuration={300}>
+          <Outlet />
+          <Toaster
+            theme="dark"
+            position="bottom-right"
+            toastOptions={{
+              style: {
+                background: "var(--kaline-surface)",
+                border: "1px solid var(--kaline-border-copper)",
+                color: "var(--kaline-text)",
+                fontFamily: "var(--font-mono, ui-monospace, monospace)",
+                fontSize: "12.5px",
+              },
+            }}
+          />
+        </TooltipProvider>
+      </InstallPromptProvider>
     </QueryClientProvider>
   );
 }

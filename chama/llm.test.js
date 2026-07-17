@@ -36,9 +36,35 @@ describe("llm local bridge", () => {
   });
 
   it("mantém allowlist dos modelos locais leves aprovados", () => {
+    expect(ALLOWED_MODELS).toContain("qwen2.5:3b");
+    expect(ALLOWED_MODELS).toContain("qwen2.5:1.5b");
     expect(ALLOWED_MODELS).toContain("qwen2.5:0.5b");
     expect(ALLOWED_MODELS).toContain("qwen3.5-0.8b");
-    expect(DEFAULT_MODEL).toBe("qwen3.5-0.8b");
+    expect(DEFAULT_MODEL).toBe("qwen2.5:3b");
+  });
+
+  it("expõe somente a interseção instalada e permitida na ordem de preferência", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        models: [{ name: "modelo-proibido" }, { name: "qwen2.5:1.5b" }, { name: "qwen2.5:3b" }],
+      }),
+    }));
+
+    const health = await getLlmHealth();
+    expect(health.models).toEqual(["modelo-proibido", "qwen2.5:1.5b", "qwen2.5:3b"]);
+    expect(health.availableModels).toEqual(["qwen2.5:3b", "qwen2.5:1.5b"]);
+    expect(health.defaultModel).toBe("qwen2.5:3b");
+  });
+
+  it("não resolve modelo padrão quando nenhum instalado é permitido", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ models: [{ name: "modelo-proibido" }] }),
+    }));
+    const health = await getLlmHealth();
+    expect(health.availableModels).toEqual([]);
+    expect(health.defaultModel).toBeNull();
   });
 
   it("health usa timeout curto e degrada para ok=false em timeout", async () => {
@@ -139,5 +165,18 @@ describe("llm local bridge", () => {
     });
     const [, init] = globalThis.fetch.mock.calls[0];
     expect(JSON.parse(init.body)).toMatchObject({ model: DEFAULT_MODEL, stream: false });
+  });
+
+  it.each(["qwen2.5:3b", "qwen2.5:1.5b"])("chat aceita o modelo real %s", async (model) => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ response: "olá" }) }));
+    await expect(generateLocalChat({ message: "oi", model })).resolves.toMatchObject({ model });
+  });
+
+  it("chat rejeita modelo fora da allowlist antes do fetch", async () => {
+    globalThis.fetch = vi.fn();
+    await expect(
+      generateLocalChat({ message: "oi", model: "modelo-proibido" }),
+    ).rejects.toMatchObject({ code: "EMODELNOTALLOWED" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

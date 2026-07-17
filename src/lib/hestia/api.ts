@@ -190,7 +190,8 @@ export type LlmHealth = {
   runtime: string;
   models: string[];
   allowedModels: string[];
-  defaultModel: string;
+  availableModels: string[];
+  defaultModel: string | null;
   timeoutMs: number;
   error?: string;
   detail?: string;
@@ -279,6 +280,54 @@ export type StationCodiceHealth = {
   checkedAt: string;
 };
 
+export type OrganizerPlan = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  plan: {
+    planId: string;
+    generatedAt: string;
+    dryRun: true;
+    requiresExtraConfirmation: boolean;
+    planned: number;
+    items: Array<{
+      id: string;
+      source: { kind: string; label: string; relativePath: string };
+      target: { relativePath: string };
+      action: string;
+      reason: string | null;
+      risk: string;
+      status: string;
+      size: number;
+      mtimeIso?: string | null;
+      ignoredReason: string | null;
+    }>;
+    summary: {
+      total: number;
+      planned: number;
+      conflicts: number;
+      ignored: number;
+      quarantined: number;
+      byExtension: Record<string, number>;
+      byTargetArea: Record<string, number>;
+    };
+  };
+};
+
+export type OrganizerRuns = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  items: Array<{
+    runId: string;
+    status: string;
+    undoOf: string | null;
+    undoneBy: string | null;
+    redoOf: string | null;
+    redoneBy: string | null;
+  }>;
+};
+
 export type Config = {
   appName: string;
   serverName: string;
@@ -336,6 +385,7 @@ export type StorageScan = {
 };
 
 const DEFAULT_TIMEOUT_MS = 3500;
+const ORGANIZER_UI_TIMEOUT_MS = 610_000;
 const CHAMA_PORT = 4517;
 
 /**
@@ -520,6 +570,8 @@ async function safePost<T>(
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
   llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
+  llmChat: (message: string, model: string) =>
+    safePost<LlmChatResult>("/api/llm/chat", { message, model, facet: "kaline" }, {}, 90000),
   hermesStatus: () => safeFetch<HermesStatus>("/api/hermes/status"),
   server: () => safeFetch<ServerStatus>("/api/server/status"),
   hardwareStatus: () => safeFetch<HardwareStatus>("/api/hardware/status"),
@@ -537,6 +589,14 @@ export const hestiaApi = {
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
+  desktopOrganizerPlan: () =>
+    safePost<OrganizerPlan>(
+      "/api/stations/desktop/organizer/plan",
+      {},
+      {},
+      ORGANIZER_UI_TIMEOUT_MS,
+    ),
+  desktopOrganizerRuns: () => safeFetch<OrganizerRuns>("/api/stations/desktop/organizer/runs"),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;

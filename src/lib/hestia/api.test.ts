@@ -288,6 +288,65 @@ describe("hestiaApi.ping", () => {
   });
 });
 
+describe("hestiaApi — fluxos remotos fixos", () => {
+  beforeEach(() => setLocation("localhost"));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("usa rotas fixas para Organizer sem aceitar destino", async () => {
+    const fetchSpy = mockFetch(
+      () => new Response(JSON.stringify({ ok: true, items: [], books: [] }), { status: 200 }),
+    );
+    await hestiaApi.desktopOrganizerRuns();
+    await hestiaApi.desktopOrganizerPlan();
+    expect(fetchSpy.mock.calls.map((call) => String(call[0]))).toEqual([
+      "http://localhost:8080/api/stations/desktop/organizer/runs",
+      "http://localhost:8080/api/stations/desktop/organizer/plan",
+    ]);
+    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toEqual({});
+  });
+
+  it("mantém o plano ativo até o timeout próprio sem alterar o timeout comum", async () => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    const fetchSpy = mockFetch((_input) => {
+      const signal = fetchSpy.mock.calls.at(-1)?.[1]?.signal as AbortSignal;
+      signals.push(signal);
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+
+    const plan = hestiaApi.desktopOrganizerPlan();
+    expect(String(fetchSpy.mock.calls[0][0])).toBe(
+      "http://localhost:8080/api/stations/desktop/organizer/plan",
+    );
+    expect(JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))).toEqual({});
+
+    await vi.advanceTimersByTimeAsync(3_500);
+    expect(signals[0].aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(116_500);
+    expect(signals[0].aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(490_000);
+    expect(signals[0].aborted).toBe(true);
+    expect(expectUnavailable(await plan).details).toMatchObject({
+      origin: "timeout",
+      timeoutMs: 610_000,
+    });
+
+    const common = hestiaApi.health();
+    await vi.advanceTimersByTimeAsync(3_500);
+    expect(signals[1].aborted).toBe(true);
+    expect(expectUnavailable(await common).details).toMatchObject({
+      origin: "timeout",
+      timeoutMs: 3_500,
+    });
+    vi.useRealTimers();
+  });
+});
+
 describe("formatBytes / formatUptime", () => {
   it("formatBytes cobre nulos, bytes e escalas", () => {
     expect(formatBytes(null)).toBe("—");

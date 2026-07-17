@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isValidOrganizerId } from "./organizerIds.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -28,11 +29,17 @@ const LEGACY_KEYS = Object.freeze(["HESTIA_STATION_BASE_URL", "HESTIA_STATION_TO
 const DEFAULT_TIMEOUT_MS = 5000;
 const MIN_TIMEOUT_MS = 1000;
 const MAX_TIMEOUT_MS = 30000;
+const DEFAULT_ORGANIZER_TIMEOUT_MS = 120000;
+const MIN_ORGANIZER_TIMEOUT_MS = 5000;
+const MAX_ORGANIZER_TIMEOUT_MS = 600000;
 const HEALTH_PATH = "/api/station/health";
 const STORAGE_PATH = "/api/station/storage/status";
 const SERVICES_PATH = "/api/station/services/status";
 const CODICE_HEALTH_PATH = "/api/codice/health";
+const ORGANIZER_PLAN_PATH = "/api/station/organizer/plan";
+const ORGANIZER_RUNS_PATH = "/api/station/organizer/runs";
 const MAX_BODY_BYTES = 64 * 1024;
+const MAX_ORGANIZER_BODY_BYTES = 4 * 1024 * 1024;
 const SERVICE = "hestia-station-agent";
 const STORAGE_STATUSES = new Set(["ok", "missing", "unavailable"]);
 const SERVICE_STATUSES = new Set([
@@ -48,6 +55,13 @@ const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
 function resolveTimeout(raw = process.env.HESTIA_STATION_TIMEOUT_MS) {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < MIN_TIMEOUT_MS || n > MAX_TIMEOUT_MS) return DEFAULT_TIMEOUT_MS;
+  return n;
+}
+
+export function resolveOrganizerTimeout(raw = process.env.HESTIA_ORGANIZER_TIMEOUT_MS) {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < MIN_ORGANIZER_TIMEOUT_MS || n > MAX_ORGANIZER_TIMEOUT_MS)
+    return DEFAULT_ORGANIZER_TIMEOUT_MS;
   return n;
 }
 
@@ -79,6 +93,7 @@ export function resolveNamedStationConfig(stationId, env = process.env) {
   const rawBaseUrl = env[baseUrlKey]?.trim() || "";
   const rawToken = env[tokenKey]?.trim() || "";
   const timeoutMs = resolveTimeout(env.HESTIA_STATION_TIMEOUT_MS);
+  const organizerTimeoutMs = resolveOrganizerTimeout(env.HESTIA_ORGANIZER_TIMEOUT_MS);
   if (!rawBaseUrl && !rawToken) {
     return {
       stationId,
@@ -87,6 +102,7 @@ export function resolveNamedStationConfig(stationId, env = process.env) {
       baseUrl: null,
       token: null,
       timeoutMs,
+      organizerTimeoutMs,
       errorCode: STATION_CODES.NOT_CONFIGURED,
     };
   }
@@ -99,6 +115,7 @@ export function resolveNamedStationConfig(stationId, env = process.env) {
       baseUrl: null,
       token: null,
       timeoutMs,
+      organizerTimeoutMs,
       errorCode: STATION_CODES.MISCONFIGURED,
     };
   }
@@ -114,6 +131,7 @@ export function resolveNamedStationConfig(stationId, env = process.env) {
       baseUrl: null,
       token: null,
       timeoutMs,
+      organizerTimeoutMs,
       errorCode: STATION_CODES.MISCONFIGURED,
     };
   }
@@ -132,6 +150,7 @@ export function resolveNamedStationConfig(stationId, env = process.env) {
       baseUrl: null,
       token: null,
       timeoutMs,
+      organizerTimeoutMs,
       errorCode: STATION_CODES.MISCONFIGURED,
     };
   }
@@ -144,6 +163,7 @@ export function resolveNamedStationConfig(stationId, env = process.env) {
     baseUrl: normalized,
     token: rawToken,
     timeoutMs,
+    organizerTimeoutMs,
     errorCode: null,
   };
 }
@@ -294,6 +314,213 @@ function validateCodiceHealth(body) {
   };
 }
 
+const FORBIDDEN_ORGANIZER_KEYS = new Set([
+  "token",
+  "authorization",
+  "secret",
+  "stack",
+  "sourcepath",
+  "targetpath",
+  "storagepath",
+  "storageroot",
+  "datadir",
+  "from",
+  "to",
+  "path",
+  "paths",
+  "url",
+]);
+
+function containsForbiddenOrganizerData(value) {
+  if (typeof value === "string") {
+    return /[\0-\x1F\x7F]/.test(value) || value.startsWith("/") || /^[A-Za-z]:[\\/]/.test(value);
+  }
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(containsForbiddenOrganizerData);
+  return Object.entries(value).some(
+    ([key, nested]) =>
+      FORBIDDEN_ORGANIZER_KEYS.has(key.toLowerCase()) || containsForbiddenOrganizerData(nested),
+  );
+}
+
+const ORGANIZER_ACTIONS = new Set(["move", "copy"]);
+const ORGANIZER_RISKS = new Set(["low", "medium", "high"]);
+const ORGANIZER_ITEM_STATUSES = new Set(["planned", "conflict", "ignored", "quarantined"]);
+const ORGANIZER_RUN_STATUSES = new Set(["applied", "partially_applied", "failed"]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isSafeString(value, { nonEmpty = false } = {}) {
+  return (
+    typeof value === "string" &&
+    !/[\0-\x1F\x7F]/.test(value) &&
+    (!nonEmpty || value.trim().length > 0)
+  );
+}
+
+function isSafeNullableString(value) {
+  return value === null || isSafeString(value);
+}
+
+function isSafeRelativePath(value) {
+  if (!isSafeString(value, { nonEmpty: true })) return false;
+  if (value.startsWith("/") || value.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(value))
+    return false;
+  if (value.includes("\\")) return false;
+  return !value.split("/").some((part) => part === "..");
+}
+
+function sanitizedCountMap(value) {
+  if (!isPlainObject(value)) return null;
+  const result = {};
+  for (const [key, count] of Object.entries(value)) {
+    if (!isSafeString(key, { nonEmpty: true }) || !Number.isInteger(count) || count < 0)
+      return null;
+    result[key] = count;
+  }
+  return result;
+}
+
+function sanitizedOrganizerItem(item) {
+  if (
+    !isPlainObject(item) ||
+    !UUID_PATTERN.test(item.id) ||
+    !isPlainObject(item.source) ||
+    !isSafeString(item.source.kind, { nonEmpty: true }) ||
+    !isSafeString(item.source.label, { nonEmpty: true }) ||
+    !isSafeRelativePath(item.source.relativePath) ||
+    !isPlainObject(item.target) ||
+    !isSafeRelativePath(item.target.relativePath) ||
+    !ORGANIZER_ACTIONS.has(item.action) ||
+    !isSafeNullableString(item.reason) ||
+    !ORGANIZER_RISKS.has(item.risk) ||
+    !ORGANIZER_ITEM_STATUSES.has(item.status) ||
+    !validNonNegativeNumber(item.size) ||
+    (Object.hasOwn(item, "mtimeIso") && item.mtimeIso !== null && !isValidIsoDate(item.mtimeIso)) ||
+    !isSafeNullableString(item.ignoredReason)
+  )
+    return null;
+  return {
+    id: item.id,
+    source: {
+      kind: item.source.kind,
+      label: item.source.label,
+      relativePath: item.source.relativePath,
+    },
+    target: { relativePath: item.target.relativePath },
+    action: item.action,
+    reason: item.reason,
+    risk: item.risk,
+    status: item.status,
+    size: item.size,
+    ...(Object.hasOwn(item, "mtimeIso") ? { mtimeIso: item.mtimeIso } : {}),
+    ignoredReason: item.ignoredReason,
+  };
+}
+
+function validateOrganizerPlan(body) {
+  if (
+    !isPlainObject(body) ||
+    containsForbiddenOrganizerData(body) ||
+    body.ok !== true ||
+    body.schemaVersion !== 1 ||
+    !isValidIsoDate(body.checkedAt) ||
+    !isPlainObject(body.plan)
+  )
+    return null;
+  const plan = body.plan;
+  if (
+    !isValidOrganizerId(plan.planId) ||
+    !plan.planId.startsWith("plan_") ||
+    !isValidIsoDate(plan.generatedAt) ||
+    plan.dryRun !== true ||
+    typeof plan.requiresExtraConfirmation !== "boolean" ||
+    !Number.isInteger(plan.planned) ||
+    plan.planned < 0 ||
+    !Array.isArray(plan.items) ||
+    !isPlainObject(plan.summary)
+  )
+    return null;
+  const items = plan.items.map(sanitizedOrganizerItem);
+  if (items.some((item) => item === null)) return null;
+  const summary = plan.summary;
+  const counts = [
+    summary.total,
+    summary.planned,
+    summary.conflicts,
+    summary.ignored,
+    summary.quarantined,
+  ];
+  const byExtension = sanitizedCountMap(summary.byExtension);
+  const byTargetArea = sanitizedCountMap(summary.byTargetArea);
+  if (
+    counts.some((value) => !Number.isInteger(value) || value < 0) ||
+    !byExtension ||
+    !byTargetArea
+  )
+    return null;
+  return {
+    ok: true,
+    schemaVersion: 1,
+    checkedAt: body.checkedAt,
+    plan: {
+      planId: plan.planId,
+      generatedAt: plan.generatedAt,
+      dryRun: true,
+      requiresExtraConfirmation: plan.requiresExtraConfirmation,
+      planned: plan.planned,
+      items,
+      summary: {
+        total: summary.total,
+        planned: summary.planned,
+        conflicts: summary.conflicts,
+        ignored: summary.ignored,
+        quarantined: summary.quarantined,
+        byExtension,
+        byTargetArea,
+      },
+    },
+  };
+}
+
+function sanitizedOrganizerRun(item) {
+  if (
+    !isPlainObject(item) ||
+    !isValidOrganizerId(item.runId) ||
+    !ORGANIZER_RUN_STATUSES.has(item.status)
+  )
+    return null;
+  const links = ["undoOf", "undoneBy", "redoOf", "redoneBy"];
+  if (
+    links.some(
+      (key) => Object.hasOwn(item, key) && item[key] !== null && !isValidOrganizerId(item[key]),
+    )
+  )
+    return null;
+  return {
+    runId: item.runId,
+    status: item.status,
+    undoOf: item.undoOf ?? null,
+    undoneBy: item.undoneBy ?? null,
+    redoOf: item.redoOf ?? null,
+    redoneBy: item.redoneBy ?? null,
+  };
+}
+
+function validateOrganizerRuns(body) {
+  if (
+    !isPlainObject(body) ||
+    containsForbiddenOrganizerData(body) ||
+    body.ok !== true ||
+    body.schemaVersion !== 1 ||
+    !isValidIsoDate(body.checkedAt) ||
+    !Array.isArray(body.items)
+  )
+    return null;
+  const items = body.items.map(sanitizedOrganizerRun);
+  if (items.some((item) => item === null)) return null;
+  return { ok: true, schemaVersion: 1, checkedAt: body.checkedAt, items };
+}
+
 function isJsonContentType(header) {
   const mediaType = String(header || "")
     .split(";", 1)[0]
@@ -400,6 +627,66 @@ async function fetchStationResource(path, validate, cfg) {
   }
 }
 
+async function fetchJsonResource(path, validate, cfg, options = {}) {
+  if (!cfg || typeof cfg !== "object") throw new TypeError("configuração da Station é obrigatória");
+  if (!cfg.configured) return failure("not_configured", STATION_CODES.NOT_CONFIGURED);
+  if (!cfg.valid) return failure("misconfigured", cfg.errorCode || STATION_CODES.MISCONFIGURED);
+  const finalUrl = new URL(path, cfg.baseUrl);
+  if (finalUrl.origin !== cfg.baseUrl.origin || finalUrl.pathname !== path) {
+    return failure("misconfigured", STATION_CODES.MISCONFIGURED);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? cfg.timeoutMs);
+  try {
+    const response = await fetch(finalUrl, {
+      method: options.method || "GET",
+      headers: {
+        Accept: "application/json",
+        ...(options.auth
+          ? {
+              Authorization: `Bearer ${cfg.token}`,
+              "X-Hestia-Console-Version": pkg.version || "0.1.0",
+              "X-Hestia-Request-Id": randomUUID(),
+            }
+          : {}),
+        ...(options.confirm ? { "X-Hestia-Local-Confirm": "organize" } : {}),
+        ...(options.method === "POST" ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(options.method === "POST" ? { body: "{}" } : {}),
+      redirect: "manual",
+      signal: controller.signal,
+    });
+    if (response.status === 401 || response.status === 403)
+      return failure("unauthorized", STATION_CODES.AUTH_FAILED);
+    if (response.status >= 300 && response.status < 400)
+      return failure("incompatible", STATION_CODES.REDIRECT_REJECTED);
+    if (!response.ok) {
+      return {
+        ...failure("unavailable", STATION_CODES.UNAVAILABLE),
+        remoteStatus: response.status,
+      };
+    }
+    const parsed = await readLimitedJson(response, options.maxBytes || MAX_BODY_BYTES);
+    if (!parsed.ok) return failure("incompatible", parsed.code);
+    const resource = validate(parsed.body);
+    if (!resource) return failure("incompatible", STATION_CODES.CONTRACT_MISMATCH);
+    return {
+      ok: true,
+      state: "available",
+      code: null,
+      resource,
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    return failure(
+      "unavailable",
+      controller.signal.aborted ? STATION_CODES.TIMEOUT : STATION_CODES.UNAVAILABLE,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchTvboxCodiceHealth(stationConfig) {
   const cfg = stationConfig;
   if (!cfg || typeof cfg !== "object") throw new TypeError("configuração da TV Box é obrigatória");
@@ -432,6 +719,41 @@ export async function fetchTvboxCodiceHealth(stationConfig) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function fetchDesktopOrganizerPlan(stationConfig) {
+  if (stationConfig?.stationId !== "desktop")
+    return failure("misconfigured", STATION_CODES.MISCONFIGURED);
+  const result = await fetchJsonResource(
+    ORGANIZER_PLAN_PATH,
+    validateOrganizerPlan,
+    stationConfig,
+    {
+      method: "POST",
+      auth: true,
+      confirm: true,
+      maxBytes: MAX_ORGANIZER_BODY_BYTES,
+      timeoutMs: stationConfig.organizerTimeoutMs,
+    },
+  );
+  if (!result.ok) return result;
+  return result.resource;
+}
+
+export async function fetchDesktopOrganizerRuns(stationConfig) {
+  if (stationConfig?.stationId !== "desktop")
+    return failure("misconfigured", STATION_CODES.MISCONFIGURED);
+  const result = await fetchJsonResource(
+    ORGANIZER_RUNS_PATH,
+    validateOrganizerRuns,
+    stationConfig,
+    {
+      auth: true,
+      maxBytes: MAX_ORGANIZER_BODY_BYTES,
+    },
+  );
+  if (!result.ok) return result;
+  return result.resource;
 }
 
 export async function fetchStationStorageStatus(stationConfig) {

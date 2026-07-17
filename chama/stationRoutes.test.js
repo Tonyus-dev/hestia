@@ -37,6 +37,29 @@ const codice = {
   libraryAvailable: true,
   formats: ["epub", "pdf"],
 };
+const organizerPlan = {
+  ok: true,
+  schemaVersion: 1,
+  checkedAt,
+  plan: {
+    planId: "plan_123_abcdef12",
+    generatedAt: checkedAt,
+    dryRun: true,
+    requiresExtraConfirmation: false,
+    planned: 0,
+    items: [],
+    summary: {
+      total: 0,
+      planned: 0,
+      conflicts: 0,
+      ignored: 0,
+      quarantined: 0,
+      byExtension: {},
+      byTargetArea: {},
+    },
+  },
+};
+const organizerRuns = { ok: true, schemaVersion: 1, checkedAt, items: [] };
 const response = (body) =>
   new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
 
@@ -79,6 +102,60 @@ describe("rotas plurais da Console", () => {
     expect(
       (await server.inject({ method: "POST", url: "/api/station/organizer/plan" })).statusCode,
     ).toBe(404);
+  });
+
+  it("proxya apenas plan e runs do Organizer desktop com Bearer server-side", async () => {
+    const calls = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, init = {}) => {
+        calls.push({ url: String(url), init });
+        return response(new URL(url).pathname.endsWith("/plan") ? organizerPlan : organizerRuns);
+      }),
+    );
+    const server = app({
+      NODE_ENV: "test",
+      HESTIA_DESKTOP_BASE_URL: "http://127.0.0.1:4518",
+      HESTIA_DESKTOP_TOKEN: "desktop-secret",
+    });
+    const plan = await server.inject({
+      method: "POST",
+      url: "/api/stations/desktop/organizer/plan",
+      payload: {},
+    });
+    const runs = await server.inject("/api/stations/desktop/organizer/runs");
+    expect(plan.statusCode).toBe(200);
+    expect(runs.statusCode).toBe(200);
+    expect(calls[0].init.headers.Authorization).toBe("Bearer desktop-secret");
+    expect(calls[0].init.headers["X-Hestia-Local-Confirm"]).toBe("organize");
+    expect(calls[0].init.body).toBe("{}");
+    expect(calls[1].init.headers.Authorization).toBe("Bearer desktop-secret");
+    expect(`${plan.body}${runs.body}`).not.toContain("desktop-secret");
+    expect(
+      (
+        await server.inject({
+          method: "POST",
+          url: "/api/stations/desktop/organizer/plan",
+          payload: { path: "/tmp" },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect((await server.inject("/api/stations/tvbox/organizer/runs")).statusCode).toBe(404);
+  });
+
+  it("distingue Organizer desativado de Station indisponível", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("not found", { status: 404 })),
+    );
+    const server = app({
+      NODE_ENV: "test",
+      HESTIA_DESKTOP_BASE_URL: "http://127.0.0.1:4518",
+      HESTIA_DESKTOP_TOKEN: "desktop-secret",
+    });
+    const result = await server.inject("/api/stations/desktop/organizer/runs");
+    expect(result.statusCode).toBe(503);
+    expect(result.json()).toMatchObject({ code: "ORGANIZER_DISABLED", state: "disabled" });
   });
 
   it("mantém uma Station válida quando a outra está inválida e não vaza configuração", async () => {
