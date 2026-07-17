@@ -16,7 +16,8 @@ import { getStorageStatus } from "./storage.js";
 import { ensureDataDir, resolveDataDir } from "./dataDir.js";
 import { config as sharedConfig } from "./config.js";
 import { registerStationOrganizerRoutes } from "./stationOrganizerRoutes.js";
-import { registerCodiceReadOnlyRoutes } from "./codiceReadOnlyRoutes.js";
+import { createCodiceHealthHandler, registerCodiceReadOnlyRoutes } from "./codiceReadOnlyRoutes.js";
+import { authenticateCodiceRequest, isValidCodiceUserId } from "./codiceAuth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -71,6 +72,55 @@ function resolveCodiceCorsOrigin(value, nodeEnv) {
   return value;
 }
 
+function resolveCodiceSupabaseUrl(value, nodeEnv) {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+    configError("HESTIA_CODICE_SUPABASE_URL é obrigatória quando o Códice está habilitado.");
+  }
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    configError("HESTIA_CODICE_SUPABASE_URL deve ser uma origem HTTP(S) válida.");
+  }
+  if (url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    configError(
+      "HESTIA_CODICE_SUPABASE_URL deve ser uma origem exata, sem credenciais ou caminho.",
+    );
+  }
+  const allowsHttpLoopback =
+    (nodeEnv === "test" || nodeEnv === "development") && isLoopbackHost(url.hostname);
+  if (url.protocol !== "https:" && (url.protocol !== "http:" || !allowsHttpLoopback)) {
+    configError("HESTIA_CODICE_SUPABASE_URL exige HTTPS fora de loopback em test/development.");
+  }
+  return url.origin;
+}
+
+function resolveCodicePublishableKey(value) {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+    configError(
+      "HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY é obrigatória quando o Códice está habilitado.",
+    );
+  }
+  if (!/^sb_publishable_\S+$/.test(value)) {
+    configError("HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY deve usar o prefixo sb_publishable_.");
+  }
+  return value;
+}
+
+function resolveCodiceAllowedUserIds(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    configError("HESTIA_CODICE_ALLOWED_USER_IDS é obrigatória quando o Códice está habilitado.");
+  }
+  const entries = value.split(",").map((entry) => entry.trim());
+  if (entries.length === 0 || entries.some((entry) => !entry || entry === "*")) {
+    configError("HESTIA_CODICE_ALLOWED_USER_IDS deve conter UUIDs explícitos sem entradas vazias.");
+  }
+  if (entries.some((entry) => !isValidCodiceUserId(entry))) {
+    configError("HESTIA_CODICE_ALLOWED_USER_IDS contém UUID inválido.");
+  }
+  return new Set(entries);
+}
+
 export function resolveStationAgentConfig(env = process.env) {
   const host = env.HESTIA_STATION_HOST?.trim() || "127.0.0.1";
   const portRaw = env.HESTIA_STATION_PORT?.trim() || "4518";
@@ -82,6 +132,15 @@ export function resolveStationAgentConfig(env = process.env) {
   const codiceCorsOrigin = codiceEnabled
     ? resolveCodiceCorsOrigin(env.HESTIA_CODICE_CORS_ORIGIN, env.NODE_ENV)
     : "";
+  const codiceSupabaseUrl = codiceEnabled
+    ? resolveCodiceSupabaseUrl(env.HESTIA_CODICE_SUPABASE_URL, env.NODE_ENV)
+    : "";
+  const codiceSupabasePublishableKey = codiceEnabled
+    ? resolveCodicePublishableKey(env.HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY)
+    : "";
+  const codiceAllowedUserIds = codiceEnabled
+    ? resolveCodiceAllowedUserIds(env.HESTIA_CODICE_ALLOWED_USER_IDS)
+    : new Set();
   const rawStoragePath =
     env.HESTIA_STORAGE_PATH?.trim() || env.HESTIA_KALINE_ROOT?.trim() || "/KALINE";
   if (!isAbsolute(rawStoragePath)) {
@@ -122,6 +181,9 @@ export function resolveStationAgentConfig(env = process.env) {
     organizerEnabled,
     codiceEnabled,
     codiceCorsOrigin,
+    codiceSupabaseUrl,
+    codiceSupabasePublishableKey,
+    codiceAllowedUserIds,
   };
 }
 
@@ -171,6 +233,7 @@ export function createStationAgent(config, providers = {}) {
   const app = Fastify({ logger: false });
   const readStorage = providers.getStorageStatus || getStorageStatus;
   const readServices = providers.getServicesStatus || getServicesStatus;
+  const authFetch = providers.fetch || globalThis.fetch;
 
   app.addHook("onRequest", async (request, reply) => {
     const address = app.server.address();
@@ -184,16 +247,31 @@ export function createStationAgent(config, providers = {}) {
   app.addHook("onRequest", async (request, reply) => {
     if (!request.url.split("?", 1)[0].startsWith("/api/codice/")) return;
     if (!config.codiceEnabled) return;
+    reply.header("Cache-Control", request.method === "OPTIONS" ? "no-store" : "private, no-store");
+    const vary = String(reply.getHeader("Vary") || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (!vary.some((value) => value.toLowerCase() === "origin")) vary.push("Origin");
+    reply.header("Vary", vary.join(", "));
     const origin = request.headers.origin;
-    if (origin !== undefined && origin !== config.codiceCorsOrigin) {
+    if (origin !== config.codiceCorsOrigin) {
       return reply.code(403).send({ ok: false, error: "origin_not_allowed" });
     }
-    if (origin) {
-      applyCodiceCors(request, reply, config.codiceCorsOrigin, { allowCredentials: false });
-    }
+    applyCodiceCors(request, reply, config.codiceCorsOrigin, { allowCredentials: false });
     if (request.method === "OPTIONS") {
-      if (!origin) return reply.code(403).send({ ok: false, error: "origin_not_allowed" });
       return reply.code(204).send();
+    }
+    const auth = await authenticateCodiceRequest({
+      authorization: request.headers.authorization,
+      supabaseUrl: config.codiceSupabaseUrl,
+      publishableKey: config.codiceSupabasePublishableKey,
+      allowedUserIds: config.codiceAllowedUserIds,
+      fetchImpl: authFetch,
+    });
+    if (!auth.ok) {
+      if (auth.status === 401) reply.header("WWW-Authenticate", "Bearer");
+      return reply.code(auth.status).send({ ok: false, error: auth.error });
     }
   });
 
@@ -236,7 +314,10 @@ export function createStationAgent(config, providers = {}) {
   }
 
   if (config.codiceEnabled === true) {
-    registerCodiceReadOnlyRoutes(app, { storageRoot: config.storagePath || "/KALINE" });
+    const storageRoot = config.storagePath || "/KALINE";
+    const healthHandler = createCodiceHealthHandler(storageRoot);
+    app.get("/api/station/codice/health", healthHandler);
+    registerCodiceReadOnlyRoutes(app, { storageRoot, healthHandler });
   }
 
   app.setNotFoundHandler((_request, reply) => {

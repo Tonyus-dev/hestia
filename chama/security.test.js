@@ -138,6 +138,7 @@ describe("applyCodiceCors", () => {
     };
     const headers = {};
     const reply = {
+      getHeader: (name) => headers[name],
       header: (name, val) => {
         headers[name] = val;
       },
@@ -148,6 +149,7 @@ describe("applyCodiceCors", () => {
     expect(headers["Access-Control-Allow-Origin"]).toBe("https://codice.example.com");
     expect(headers["Access-Control-Allow-Credentials"]).toBe("true");
     expect(headers["Access-Control-Allow-Private-Network"]).toBe("true");
+    expect(headers["Access-Control-Allow-Headers"]).toBe("Authorization, Content-Type");
   });
 
   it("rejeita wildcard '*' no CORS e retorna false", () => {
@@ -158,6 +160,7 @@ describe("applyCodiceCors", () => {
     };
     const headers = {};
     const reply = {
+      getHeader: (name) => headers[name],
       header: (name, val) => {
         headers[name] = val;
       },
@@ -172,6 +175,7 @@ describe("applyCodiceCors", () => {
     const req = { headers: { origin: "https://codice.example.com" } };
     const headers = {};
     const reply = {
+      getHeader: (name) => headers[name],
       header: (name, val) => {
         headers[name] = val;
       },
@@ -183,5 +187,20 @@ describe("applyCodiceCors", () => {
     expect(allowed).toBe(true);
     expect(headers["Access-Control-Allow-Origin"]).toBe("https://codice.example.com");
     expect(headers["Access-Control-Allow-Credentials"]).toBeUndefined();
+  });
+
+  it("preserva Vary existente ao adicionar Origin", () => {
+    const req = { headers: { origin: "https://codice.example.com" } };
+    const headers = { Vary: "Accept-Encoding" };
+    const reply = {
+      getHeader: (name) => headers[name],
+      header: (name, value) => {
+        headers[name] = value;
+      },
+    };
+    expect(
+      applyCodiceCors(req, reply, "https://codice.example.com", { allowCredentials: false }),
+    ).toBe(true);
+    expect(headers.Vary).toBe("Accept-Encoding, Origin");
   });
 });

@@ -97,9 +97,14 @@ export function applyCodiceCors(req, reply, allowedOrigin, options = {}) {
   if (!isAllowed) return false;
 
   reply.header("Access-Control-Allow-Origin", reqOrigin);
-  reply.header("Vary", "Origin");
+  const vary = String((typeof reply.getHeader === "function" ? reply.getHeader("Vary") : "") || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!vary.some((value) => value.toLowerCase() === "origin")) vary.push("Origin");
+  reply.header("Vary", vary.join(", "));
   reply.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  reply.header("Access-Control-Allow-Headers", "Content-Type");
+  reply.header("Access-Control-Allow-Headers", "Authorization, Content-Type");
   if (options.allowCredentials !== false) {
     reply.header("Access-Control-Allow-Credentials", "true");
   }

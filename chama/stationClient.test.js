@@ -236,7 +236,7 @@ describe("cliente reutilizável e isolado", () => {
     });
   });
 
-  it("Códice consulta somente a TV Box e nunca envia Bearer", async () => {
+  it("Códice consulta somente a rota interna da TV Box com o Station token", async () => {
     const fetchMock = vi.fn(async () =>
       json({
         ok: true,
@@ -256,8 +256,11 @@ describe("cliente reutilizável e isolado", () => {
       formats: ["epub", "pdf"],
     });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe("https://tvbox.example/api/codice/health");
-    expect(init.headers).toEqual({ Accept: "application/json" });
+    expect(String(url)).toBe("https://tvbox.example/api/station/codice/health");
+    expect(init.headers).toEqual({
+      Accept: "application/json",
+      Authorization: "Bearer station-secret",
+    });
     expect(
       JSON.stringify(await fetchTvboxCodiceHealth({ ...config, stationId: "desktop" })),
     ).not.toContain("station-secret");
