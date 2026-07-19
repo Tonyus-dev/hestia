@@ -24,6 +24,22 @@ const storage = {
     percentUsed: 50,
   },
 };
+const system = {
+  ok: true,
+  schemaVersion: 1,
+  checkedAt,
+  system: {
+    hostname: "station-host",
+    platform: "linux",
+    release: "6.8",
+    arch: "x64",
+    uptimeSeconds: 10,
+    cpu: { model: "cpu", cores: 1, threads: 1, loadAverage: [0, 0, 0], usagePercent: 0 },
+    memory: { totalBytes: 100, usedBytes: 50, freeBytes: 50, usedPercent: 50 },
+    swap: { totalBytes: 0, usedBytes: 0, freeBytes: 0, usedPercent: 0 },
+    rootDisk: { totalBytes: 100, usedBytes: 10, freeBytes: 90, usedPercent: 10 },
+  },
+};
 const services = {
   ok: true,
   schemaVersion: 1,
@@ -79,6 +95,7 @@ describe("rotas plurais da Console", () => {
         const path = new URL(url).pathname;
         if (path === "/api/station/codice/health") return response(codice);
         if (path.endsWith("/health")) return response(health);
+        if (path.includes("/system/")) return response(system);
         if (path.includes("/storage/")) return response(storage);
         return response(services);
       }),
@@ -89,14 +106,26 @@ describe("rotas plurais da Console", () => {
       HESTIA_DESKTOP_TOKEN: "desktop-token",
       HESTIA_TVBOX_BASE_URL: "http://127.0.0.1:4519",
       HESTIA_TVBOX_TOKEN: "tvbox-token",
+      HESTIA_POCKET_BASE_URL: "http://127.0.0.1:4520",
+      HESTIA_POCKET_TOKEN: "pocket-token",
+      HESTIA_BABY_BASE_URL: "http://127.0.0.1:4521",
+      HESTIA_BABY_TOKEN: "baby-token",
     });
-    for (const id of ["desktop", "tvbox"]) {
-      for (const suffix of ["connection", "health", "storage/status", "services/status"]) {
+    for (const id of ["desktop", "tvbox", "pocket", "baby"]) {
+      for (const suffix of [
+        "connection",
+        "health",
+        "system/status",
+        "storage/status",
+        "services/status",
+      ]) {
         expect((await server.inject(`/api/stations/${id}/${suffix}`)).statusCode).toBe(200);
       }
     }
     expect((await server.inject("/api/stations/tvbox/codice/health")).statusCode).toBe(200);
     expect((await server.inject("/api/stations/desktop/codice/health")).statusCode).toBe(404);
+    expect((await server.inject("/api/stations/pocket/codice/health")).statusCode).toBe(404);
+    expect((await server.inject("/api/stations/baby/organizer/runs")).statusCode).toBe(404);
     expect((await server.inject("/api/stations/outro/health")).statusCode).toBe(404);
     expect((await server.inject("/api/station/health")).statusCode).toBe(404);
     expect(

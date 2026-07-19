@@ -89,6 +89,10 @@ function ConfigPage() {
                 <Row k="Token do Servidor" v={state.data.desktopAuthConfigured ? "sim" : "não"} />
                 <Row k="TV Box configurada" v={state.data.tvboxConfigured ? "sim" : "não"} />
                 <Row k="Token da TV Box" v={state.data.tvboxAuthConfigured ? "sim" : "não"} />
+                <Row k="Pocket configurada" v={state.data.pocketConfigured ? "sim" : "não"} />
+                <Row k="Token da Pocket" v={state.data.pocketAuthConfigured ? "sim" : "não"} />
+                <Row k="Baby configurada" v={state.data.babyConfigured ? "sim" : "não"} />
+                <Row k="Token da Baby" v={state.data.babyAuthConfigured ? "sim" : "não"} />
                 <Row
                   k="Configuração legada"
                   v={state.data.legacyStationConfigDetected ? "corrigir" : "ausente"}

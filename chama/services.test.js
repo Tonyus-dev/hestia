@@ -67,10 +67,17 @@ describe("getServicesStatus", () => {
       "evil.service",
       "jellyfin",
       "tailscaled",
+      "hermes",
+      "telegram-guard",
     ]);
 
-    expect(items.map((item) => item.name)).toEqual(["jellyfin", "tailscaled"]);
-    expect(execFile).toHaveBeenCalledTimes(2);
+    expect(items.map((item) => item.name)).toEqual([
+      "jellyfin",
+      "tailscaled",
+      "hermes",
+      "telegram-guard",
+    ]);
+    expect(execFile).toHaveBeenCalledTimes(4);
     expect(execFile.mock.calls.flatMap((call) => call[1])).not.toContain("evil.service");
   });
 });

@@ -33,7 +33,14 @@ function loadUserConfig() {
   }
 }
 
-export const ALLOWED_SERVICES = Object.freeze(["jellyfin", "smbd", "tailscaled"]);
+export const ALLOWED_SERVICES = Object.freeze([
+  "jellyfin",
+  "smbd",
+  "tailscaled",
+  "hermes",
+  "telegram-guard",
+]);
+export const DEFAULT_SERVICES = Object.freeze(["jellyfin", "smbd", "tailscaled"]);
 const userCfg = loadUserConfig();
 
 const host = process.env.HESTIA_HOST || userCfg.host || "127.0.0.1";
@@ -63,7 +70,7 @@ export const config = {
       : ["/", this.storageRoot];
   },
   storageSources: userCfg.storageSources || [],
-  services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : ALLOWED_SERVICES,
+  services: userCfg.services && userCfg.services.length > 0 ? userCfg.services : DEFAULT_SERVICES,
   // Retenção de planos/execuções/eventos — só via env (HESTIA_RETENTION_*_DAYS), nunca do
   // whitelist de ~/.chama/config.json.
   retention: resolveRetention(),

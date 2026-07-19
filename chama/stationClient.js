@@ -19,10 +19,12 @@ export const STATION_CODES = Object.freeze({
   CONTRACT_MISMATCH: "STATION_CONTRACT_MISMATCH",
 });
 
-export const STATION_IDS = Object.freeze(["desktop", "tvbox"]);
+export const STATION_IDS = Object.freeze(["desktop", "tvbox", "pocket", "baby"]);
 const STATION_ENV = Object.freeze({
   desktop: ["HESTIA_DESKTOP_BASE_URL", "HESTIA_DESKTOP_TOKEN"],
   tvbox: ["HESTIA_TVBOX_BASE_URL", "HESTIA_TVBOX_TOKEN"],
+  pocket: ["HESTIA_POCKET_BASE_URL", "HESTIA_POCKET_TOKEN"],
+  baby: ["HESTIA_BABY_BASE_URL", "HESTIA_BABY_TOKEN"],
 });
 const LEGACY_KEYS = Object.freeze(["HESTIA_STATION_BASE_URL", "HESTIA_STATION_TOKEN"]);
 
@@ -35,6 +37,7 @@ const MAX_ORGANIZER_TIMEOUT_MS = 600000;
 const HEALTH_PATH = "/api/station/health";
 const STORAGE_PATH = "/api/station/storage/status";
 const SERVICES_PATH = "/api/station/services/status";
+const SYSTEM_PATH = "/api/station/system/status";
 const CODICE_HEALTH_PATH = "/api/station/codice/health";
 const ORGANIZER_PLAN_PATH = "/api/station/organizer/plan";
 const ORGANIZER_RUNS_PATH = "/api/station/organizer/runs";
@@ -50,7 +53,7 @@ const SERVICE_STATUSES = new Set([
   "unavailable",
   "unknown",
 ]);
-const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled"];
+const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled", "hermes", "telegram-guard"];
 
 function resolveTimeout(raw = process.env.HESTIA_STATION_TIMEOUT_MS) {
   const n = Number(raw);
@@ -284,6 +287,96 @@ function validateStationServices(body) {
   )
     return null;
   return { ok: true, schemaVersion: 1, checkedAt: body.checkedAt, services };
+}
+
+function validPercent(value) {
+  return validNonNegativeNumber(value) && value <= 100;
+}
+
+function validateByteGroup(item) {
+  if (
+    !isPlainObject(item) ||
+    !hasExactKeys(item, ["totalBytes", "usedBytes", "freeBytes", "usedPercent"]) ||
+    ![item.totalBytes, item.usedBytes, item.freeBytes].every(validNonNegativeNumber) ||
+    !validPercent(item.usedPercent)
+  )
+    return null;
+  if (item.usedBytes + item.freeBytes > item.totalBytes) return null;
+  return {
+    totalBytes: item.totalBytes,
+    usedBytes: item.usedBytes,
+    freeBytes: item.freeBytes,
+    usedPercent: item.usedPercent,
+  };
+}
+
+function validateStationSystem(body) {
+  if (!isPlainObject(body) || !hasExactKeys(body, ["ok", "schemaVersion", "checkedAt", "system"]))
+    return null;
+  if (body.ok !== true || body.schemaVersion !== 1 || !isValidIsoDate(body.checkedAt)) return null;
+  const system = body.system;
+  if (
+    !isPlainObject(system) ||
+    !hasExactKeys(system, [
+      "hostname",
+      "platform",
+      "release",
+      "arch",
+      "uptimeSeconds",
+      "cpu",
+      "memory",
+      "swap",
+      "rootDisk",
+    ]) ||
+    typeof system.hostname !== "string" ||
+    system.hostname.trim() === "" ||
+    typeof system.platform !== "string" ||
+    typeof system.release !== "string" ||
+    typeof system.arch !== "string" ||
+    !validNonNegativeNumber(system.uptimeSeconds)
+  )
+    return null;
+  const cpu = system.cpu;
+  if (
+    !isPlainObject(cpu) ||
+    !hasExactKeys(cpu, ["model", "cores", "threads", "loadAverage", "usagePercent"]) ||
+    typeof cpu.model !== "string" ||
+    !Number.isInteger(cpu.cores) ||
+    cpu.cores < 1 ||
+    !Number.isInteger(cpu.threads) ||
+    cpu.threads < 1 ||
+    !Array.isArray(cpu.loadAverage) ||
+    cpu.loadAverage.length !== 3 ||
+    !cpu.loadAverage.every(validNonNegativeNumber) ||
+    !(validPercent(cpu.usagePercent) || cpu.usagePercent === null)
+  )
+    return null;
+  const memory = validateByteGroup(system.memory);
+  const swap = validateByteGroup(system.swap);
+  const rootDisk = validateByteGroup(system.rootDisk);
+  if (!memory || !swap || !rootDisk) return null;
+  return {
+    ok: true,
+    schemaVersion: 1,
+    checkedAt: body.checkedAt,
+    system: {
+      hostname: system.hostname,
+      platform: system.platform,
+      release: system.release,
+      arch: system.arch,
+      uptimeSeconds: system.uptimeSeconds,
+      cpu: {
+        model: cpu.model,
+        cores: cpu.cores,
+        threads: cpu.threads,
+        loadAverage: cpu.loadAverage,
+        usagePercent: cpu.usagePercent,
+      },
+      memory,
+      swap,
+      rootDisk,
+    },
+  };
 }
 
 function validateCodiceHealth(body) {
@@ -770,6 +863,13 @@ export async function fetchStationServicesStatus(stationConfig) {
   return { ...metadata, services: resource };
 }
 
+export async function fetchStationSystemStatus(stationConfig) {
+  const result = await fetchStationResource(SYSTEM_PATH, validateStationSystem, stationConfig);
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  return { ...metadata, system: resource };
+}
+
 export async function getStationConnectionStatus(stationConfig) {
   const result = await fetchStationHealth(stationConfig);
   return {
@@ -792,11 +892,17 @@ export async function getStationConnectionStatus(stationConfig) {
 export function publicStationConfig(env = process.env) {
   const desktop = resolveNamedStationConfig("desktop", env);
   const tvbox = resolveNamedStationConfig("tvbox", env);
+  const pocket = resolveNamedStationConfig("pocket", env);
+  const baby = resolveNamedStationConfig("baby", env);
   return {
     desktopConfigured: desktop.configured,
     desktopAuthConfigured: Boolean(env.HESTIA_DESKTOP_TOKEN?.trim()),
     tvboxConfigured: tvbox.configured,
     tvboxAuthConfigured: Boolean(env.HESTIA_TVBOX_TOKEN?.trim()),
+    pocketConfigured: pocket.configured,
+    pocketAuthConfigured: Boolean(env.HESTIA_POCKET_TOKEN?.trim()),
+    babyConfigured: baby.configured,
+    babyAuthConfigured: Boolean(env.HESTIA_BABY_TOKEN?.trim()),
     stationTimeoutMs: desktop.timeoutMs,
     legacyStationConfigDetected: hasLegacyStationConfig(env),
   };

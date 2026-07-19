@@ -13,7 +13,7 @@ cp "$ROOT_DIR/station.js" "$SOURCE/"
 cp "$ROOT_DIR/packaging/station-runtime/package.json" "$ROOT_DIR/packaging/station-runtime/package-lock.json" "$SOURCE/packaging/station-runtime/"
 cp "$ROOT_DIR/packaging/hestia-station-agent.service.in" "$SOURCE/packaging/"
 cp "$ROOT_DIR/scripts/station-doctor.mjs" "$ROOT_DIR/scripts/require-node.mjs" "$SOURCE/scripts/"
-for file in codice.js codiceAuth.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do cp "$ROOT_DIR/chama/$file" "$SOURCE/chama/$file"; done
+for file in codice.js codiceAuth.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js systemStatus.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do cp "$ROOT_DIR/chama/$file" "$SOURCE/chama/$file"; done
 fail() { echo "[station-install-test] ERRO: $*" >&2; exit 1; }
 
 cat > "$BIN/id" <<'EOF'

@@ -3,6 +3,7 @@ import {
   fetchStationHealth,
   fetchStationServicesStatus,
   fetchStationStorageStatus,
+  fetchStationSystemStatus,
   fetchTvboxCodiceHealth,
   fetchDesktopOrganizerPlan,
   fetchDesktopOrganizerRuns,
@@ -31,6 +32,10 @@ function registerNamedStationRoutes(app, stationId, env) {
   app.get(`${prefix}/health`, async (_request, reply) => {
     const result = await fetchStationHealth(config());
     return result.ok ? result.station : unavailable(reply, result, `${stationId} health`);
+  });
+  app.get(`${prefix}/system/status`, async (_request, reply) => {
+    const result = await fetchStationSystemStatus(config());
+    return result.ok ? result.system : unavailable(reply, result, `${stationId} system`);
   });
   app.get(`${prefix}/storage/status`, async (_request, reply) => {
     const result = await fetchStationStorageStatus(config());

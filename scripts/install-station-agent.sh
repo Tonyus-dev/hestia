@@ -90,7 +90,7 @@ cp "$SOURCE_DIR/packaging/station-runtime/package.json" "$STAGING/package.json"
 cp "$SOURCE_DIR/packaging/station-runtime/package-lock.json" "$STAGING/package-lock.json"
 cp "$SOURCE_DIR/station.js" "$STAGING/station.js"
 mkdir -p "$STAGING/chama" "$STAGING/scripts"
-for file in codice.js codiceAuth.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do
+for file in codice.js codiceAuth.js codiceReadOnlyRoutes.js config.js dataDir.js events.js legacyStorageConfig.js organizerApply.js organizerIds.js organizerOperationLock.js organizerPlan.js organizerPublic.js organizerRedo.js organizerUndo.js retention.js security.js services.js stationAgent.js stationClient.js stationDoctor.js systemStatus.js stationOrganizerRoutes.js storage.js storageModel.js storageScanner.js storageSources.js; do
   cp "$SOURCE_DIR/chama/$file" "$STAGING/chama/$file"
 done
 cp "$SOURCE_DIR/scripts/station-doctor.mjs" "$SOURCE_DIR/scripts/require-node.mjs" "$STAGING/scripts/"

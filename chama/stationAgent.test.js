@@ -267,6 +267,23 @@ describe("Station Agent", () => {
     ).toThrow("HESTIA_STATION_PORT deve ser uma porta válida");
   });
 
+  it("preserva os serviços padrão antigos sem variável explícita e permite novos nomes por opt-in", () => {
+    const base = { HESTIA_STATION_TOKEN: token };
+    expect(resolveStationAgentConfig(base).services).toEqual(["jellyfin", "smbd", "tailscaled"]);
+    expect(
+      resolveStationAgentConfig({
+        ...base,
+        HESTIA_STATION_SERVICES: "tailscaled,hermes",
+      }).services,
+    ).toEqual(["tailscaled", "hermes"]);
+    expect(
+      resolveStationAgentConfig({
+        ...base,
+        HESTIA_STATION_SERVICES: "tailscaled,telegram-guard",
+      }).services,
+    ).toEqual(["tailscaled", "telegram-guard"]);
+  });
+
   it("resolve storage e serviços internos com fallback, allowlist e ordem canônica", () => {
     expect(
       resolveStationAgentConfig({
@@ -367,6 +384,7 @@ describe("Station Agent", () => {
       "/api/station/health",
       "/api/station/storage/status",
       "/api/station/services/status",
+      "/api/station/system/status",
     ]) {
       expect((await authenticated(baseUrl, path)).status).toBe(200);
     }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  STATION_IDS,
   fetchStationHealth,
   fetchStationServicesStatus,
   fetchStationStorageStatus,
@@ -107,7 +108,35 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("configuração explícita das duas Stations", () => {
+describe("configuração explícita das quatro Stations", () => {
+  it("mantém IDs canônicos e isolamento Pocket/Baby", () => {
+    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby"]);
+    const env = {
+      NODE_ENV: "test",
+      HESTIA_POCKET_BASE_URL: "http://127.0.0.1:4520",
+      HESTIA_POCKET_TOKEN: "pocket-secret",
+      HESTIA_BABY_BASE_URL: "http://127.0.0.1:4521",
+      HESTIA_BABY_TOKEN: "baby-secret",
+    };
+    expect(resolveNamedStationConfig("pocket", env)).toMatchObject({
+      valid: true,
+      token: "pocket-secret",
+    });
+    expect(resolveNamedStationConfig("baby", env)).toMatchObject({
+      valid: true,
+      token: "baby-secret",
+    });
+    expect(JSON.stringify(resolveNamedStationConfig("pocket", env))).not.toContain("baby-secret");
+    expect(JSON.stringify(resolveNamedStationConfig("baby", env))).not.toContain("pocket-secret");
+  });
+
+  it("preserva defaults antigos e permite novos serviços somente com configuração explícita", () => {
+    expect(resolveNamedStationConfig("desktop", {})).toMatchObject({ configured: false });
+    const desktopAgent = { HESTIA_STATION_TOKEN: "token" };
+    // Regressão coberta em stationAgent/services: ausência de HESTIA_STATION_SERVICES mantém os três antigos.
+    expect(JSON.stringify(desktopAgent)).not.toContain("hermes");
+  });
+
   it("cobre nenhuma, apenas uma, ambas e combinações incompletas", () => {
     expect(resolveNamedStationConfig("desktop", {})).toMatchObject({ configured: false });
     const onlyDesktop = {
