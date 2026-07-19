@@ -44,11 +44,11 @@ import {
   ALLOWED_MODELS,
   getLlmHealth,
   generateLocalChat,
-  generatePromptForge,
   normalizeFacet,
   validateChatInput,
 } from "./chama/llm.js";
 import { getHermesStatus, processHermesOnce } from "./chama/hermes.js";
+import { registerLlmCorsHooks, registerPromptForgeRoute } from "./chama/llmRoutes.js";
 import { createReadStream } from "node:fs";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
@@ -186,21 +186,8 @@ app.addHook("onRequest", async (req, reply) => {
   });
 });
 
-function applyKalineLlmCors(req, reply) {
-  const origin = req.headers.origin;
-  if (!config.kalineCorsOrigin || origin !== config.kalineCorsOrigin) return;
-  reply.header("Access-Control-Allow-Origin", origin);
-  reply.header("Vary", "Origin");
-  reply.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  reply.header("Access-Control-Allow-Headers", "Content-Type");
-}
-
 // --- CORS opt-in só para /api/llm/* (Kaline Workers, origem única). --------
-app.addHook("onRequest", async (req, reply) => {
-  if (!req.url.startsWith("/api/llm/")) return;
-  applyKalineLlmCors(req, reply);
-  if (req.method === "OPTIONS") return reply.code(204).send();
-});
+registerLlmCorsHooks(app);
 
 // --- CORS opt-in só para /api/codice/* (Códice Web App). --------
 app.addHook("onRequest", async (req, reply) => {
@@ -242,9 +229,6 @@ app.addHook("onSend", async (req, reply, payload) => {
   reply.header("Referrer-Policy", "no-referrer");
   reply.header("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
   reply.header("Content-Security-Policy", CSP);
-  if (req.url.startsWith("/api/llm/")) {
-    applyKalineLlmCors(req, reply);
-  }
   if (req.url.startsWith("/api/codice/")) {
     applyCodiceCors(req, reply, config.codiceCorsOrigin);
   }
@@ -308,35 +292,7 @@ app.post("/api/llm/chat", async (req, reply) => {
   }
 });
 
-app.post("/api/llm/prompt-forge", async (req, reply) => {
-  try {
-    return await generatePromptForge(req.body || {});
-  } catch (err) {
-    if (["INVALID_REQUEST", "TASK_NOT_ALLOWED"].includes(err.code)) {
-      reply.code(400).send({ ok: false, code: err.code, error: err.message });
-      return;
-    }
-    if (err.code === "INPUT_TOO_LARGE") {
-      reply.code(413).send({ ok: false, code: err.code, error: err.message });
-      return;
-    }
-    if (err.code === "LOCAL_LLM_INVALID_RESPONSE") {
-      reply.code(502).send({ ok: false, code: err.code, error: err.message });
-      return;
-    }
-    if (["LOCAL_LLM_UNAVAILABLE", "LOCAL_LLM_TIMEOUT"].includes(err.code)) {
-      reply.code(503).send({
-        ok: false,
-        code: err.code,
-        error: "Runtime local indisponível.",
-        runtime: "hestia-llm",
-        detail: err.detail,
-      });
-      return;
-    }
-    throw err;
-  }
-});
+registerPromptForgeRoute(app);
 app.get("/api/hermes/status", async () => getHermesStatus(config));
 app.post("/api/hermes/process-once", async () => processHermesOnce(config));
 app.get("/api/server/status", async () => getServerStatus());
