@@ -104,3 +104,74 @@ sequenceDiagram
     H->>S: Move fisicamente os arquivos de entrada para os caminhos canônicos
     H-->>K: Atualiza status de conclusão da organização
 ```
+
+---
+
+## 7. Ponte LLM Local para Klio e PromptForge
+
+A Héstia hospeda e controla o runtime local de linguagem. A Klio pode consumir a ponte local somente por endpoints `/api/llm/*`; a programação real continua fora da Héstia local e deve ser encaminhada para o fluxo pago/externo apropriado quando houver revisão humana.
+
+### 7.1 `GET /api/llm/health`
+
+- Endpoint de leitura que consulta o Ollama local em `/api/tags` usando a URL interna configurada na Héstia.
+- Preserva os metadados do chat local: `models`, `allowedModels`, `availableModels`, `defaultModel`, `runtime`, `timeoutMs` e `checkedAt`.
+- Expõe também `promptForge`, com `model: "qwen2.5:3b"`, `role: "promptforge"`, lista de tarefas permitidas e `available` verdadeiro somente quando o Ollama respondeu, o modelo `qwen2.5:3b` apareceu nos pesos locais e esse modelo está permitido pelo runtime.
+
+### 7.2 `POST /api/llm/chat`
+
+Chat local genérico da Héstia:
+
+- usa `qwen2.5:3b` como modelo padrão quando o cliente não envia `model`;
+- aceita outro `model` somente se estiver na allowlist local da Héstia;
+- rejeita modelo proibido antes de chamar o Ollama;
+- preserva as facetas existentes (`kaline`, `klio`, `kharis`) e o contrato atual de `message`, `contextBlock` e `structuredPrompt`;
+- não dá autoridade operacional ao modelo local: a resposta é texto, não prova de execução, teste, commit, deploy ou alteração de arquivo.
+
+### 7.3 `POST /api/llm/prompt-forge`
+
+Rota dedicada e restrita para a oficina textual PromptForge da Klio:
+
+- usa sempre o modelo local fixo `qwen2.5:3b`, definido pelo servidor;
+- não aceita escolha de `model`, `facet`, `system`, `tools`, `options`, `temperature`, `endpoint`, `ollamaUrl`, `execute`, `shell`, `files` ou `stream` pelo cliente;
+- reutiliza o mesmo cliente HTTP interno, a mesma instalação Ollama, os mesmos pesos locais e o mesmo timeout de chat da ponte LLM;
+- chama apenas `POST /api/generate` do Ollama local com `stream: false` e opções determinísticas do PromptForge;
+- não chama OpenRouter, não acessa filesystem, Git, shell, Station Agent, Organizer, Kódice, Hermes, Supabase ou qualquer ferramenta operacional;
+- retorna sempre `executed: false` em sucesso.
+
+Payload aceito:
+
+```json
+{
+  "task": "create_prompt",
+  "input": "pedido original do usuário",
+  "confirmedContext": "contexto explicitamente confirmado",
+  "constraints": ["não inventar arquivos", "não afirmar execução"]
+}
+```
+
+Tarefas permitidas:
+
+- `create_prompt`: transforma uma ideia ou pedido informal em prompt claro.
+- `improve_prompt`: melhora um prompt existente sem mudar sua missão.
+- `condense_context`: reduz contexto preservando fatos, restrições, decisões, pendências e perguntas abertas.
+- `summarize_log`: resume somente o log enviado no payload, sem ler `/api/logs`, arquivos ou journald.
+- `structure_handoff`: cria um handoff textual em Markdown, sem gravar em Hermes e sem tratar a saída como JSON canônico do Kairós.
+
+Resposta de sucesso:
+
+```json
+{
+  "ok": true,
+  "schemaVersion": 1,
+  "provider": "ollama",
+  "model": "qwen2.5:3b",
+  "role": "promptforge",
+  "task": "create_prompt",
+  "executed": false,
+  "content": "texto gerado",
+  "durationMs": 18420,
+  "generatedAt": "2026-07-19T00:00:00.000Z"
+}
+```
+
+Todos os metadados da resposta são definidos pela Héstia, não pelo modelo. O conteúdo gerado deve ser lido por humano antes de ser usado; build, lint ou teste automatizado não substituem validação manual do fluxo real.
