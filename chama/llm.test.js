@@ -1,3 +1,4 @@
+import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "./config.js";
 import {
@@ -13,6 +14,67 @@ import {
 const originalFetch = globalThis.fetch;
 const originalHealthTimeout = config.llmHealthTimeoutMs;
 const originalChatTimeout = config.llmChatTimeoutMs;
+const originalKalineCorsOrigin = config.kalineCorsOrigin;
+
+function mockPromptForgeOllama(response = "Prompt pronto") {
+  return vi.fn(async (url) => {
+    const pathname = new URL(String(url)).pathname;
+    if (pathname === "/api/tags") {
+      return { ok: true, json: async () => ({ models: [{ name: PROMPTFORGE_MODEL }] }) };
+    }
+    return { ok: true, json: async () => ({ response }) };
+  });
+}
+
+function applyTestLlmCors(req, reply) {
+  const origin = req.headers.origin;
+  if (!config.kalineCorsOrigin || origin !== config.kalineCorsOrigin) return;
+  reply.header("Access-Control-Allow-Origin", origin);
+  reply.header("Vary", "Origin");
+  reply.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  reply.header("Access-Control-Allow-Headers", "Content-Type");
+}
+
+function registerPromptForgeTestRoute(app) {
+  app.addHook("onRequest", async (req, reply) => {
+    if (!req.url.startsWith("/api/llm/")) return;
+    applyTestLlmCors(req, reply);
+    if (req.method === "OPTIONS") return reply.code(204).send();
+  });
+  app.addHook("onSend", async (req, reply, payload) => {
+    if (req.url.startsWith("/api/llm/")) applyTestLlmCors(req, reply);
+    return payload;
+  });
+  app.post("/api/llm/prompt-forge", async (req, reply) => {
+    try {
+      return await generatePromptForge(req.body || {});
+    } catch (err) {
+      if (["INVALID_REQUEST", "TASK_NOT_ALLOWED"].includes(err.code)) {
+        reply.code(400).send({ ok: false, code: err.code, error: err.message });
+        return;
+      }
+      if (err.code === "INPUT_TOO_LARGE") {
+        reply.code(413).send({ ok: false, code: err.code, error: err.message });
+        return;
+      }
+      if (err.code === "LOCAL_LLM_INVALID_RESPONSE") {
+        reply.code(502).send({ ok: false, code: err.code, error: err.message });
+        return;
+      }
+      if (["LOCAL_LLM_UNAVAILABLE", "LOCAL_LLM_TIMEOUT"].includes(err.code)) {
+        reply.code(503).send({
+          ok: false,
+          code: err.code,
+          error: "Runtime local indisponível.",
+          runtime: "hestia-llm",
+          detail: err.detail,
+        });
+        return;
+      }
+      throw err;
+    }
+  });
+}
 
 describe("llm local bridge", () => {
   beforeEach(() => {
@@ -24,6 +86,7 @@ describe("llm local bridge", () => {
     globalThis.fetch = originalFetch;
     config.llmHealthTimeoutMs = originalHealthTimeout;
     config.llmChatTimeoutMs = originalChatTimeout;
+    config.kalineCorsOrigin = originalKalineCorsOrigin;
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -200,12 +263,15 @@ describe("llm local bridge", () => {
 
 describe("PromptForge bridge", () => {
   beforeEach(() => {
+    config.llmHealthTimeoutMs = 25;
     config.llmChatTimeoutMs = 75;
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    config.llmHealthTimeoutMs = originalHealthTimeout;
     config.llmChatTimeoutMs = originalChatTimeout;
+    config.kalineCorsOrigin = originalKalineCorsOrigin;
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -218,10 +284,7 @@ describe("PromptForge bridge", () => {
   };
 
   it.each(PROMPTFORGE_TASKS)("aceita a task textual %s", async (task) => {
-    globalThis.fetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ response: "Prompt pronto" }),
-    }));
+    globalThis.fetch = mockPromptForgeOllama("Prompt pronto");
 
     const out = await generatePromptForge({ ...validPayload, task });
 
@@ -240,11 +303,11 @@ describe("PromptForge bridge", () => {
   });
 
   it("fixa modelo, opções determinísticas e stream=false", async () => {
-    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ response: "ok" }) }));
+    globalThis.fetch = mockPromptForgeOllama("ok");
 
     await generatePromptForge(validPayload);
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = globalThis.fetch.mock.calls[1];
     expect(String(url)).toContain("/api/generate");
     expect(JSON.parse(init.body)).toMatchObject({
       model: PROMPTFORGE_MODEL,
@@ -326,41 +389,245 @@ describe("PromptForge bridge", () => {
     const assertion = expect(generatePromptForge(validPayload)).rejects.toMatchObject({
       code: "LOCAL_LLM_TIMEOUT",
     });
-    await vi.advanceTimersByTimeAsync(75);
+    await vi.advanceTimersByTimeAsync(25);
 
     await assertion;
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("diferencia modelo PromptForge indisponível antes de gerar", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ models: [{ name: "qwen2.5:1.5b" }] }),
+    }));
+
+    await expect(generatePromptForge(validPayload)).rejects.toMatchObject({
+      code: "LOCAL_LLM_UNAVAILABLE",
+      detail: expect.stringContaining(PROMPTFORGE_MODEL),
+    });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("diferencia erro HTTP do Ollama sem expor corpo bruto", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ models: [{ name: PROMPTFORGE_MODEL }] }),
+    }));
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ models: [{ name: PROMPTFORGE_MODEL }] }),
+    });
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "segredo bruto" }),
+    });
+
+    await expect(generatePromptForge(validPayload)).rejects.toMatchObject({
+      code: "LOCAL_LLM_UNAVAILABLE",
+      detail: "Ollama local retornou erro HTTP.",
+    });
+  });
+
   it("trata Ollama indisponível, resposta vazia e shape inesperado sem fallback", async () => {
-    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }));
+    globalThis.fetch = vi.fn(async () => {
+      throw new TypeError("connect ECONNREFUSED");
+    });
     await expect(generatePromptForge(validPayload)).rejects.toMatchObject({
       code: "LOCAL_LLM_UNAVAILABLE",
     });
 
-    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ response: "   " }) }));
+    globalThis.fetch = mockPromptForgeOllama("   ");
     await expect(generatePromptForge(validPayload)).rejects.toMatchObject({
       code: "LOCAL_LLM_INVALID_RESPONSE",
     });
 
-    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ text: "nope" }) }));
+    globalThis.fetch = vi.fn(async (url) => {
+      const pathname = new URL(String(url)).pathname;
+      if (pathname === "/api/tags") {
+        return { ok: true, json: async () => ({ models: [{ name: PROMPTFORGE_MODEL }] }) };
+      }
+      return { ok: true, json: async () => ({ text: "nope" }) };
+    });
     await expect(generatePromptForge(validPayload)).rejects.toMatchObject({
       code: "LOCAL_LLM_INVALID_RESPONSE",
     });
 
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
   it("não chama OpenRouter nem executa nada; só consulta Ollama local", async () => {
-    globalThis.fetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ response: "missão textual" }),
-    }));
+    globalThis.fetch = mockPromptForgeOllama("missão textual");
 
     const out = await generatePromptForge(validPayload);
 
     expect(out.executed).toBe(false);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    expect(String(globalThis.fetch.mock.calls[0][0])).toBe("http://127.0.0.1:11434/api/generate");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(globalThis.fetch.mock.calls.map((call) => String(call[0]))).toEqual([
+      "http://127.0.0.1:11434/api/tags",
+      "http://127.0.0.1:11434/api/generate",
+    ]);
+  });
+});
+
+describe("PromptForge HTTP route", () => {
+  const validPayload = {
+    task: "create_prompt",
+    input: "Prepare um prompt textual.",
+    confirmedContext: "Contexto confirmado.",
+    constraints: ["não executar nada"],
+  };
+
+  let app;
+
+  beforeEach(() => {
+    config.llmHealthTimeoutMs = 25;
+    config.llmChatTimeoutMs = 75;
+    config.kalineCorsOrigin = "https://klio.example";
+    app = Fastify({ logger: false });
+    registerPromptForgeTestRoute(app);
+  });
+
+  afterEach(async () => {
+    if (app) await app.close();
+    globalThis.fetch = originalFetch;
+    config.llmHealthTimeoutMs = originalHealthTimeout;
+    config.llmChatTimeoutMs = originalChatTimeout;
+    config.kalineCorsOrigin = originalKalineCorsOrigin;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("POST válido retorna 200", async () => {
+    globalThis.fetch = mockPromptForgeOllama("Prompt gerado");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/llm/prompt-forge",
+      payload: validPayload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, model: PROMPTFORGE_MODEL, executed: false });
+  });
+
+  it("task proibida retorna 400", async () => {
+    globalThis.fetch = vi.fn();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/llm/prompt-forge",
+      payload: { ...validPayload, task: "write_code" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ ok: false, code: "TASK_NOT_ALLOWED" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("campo model retorna 400", async () => {
+    globalThis.fetch = vi.fn();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/llm/prompt-forge",
+      payload: { ...validPayload, model: "qwen2.5:1.5b" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ ok: false, code: "INVALID_REQUEST" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("input excessivo retorna 413", async () => {
+    globalThis.fetch = vi.fn();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/llm/prompt-forge",
+      payload: { ...validPayload, input: "x".repeat(12_001) },
+    });
+
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ ok: false, code: "INPUT_TOO_LARGE" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("resposta inválida do Ollama retorna 502", async () => {
+    globalThis.fetch = mockPromptForgeOllama("   ");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/llm/prompt-forge",
+      payload: validPayload,
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ ok: false, code: "LOCAL_LLM_INVALID_RESPONSE" });
+  });
+
+  it("timeout retorna 503", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        }),
+    );
+
+    const pending = app.inject({
+      method: "POST",
+      url: "/api/llm/prompt-forge",
+      payload: validPayload,
+    });
+    await vi.advanceTimersByTimeAsync(25);
+    const res = await pending;
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ ok: false, code: "LOCAL_LLM_TIMEOUT" });
+  });
+
+  it("Ollama indisponível retorna 503", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new TypeError("connect ECONNREFUSED");
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/llm/prompt-forge",
+      payload: validPayload,
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ ok: false, code: "LOCAL_LLM_UNAVAILABLE" });
+  });
+
+  it("OPTIONS com origem permitida retorna 204", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/api/llm/prompt-forge",
+      headers: { origin: "https://klio.example" },
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(res.headers["access-control-allow-origin"]).toBe("https://klio.example");
+  });
+
+  it("origem diferente não recebe cabeçalho CORS", async () => {
+    globalThis.fetch = mockPromptForgeOllama("Prompt gerado");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/llm/prompt-forge",
+      headers: { origin: "https://evil.example" },
+      payload: validPayload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
   });
 });

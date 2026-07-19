@@ -19,6 +19,8 @@ export const PROMPTFORGE_TASKS = Object.freeze([
 
 const OLLAMA_UNAVAILABLE_DETAIL = "Ollama não respondeu em 127.0.0.1:11434";
 const OLLAMA_TIMEOUT_DETAIL = "Tempo esgotado ao consultar o Ollama local";
+const OLLAMA_HTTP_ERROR_DETAIL = "Ollama local retornou erro HTTP.";
+const PROMPTFORGE_MODEL_UNAVAILABLE_DETAIL = `Modelo PromptForge ${PROMPTFORGE_MODEL} indisponível no Ollama local.`;
 const MAX_MESSAGE_CHARS = 12_000;
 const MAX_PROMPT_BLOCK_CHARS = 40_000;
 const MAX_PROMPTFORGE_CONSTRAINTS = 8;
@@ -87,6 +89,13 @@ function bridgeError(message, code) {
   const err = new Error(message);
   err.code = code;
   throw err;
+}
+
+function ollamaHttpError(status) {
+  const err = new Error(OLLAMA_HTTP_ERROR_DETAIL);
+  err.code = "ELLM_HTTP_STATUS";
+  err.status = status;
+  return err;
 }
 
 function badChatInput(message, code) {
@@ -296,6 +305,25 @@ function validatePromptForgeInput(body) {
   }
 }
 
+async function ensurePromptForgeModelAvailable() {
+  const res = await fetchOllama("/api/tags", {}, healthTimeoutMs());
+  if (!res.ok) throw ollamaHttpError(res.status);
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    bridgeError("Resposta local inválida.", "LOCAL_LLM_INVALID_RESPONSE");
+  }
+  const models = Array.isArray(data?.models)
+    ? data.models.map((model) => model?.name).filter((name) => typeof name === "string")
+    : [];
+  if (!models.includes(PROMPTFORGE_MODEL) || !isAllowedModel(PROMPTFORGE_MODEL)) {
+    const err = new Error(PROMPTFORGE_MODEL_UNAVAILABLE_DETAIL);
+    err.code = "ELLM_MODEL_UNAVAILABLE";
+    throw err;
+  }
+}
+
 export function buildPromptForgePrompt({ task, input, confirmedContext = "", constraints = [] }) {
   const constraintsText =
     constraints.length > 0 ? constraints.map((item) => `- ${item}`).join("\n") : "Nenhuma.";
@@ -341,6 +369,7 @@ export async function generatePromptForge(body) {
   validatePromptForgeInput(body);
   const startedAt = Date.now();
   try {
+    await ensurePromptForgeModelAvailable();
     const res = await fetchOllama(
       "/api/generate",
       {
@@ -360,7 +389,7 @@ export async function generatePromptForge(body) {
       },
       chatTimeoutMs(),
     );
-    if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
+    if (!res.ok) throw ollamaHttpError(res.status);
     let data;
     try {
       data = await res.json();
@@ -399,8 +428,12 @@ export async function generatePromptForge(body) {
     }
     const unavailable = new Error("Runtime local indisponível.");
     unavailable.code = err?.code === "ELLM_TIMEOUT" ? "LOCAL_LLM_TIMEOUT" : "LOCAL_LLM_UNAVAILABLE";
-    unavailable.detail =
-      err?.code === "ELLM_TIMEOUT" ? OLLAMA_TIMEOUT_DETAIL : OLLAMA_UNAVAILABLE_DETAIL;
+    unavailable.detail = OLLAMA_UNAVAILABLE_DETAIL;
+    if (err?.code === "ELLM_TIMEOUT") unavailable.detail = OLLAMA_TIMEOUT_DETAIL;
+    if (err?.code === "ELLM_HTTP_STATUS") unavailable.detail = OLLAMA_HTTP_ERROR_DETAIL;
+    if (err?.code === "ELLM_MODEL_UNAVAILABLE") {
+      unavailable.detail = PROMPTFORGE_MODEL_UNAVAILABLE_DETAIL;
+    }
     throw unavailable;
   }
 }
