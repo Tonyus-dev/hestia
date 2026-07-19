@@ -157,14 +157,18 @@ async function main() {
   root = await mkdtemp(join(tmpdir(), "hestia-dual-smoke-"));
   const desktopToken = randomBytes(32).toString("hex");
   const tvboxToken = randomBytes(32).toString("hex");
-  const [consolePort, desktopPort, tvboxPort, authPort] = await Promise.all([
+  const pocketToken = randomBytes(32).toString("hex");
+  const babyToken = randomBytes(32).toString("hex");
+  const [consolePort, desktopPort, tvboxPort, pocketPort, babyPort, authPort] = await Promise.all([
+    freePort(),
+    freePort(),
     freePort(),
     freePort(),
     freePort(),
     freePort(),
   ]);
-  const ports = [consolePort, desktopPort, tvboxPort, authPort];
-  ensure(new Set(ports).size === 4, "portas do smoke colidiram");
+  const ports = [consolePort, desktopPort, tvboxPort, pocketPort, babyPort, authPort];
+  ensure(new Set(ports).size === 6, "portas do smoke colidiram");
   const allowedUserId = "11111111-1111-4111-8111-111111111111";
   const deniedUserId = "22222222-2222-4222-8222-222222222222";
   const codiceOrigin = "https://codice-web.example.test";
@@ -215,8 +219,32 @@ async function main() {
       HESTIA_STORAGE_PATH: storage,
       HESTIA_DATA_DIR: join(root, "tvbox", "data"),
     });
+  const pocketEnv = cleanEnvironment({
+    NODE_ENV: "test",
+    HESTIA_STATION_HOST: HOST,
+    HESTIA_STATION_PORT: String(pocketPort),
+    HESTIA_STATION_TOKEN: pocketToken,
+    HESTIA_STATION_ORGANIZER_ENABLED: "0",
+    HESTIA_STATION_CODICE_ENABLED: "0",
+    HESTIA_STATION_SERVICES: "tailscaled,hermes",
+    HESTIA_STORAGE_PATH: join(root, "pocket", "root-disk"),
+    HESTIA_DATA_DIR: join(root, "pocket", "data"),
+  });
+  const babyEnv = cleanEnvironment({
+    NODE_ENV: "test",
+    HESTIA_STATION_HOST: HOST,
+    HESTIA_STATION_PORT: String(babyPort),
+    HESTIA_STATION_TOKEN: babyToken,
+    HESTIA_STATION_ORGANIZER_ENABLED: "0",
+    HESTIA_STATION_CODICE_ENABLED: "0",
+    HESTIA_STATION_SERVICES: "tailscaled,telegram-guard",
+    HESTIA_STORAGE_PATH: join(root, "baby", "root-disk"),
+    HESTIA_DATA_DIR: join(root, "baby", "data"),
+  });
   let desktop = start("desktop Station", "station.js", desktopEnv);
   let tvbox = start("TV Box Station", "station.js", tvboxEnv());
+  let pocket = start("Pocket Station", "station.js", pocketEnv);
+  let baby = start("Baby Station", "station.js", babyEnv);
   const consoleProcess = start(
     "Console",
     "hestia.js",
@@ -229,23 +257,47 @@ async function main() {
       HESTIA_DESKTOP_TOKEN: desktopToken,
       HESTIA_TVBOX_BASE_URL: `http://${HOST}:${tvboxPort}`,
       HESTIA_TVBOX_TOKEN: tvboxToken,
+      HESTIA_POCKET_BASE_URL: `http://${HOST}:${pocketPort}`,
+      HESTIA_POCKET_TOKEN: pocketToken,
+      HESTIA_BABY_BASE_URL: `http://${HOST}:${babyPort}`,
+      HESTIA_BABY_TOKEN: babyToken,
       HESTIA_STATION_TIMEOUT_MS: "1000",
     }),
   );
   const desktopBase = `http://${HOST}:${desktopPort}`;
   const tvboxBase = `http://${HOST}:${tvboxPort}`;
+  const pocketBase = `http://${HOST}:${pocketPort}`;
+  const babyBase = `http://${HOST}:${babyPort}`;
   const consoleBase = `http://${HOST}:${consolePort}`;
   await wait(desktopBase, "/api/station/health", { token: desktopToken, process: desktop });
   await wait(tvboxBase, "/api/station/health", { token: tvboxToken, process: tvbox });
+  await wait(pocketBase, "/api/station/health", { token: pocketToken, process: pocket });
+  await wait(babyBase, "/api/station/health", { token: babyToken, process: baby });
   await wait(consoleBase, "/api/health", { process: consoleProcess });
   ensure((await fetch(`${consoleBase}/`)).status === 200, "interface da Console não abriu");
   for (const path of ["/codice", "/organizador", "/config", "/manifest.webmanifest", "/rede/"]) {
     ensure((await fetch(`${consoleBase}${path}`)).status === 200, `${path} não abriu`);
   }
 
-  const secrets = [root, desktopToken, tvboxToken, desktopBase, tvboxBase];
-  for (const id of ["desktop", "tvbox"]) {
-    for (const suffix of ["connection", "health", "storage/status", "services/status"]) {
+  const secrets = [
+    root,
+    desktopToken,
+    tvboxToken,
+    pocketToken,
+    babyToken,
+    desktopBase,
+    tvboxBase,
+    pocketBase,
+    babyBase,
+  ];
+  for (const id of ["desktop", "tvbox", "pocket", "baby"]) {
+    for (const suffix of [
+      "connection",
+      "health",
+      "system/status",
+      "storage/status",
+      "services/status",
+    ]) {
       const result = await json(consoleBase, `/api/stations/${id}/${suffix}`);
       ensure(result.response.status === 200, `${id}/${suffix} falhou`);
       sanitized(result.text, secrets, `${id}/${suffix}`);
@@ -261,6 +313,8 @@ async function main() {
     "/api/stations/desktop/codice/health",
     "/api/stations/tvbox/codice/library",
     "/api/stations/tvbox/codice/books/inexistente",
+    "/api/stations/pocket/codice/health",
+    "/api/stations/baby/organizer/runs",
     "/api/stations/outro/health",
     "/api/station/health",
     "/api/station/organizer/runs",
@@ -384,6 +438,30 @@ async function main() {
     "livro removido entre listagem e abertura não retornou 404",
   );
 
+  await stop(pocket);
+  ensure(
+    (await json(consoleBase, "/api/stations/pocket/connection")).body.state === "unavailable",
+    "Pocket desligada não degradou",
+  );
+  ensure(
+    (await json(consoleBase, "/api/stations/baby/connection")).body.state === "available",
+    "Baby caiu junto com Pocket",
+  );
+  pocket = start("Pocket Station reiniciada", "station.js", pocketEnv);
+  await wait(pocketBase, "/api/station/health", { token: pocketToken, process: pocket });
+
+  await stop(baby);
+  ensure(
+    (await json(consoleBase, "/api/stations/baby/connection")).body.state === "unavailable",
+    "Baby desligada não degradou",
+  );
+  ensure(
+    (await json(consoleBase, "/api/stations/pocket/connection")).body.state === "available",
+    "Pocket caiu junto com Baby",
+  );
+  baby = start("Baby Station reiniciada", "station.js", babyEnv);
+  await wait(babyBase, "/api/station/health", { token: babyToken, process: baby });
+
   await stop(desktop);
   ensure(
     (await json(consoleBase, "/api/stations/desktop/connection")).body.state === "unavailable",
@@ -411,6 +489,8 @@ async function main() {
     tvboxEnv(join(root, "tvbox", "sem-biblioteca")),
   );
   await wait(tvboxBase, "/api/station/health", { token: tvboxToken, process: tvbox });
+  await wait(pocketBase, "/api/station/health", { token: pocketToken, process: pocket });
+  await wait(babyBase, "/api/station/health", { token: babyToken, process: baby });
   ensure(
     (await json(consoleBase, "/api/stations/tvbox/connection")).body.state === "available",
     "Station da TV Box indisponível sem biblioteca",
@@ -422,6 +502,8 @@ async function main() {
 
   await stop(desktop);
   await stop(tvbox);
+  await stop(pocket);
+  await stop(baby);
   await stop(consoleProcess);
   for (const server of servers.splice(0)) await new Promise((resolve) => server.close(resolve));
   await reusable(ports);
@@ -430,7 +512,7 @@ async function main() {
   await rm(root, { recursive: true, force: true });
   root = undefined;
   console.log(
-    "Station Smoke: OK — Console + desktop + TV Box, Organizer dry-run e Códice autenticado com health interno",
+    "Station Smoke: OK — Console + desktop + TV Box + Pocket + Baby, Organizer dry-run e Códice autenticado com health interno",
   );
 }
 

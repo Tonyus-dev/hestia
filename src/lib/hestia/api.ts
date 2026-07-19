@@ -166,6 +166,10 @@ export type HardwareConfig = {
     desktopAuthConfigured: boolean;
     tvboxConfigured: boolean;
     tvboxAuthConfigured: boolean;
+    pocketConfigured: boolean;
+    pocketAuthConfigured: boolean;
+    babyConfigured: boolean;
+    babyAuthConfigured: boolean;
     stationTimeoutMs: number;
     legacyStationConfigDetected: boolean;
     services: string[];
@@ -226,7 +230,7 @@ export type StationState =
   | "unauthorized"
   | "incompatible";
 
-export type StationId = "desktop" | "tvbox";
+export type StationId = "desktop" | "tvbox" | "pocket" | "baby";
 
 export type StationHealth = {
   ok: true;
@@ -244,6 +248,29 @@ export type StationConnection = {
   latencyMs: number | null;
   station: null | { service: "hestia-station-agent"; schemaVersion: 1; version: string };
   code?: string;
+};
+
+export type StationSystem = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  system: {
+    hostname: string;
+    platform: string;
+    release: string;
+    arch: string;
+    uptimeSeconds: number;
+    cpu: {
+      model: string;
+      cores: number;
+      threads: number;
+      loadAverage: number[];
+      usagePercent: number | null;
+    };
+    memory: { totalBytes: number; usedBytes: number; freeBytes: number; usedPercent: number };
+    swap: { totalBytes: number; usedBytes: number; freeBytes: number; usedPercent: number | null };
+    rootDisk: { totalBytes: number; usedBytes: number; freeBytes: number; usedPercent: number };
+  };
 };
 
 export type StationStorage = {
@@ -266,7 +293,7 @@ export type StationServices = {
   schemaVersion: 1;
   checkedAt: string;
   services: Array<{
-    id: "jellyfin" | "smbd" | "tailscaled";
+    id: "jellyfin" | "smbd" | "tailscaled" | "hermes" | "telegram-guard";
     active: boolean;
     status: "active" | "inactive" | "failed" | "not-installed" | "unavailable" | "unknown";
   }>;
@@ -343,6 +370,10 @@ export type Config = {
   desktopAuthConfigured: boolean;
   tvboxConfigured: boolean;
   tvboxAuthConfigured: boolean;
+  pocketConfigured: boolean;
+  pocketAuthConfigured: boolean;
+  babyConfigured: boolean;
+  babyAuthConfigured: boolean;
   stationTimeoutMs: number;
   legacyStationConfigDetected: boolean;
   services: string[];
@@ -586,6 +617,7 @@ export const hestiaApi = {
   stationHealth: (id: StationId) => safeFetch<StationHealth>(`/api/stations/${id}/health`),
   stationStorage: (id: StationId) =>
     safeFetch<StationStorage>(`/api/stations/${id}/storage/status`),
+  stationSystem: (id: StationId) => safeFetch<StationSystem>(`/api/stations/${id}/system/status`),
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),

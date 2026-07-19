@@ -12,6 +12,7 @@ import {
   isLoopbackHost,
 } from "./security.js";
 import { getServicesStatus } from "./services.js";
+import { getStationSystemStatus } from "./systemStatus.js";
 import { getStorageStatus } from "./storage.js";
 import { ensureDataDir, resolveDataDir } from "./dataDir.js";
 import { config as sharedConfig } from "./config.js";
@@ -233,6 +234,7 @@ export function createStationAgent(config, providers = {}) {
   const app = Fastify({ logger: false });
   const readStorage = providers.getStorageStatus || getStorageStatus;
   const readServices = providers.getServicesStatus || getServicesStatus;
+  const readSystem = providers.getStationSystemStatus || getStationSystemStatus;
   const authFetch = providers.fetch || globalThis.fetch;
 
   app.addHook("onRequest", async (request, reply) => {
@@ -292,6 +294,8 @@ export function createStationAgent(config, providers = {}) {
     version: pkg.version,
     checkedAt: new Date().toISOString(),
   }));
+
+  app.get("/api/station/system/status", async () => readSystem());
 
   app.get("/api/station/storage/status", async () =>
     publicStorage(await readStorage([config.storagePath || "/KALINE"])),

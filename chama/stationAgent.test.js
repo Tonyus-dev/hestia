@@ -283,7 +283,7 @@ describe("Station Agent", () => {
       }),
     ).toMatchObject({
       storagePath: "/current",
-      services: ["jellyfin", "smbd", "tailscaled"],
+      services: ["jellyfin", "smbd", "tailscaled", "hermes", "telegram-guard"],
     });
     expect(
       resolveStationAgentConfig({
@@ -367,6 +367,7 @@ describe("Station Agent", () => {
       "/api/station/health",
       "/api/station/storage/status",
       "/api/station/services/status",
+      "/api/station/system/status",
     ]) {
       expect((await authenticated(baseUrl, path)).status).toBe(200);
     }

@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { resolveStationAgentConfig } from "./stationAgent.js";
 import {
   fetchStationHealth,
+  fetchStationSystemStatus,
   fetchStationServicesStatus,
   fetchStationStorageStatus,
 } from "./stationClient.js";
@@ -262,6 +263,17 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
       else warn(`${item.id} ${item.status}`);
     }
   }
+
+  const system = await fetchStationSystemStatus(clientConfig);
+  if (!system.ok) bad(`system falhou (${system.code})`);
+  else if (
+    system.system.system.hostname.trim() &&
+    system.system.system.arch.trim() &&
+    system.system.system.memory.totalBytes > 0 &&
+    system.system.system.rootDisk.totalBytes > 0
+  )
+    ok("system respondeu");
+  else bad("system contrato inválido");
 
   if (config.codiceEnabled) {
     let response;

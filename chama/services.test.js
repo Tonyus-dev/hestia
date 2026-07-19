@@ -39,6 +39,8 @@ describe("getServicesStatus", () => {
       { name: "jellyfin", active: true, status: "active" },
       { name: "smbd", active: true, status: "active" },
       { name: "tailscaled", active: true, status: "active" },
+      { name: "hermes", active: true, status: "active" },
+      { name: "telegram-guard", active: true, status: "active" },
     ]);
   });
 
@@ -51,7 +53,7 @@ describe("getServicesStatus", () => {
 
     const { items } = await getServicesStatus();
 
-    expect(items).toHaveLength(3);
+    expect(items).toHaveLength(5);
     expect(items.every((item) => item.active === false && item.status === "unavailable")).toBe(
       true,
     );
@@ -67,10 +69,17 @@ describe("getServicesStatus", () => {
       "evil.service",
       "jellyfin",
       "tailscaled",
+      "hermes",
+      "telegram-guard",
     ]);
 
-    expect(items.map((item) => item.name)).toEqual(["jellyfin", "tailscaled"]);
-    expect(execFile).toHaveBeenCalledTimes(2);
+    expect(items.map((item) => item.name)).toEqual([
+      "jellyfin",
+      "tailscaled",
+      "hermes",
+      "telegram-guard",
+    ]);
+    expect(execFile).toHaveBeenCalledTimes(4);
     expect(execFile.mock.calls.flatMap((call) => call[1])).not.toContain("evil.service");
   });
 });
