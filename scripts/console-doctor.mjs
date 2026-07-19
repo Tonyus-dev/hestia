@@ -3,7 +3,11 @@ import { readFile, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 
 import { supportsHestiaNode } from "./require-node.mjs";
-import { hasLegacyConsoleStationConfig } from "../chama/consoleDoctor.js";
+import {
+  classifyConsoleStationState,
+  hasLegacyConsoleStationConfig,
+} from "../chama/consoleDoctor.js";
+import { STATION_IDS } from "../chama/stationClient.js";
 
 const run = promisify(execFile);
 const envFile = process.env.HESTIA_ENV_FILE || "/etc/default/hestia-console";
@@ -12,7 +16,12 @@ const baseUrl = process.env.HESTIA_URL || "http://127.0.0.1:4517";
 const requireSystemd = process.argv.includes("--require-systemd");
 const lines = [];
 let failed = false;
+let warned = false;
 const ok = (message) => lines.push(`ok: ${message}`);
+const warn = (message) => {
+  warned = true;
+  lines.push(`aviso: ${message}`);
+};
 const bad = (message) => {
   failed = true;
   lines.push(`erro: ${message}`);
@@ -65,19 +74,32 @@ if (requireSystemd) {
 try {
   const health = await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(10_000) });
   health.ok ? ok("Console responde em 127.0.0.1:4517") : bad("Console não respondeu");
-  for (const id of ["desktop", "tvbox"]) {
+  for (const id of STATION_IDS) {
     const response = await fetch(`${baseUrl}/api/stations/${id}/connection`, {
       signal: AbortSignal.timeout(10_000),
     });
     const body = await response.json();
-    if (!response.ok || body?.ok !== true) bad(`${id}: contrato inválido`);
-    else if (body.state === "available" || body.state === "not_configured")
-      ok(`${id}: ${body.state}`);
+    if (!response.ok || body?.ok !== true) {
+      bad(`${id}: contrato inválido`);
+      continue;
+    }
+    const classification = classifyConsoleStationState(body.state);
+    if (classification === "ok") ok(`${id}: ${body.state}`);
+    else if (classification === "warning") warn(`${id}: ${body.state}`);
     else bad(`${id}: ${body.state || "indisponível"}`);
   }
 } catch {
   bad("Console não respondeu ao Doctor");
 }
 
-console.log([...lines, failed ? "Console Doctor: FALHOU" : "Console Doctor: OK"].join("\n"));
+console.log(
+  [
+    ...lines,
+    failed
+      ? "Console Doctor: FALHOU"
+      : warned
+        ? "Console Doctor: OK COM AVISOS"
+        : "Console Doctor: OK",
+  ].join("\n"),
+);
 process.exitCode = failed ? 1 : 0;

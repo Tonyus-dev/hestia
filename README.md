@@ -101,6 +101,8 @@ GET /api/station/codice/health
 
 Stations: `desktop` monitora armazenamento e Organizer; `tvbox` monitora Códice read-only; `pocket` é monitor-only para Hermes experimental e vigilância; `baby` é monitor-only para Telegram, monitoramento e Wake-on-LAN. Pocket e Baby não habilitam Organizer, Códice nem ações remotas; monitoram apenas o Agent, sistema, disco raiz agregado e serviços configurados (`tailscaled,hermes` ou `tailscaled,telegram-guard`).
 
+Cada host de Station pode usar a porta local `4518` porque roda em máquina distinta. O Console Doctor percorre as quatro Stations canônicas; Station temporariamente offline gera aviso e não bloqueia atualização da Console, mas configuração inválida, autenticação quebrada e contrato incompatível continuam bloqueando.
+
 Variáveis opcionais da Console para as novas Stations: `HESTIA_POCKET_BASE_URL`, `HESTIA_POCKET_TOKEN`, `HESTIA_BABY_BASE_URL`, `HESTIA_BABY_TOKEN`. Use origens HTTPS privadas exatas; não versionar IPs, hostnames reais ou tokens.
 
 O Agent inicia com `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. As requisições públicas `GET` e `HEAD` de `/api/codice/*` exigem Bearer Supabase válido, `user.id` na allowlist `HESTIA_CODICE_ALLOWED_USER_IDS` e a origem exata configurada. As requisições `OPTIONS` validam apenas o preflight CORS, não exigem Bearer e não consultam o Supabase. Somente chave `sb_publishable_` é aceita; service-role não é usada. Console e Doctor monitoram apenas `GET /api/station/codice/health` com o token da Station, sem JWT de usuário. EPUB e PDF são obrigatórios e TXT é opcional. Não há Range, resposta 206, upload, import ou escrita.
