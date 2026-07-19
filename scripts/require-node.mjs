@@ -15,8 +15,7 @@ export function supportsHestiaNode(value) {
   return true;
 }
 
-const requested = process.env.HESTIA_NODE_VERSION_CHECK || process.version;
-if (!supportsHestiaNode(requested)) {
-  console.error(`Node.js >=22.13.0 é necessário (detectado ${requested}).`);
+if (!supportsHestiaNode(process.version)) {
+  console.error(`Node.js >=22.13.0 é necessário (detectado ${process.version}).`);
   process.exitCode = 1;
 }

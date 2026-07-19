@@ -7,6 +7,7 @@ import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 import { classifyConsoleStationState, hasLegacyConsoleStationConfig } from "./consoleDoctor.js";
 import { STATION_IDS } from "./stationClient.js";
+import { supportsHestiaNode } from "../scripts/require-node.mjs";
 
 function runDoctor({ baseUrl, envFile, runtimeDir }) {
   return new Promise((resolve) => {
@@ -17,7 +18,6 @@ function runDoctor({ baseUrl, envFile, runtimeDir }) {
         HESTIA_URL: baseUrl,
         HESTIA_ENV_FILE: envFile,
         HESTIA_INSTALL_ROOT: runtimeDir,
-        HESTIA_NODE_VERSION_CHECK: "v24.18.0",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -64,6 +64,8 @@ async function withConsole(states, fn) {
   }
 }
 
+const describeDoctorScript = supportsHestiaNode(process.version) ? describe : describe.skip;
+
 describe("Console Doctor", () => {
   it("detecta as variáveis legadas sem depender de seus valores", () => {
     expect(hasLegacyConsoleStationConfig("HESTIA_STATION_BASE_URL=https://legacy.example")).toBe(
@@ -97,6 +99,16 @@ describe("Console Doctor", () => {
     expect(script).not.toContain('["desktop", "tvbox"]');
   });
 
+  it("não permite bypass de versão real do Node no script de produção", async () => {
+    const script = await readFile(
+      join(import.meta.dirname, "..", "scripts", "console-doctor.mjs"),
+      "utf8",
+    );
+    expect(script).not.toContain("HESTIA_NODE_VERSION_CHECK");
+  });
+});
+
+describeDoctorScript("Console Doctor script", () => {
   it("aprova com aviso quando uma Station configurada está indisponível", async () => {
     const runtime = await withDoctorRuntime();
     await withConsole(

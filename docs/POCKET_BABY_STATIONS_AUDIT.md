@@ -17,7 +17,7 @@
 - Rotas especiais: Códice apenas TV Box; Organizer apenas desktop em `chama/stationRoutes.js`.
 - Tipos frontend: `StationId = "desktop" | "tvbox" | "pocket" | "baby"` em `src/lib/hestia/api.ts`.
 - Cards atuais: quatro cards a partir do registro de Stations em `src/routes/_station.index.tsx`.
-- Configuração pública: flags desktop/tvbox em `publicStationConfig()`.
+- Configuração pública: flags desktop, tvbox, pocket e baby em `publicStationConfig()`.
 - Env example: variáveis documentadas em README/deploy, sem env example dedicado.
 - Doctor: genérico para Agent em `chama/stationDoctor.js`.
 - Smoke: dois Agents efêmeros em `scripts/station-smoke.mjs`.
@@ -38,12 +38,11 @@
 
 - Nenhuma lacuna nova foi aberta por esta correção do Console Doctor.
 
-## Escopo mínimo
+## Escopo desta correção
 
-- Arquivos necessários: cliente/rotas/Agent/hardware/services, tipos/UI, Doctor/smoke, testes e docs Station existentes.
-- Arquivos que não serão tocados: PromptForge, LLM, Klio, Kódice funcional, Organizer funcional, Supabase, identidade visual.
-- Riscos: validação estrita incompatível com resposta real; smoke local pode falhar por ambiente; validação física indisponível neste ambiente.
-- Plano: adicionar IDs e envs; criar contrato read-only genérico; proxyar rota; renderizar quatro cards por registro seguro; ampliar allowlist; atualizar testes/smoke/docs; executar gates; marcar validação física como bloqueada se não disponível.
+- Reusar o registro canônico das quatro Stations no Console Doctor.
+- Separar aviso operacional de falha fatal sem alterar arquitetura, UI, contratos das Stations, PromptForge, LLM, Organizer, Códice, Supabase ou VMs.
+- Registrar apenas a validação física comprovada e manter pendências sem inventar conclusão.
 
 # Validação física — 2026-07-19
 

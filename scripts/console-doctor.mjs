@@ -27,8 +27,9 @@ const bad = (message) => {
   lines.push(`erro: ${message}`);
 };
 
-const nodeVersion = process.env.HESTIA_NODE_VERSION_CHECK || process.version;
-supportsHestiaNode(nodeVersion) ? ok(`Node ${nodeVersion}`) : bad(`Node >=22.13.0 necessário`);
+supportsHestiaNode(process.version)
+  ? ok(`Node ${process.version}`)
+  : bad(`Node >=22.13.0 necessário`);
 try {
   const runtime = await stat(`${runtimeDir}/hestia.js`);
   runtime.isFile() ? ok("runtime da Console instalado") : bad("runtime da Console inválido");
