@@ -170,6 +170,8 @@ export type HardwareConfig = {
     pocketAuthConfigured: boolean;
     babyConfigured: boolean;
     babyAuthConfigured: boolean;
+    miniConfigured: boolean;
+    miniAuthConfigured: boolean;
     stationTimeoutMs: number;
     legacyStationConfigDetected: boolean;
     services: string[];
@@ -230,7 +232,7 @@ export type StationState =
   | "unauthorized"
   | "incompatible";
 
-export type StationId = "desktop" | "tvbox" | "pocket" | "baby";
+export type StationId = "desktop" | "tvbox" | "pocket" | "baby" | "mini";
 
 export type StationHealth = {
   ok: true;
@@ -398,6 +400,8 @@ export type Config = {
   pocketAuthConfigured: boolean;
   babyConfigured: boolean;
   babyAuthConfigured: boolean;
+  miniConfigured: boolean;
+  miniAuthConfigured: boolean;
   stationTimeoutMs: number;
   legacyStationConfigDetected: boolean;
   services: string[];

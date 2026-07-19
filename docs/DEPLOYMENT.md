@@ -2,7 +2,7 @@
 
 ## Arquitetura
 
-- `127.0.0.1:4517`: Héstia Console no notebook; monitora as duas Stations.
+- `127.0.0.1:4517`: Héstia Console no notebook; monitora as cinco Stations.
 - `127.0.0.1:4518`: Station Agent no desktop; monitor-only, sem Organizer e sem Códice.
 - `127.0.0.1:4519`: Station Agent na TV Box; monitor-only e Códice read-only.
 
@@ -20,14 +20,15 @@ Console, Station e Códice não copiam arquivos. A cópia desktop → TV Box con
 
 1. Desktop/servidor;
 2. TV Box;
-3. Tailscale e acesso privado;
-4. Notebook/Console;
-5. Gate físico completo.
+3. Pocket/Baby/Mini quando usadas;
+4. Tailscale e acesso privado;
+5. Notebook/Console;
+6. Gate físico completo.
 
 As Stations não dependem da Console. Por isso, instale e valide primeiro o
 desktop em `127.0.0.1:4518` e depois a TV Box em `127.0.0.1:4519`. Só então
-configure manualmente a rede privada e instale a Console com as duas URLs e
-tokens reais. Esta é uma sequência operacional, não uma automação.
+configure manualmente a rede privada e instale a Console com as URLs e
+tokens reais de cada Station usada. Esta é uma sequência operacional, não uma automação.
 
 ### 1. Desktop/servidor
 
@@ -47,15 +48,21 @@ configure explicitamente `HESTIA_STATION_ORGANIZER_ENABLED=0`,
 `HESTIA_STATION_ALLOWED_HOSTS=<HOST_PRIVADO>`. Execute o Doctor instalado e
 valide health, storage, services e Códice.
 
-### 3. Rede privada
+### 3. Mini sentinela externa
 
-Depois das duas Stations funcionarem localmente, configure Tailscale e acesso
+A Mini usa o `hestia-station-agent` genérico em Debian 13 como sentinela externa. Instale com porta local `4518`, serviço não-root, token criado localmente, bind em loopback e acesso remoto somente pela rede privada configurada pelo usuário; nenhum IP público, hostname privado real ou token deve entrar no código.
+
+Configuração esperada na Mini: `HESTIA_STATION_HOST=127.0.0.1`, `HESTIA_STATION_PORT=4518`, `HESTIA_STATION_ORGANIZER_ENABLED=0`, `HESTIA_STATION_CODICE_ENABLED=0` e `HESTIA_STATION_SERVICES=tailscaled`. Configure somente a Console com `HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>` e `HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>`. A Console deve obter sistema, arquitetura, RAM, swap, CPU, disco, uptime e `tailscaled` da resposta real do Agent.
+
+### 4. Rede privada
+
+Depois das Stations funcionarem localmente, configure Tailscale e acesso
 privado manualmente. Valide os dois endpoints, hosts permitidos exatos e que o
 acesso não é público. A Héstia não automatiza esse passo.
 
-### 4. Notebook/Console
+### 5. Notebook/Console
 
-Somente depois de obter as duas URLs privadas e os dois tokens independentes,
+Somente depois de obter as URLs privadas e tokens independentes,
 instale a Console e execute o Doctor instalado em `/opt`. A Console depende das
 Stations; as Stations não dependem da Console.
 
@@ -80,6 +87,12 @@ HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>
 HESTIA_DESKTOP_TOKEN=<TOKEN_DESKTOP>
 HESTIA_TVBOX_BASE_URL=https://<TVBOX_PRIVADA>
 HESTIA_TVBOX_TOKEN=<TOKEN_TVBOX>
+HESTIA_POCKET_BASE_URL=https://<HOST_PRIVADO_DA_POCKET>
+HESTIA_POCKET_TOKEN=<TOKEN_DA_STATION>
+HESTIA_BABY_BASE_URL=https://<HOST_PRIVADO_DA_BABY>
+HESTIA_BABY_TOKEN=<TOKEN_DA_STATION>
+HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>
+HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>
 HESTIA_STATION_TIMEOUT_MS=5000
 HESTIA_ORGANIZER_TIMEOUT_MS=120000
 ```

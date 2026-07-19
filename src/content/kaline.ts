@@ -49,6 +49,8 @@ export const HESTIA = {
   pocketAuthConfigured: false,
   babyConfigured: false,
   babyAuthConfigured: false,
+  miniConfigured: false,
+  miniAuthConfigured: false,
   stationTimeoutMs: 5000,
   services: ["tailscaled"],
   endpoints: [
@@ -130,6 +132,8 @@ export const HESTIA = {
         "pocketAuthConfigured",
         "babyConfigured",
         "babyAuthConfigured",
+        "miniConfigured",
+        "miniAuthConfigured",
         "stationTimeoutMs",
         "services",
       ],

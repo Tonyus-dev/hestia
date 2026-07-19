@@ -93,6 +93,8 @@ function ConfigPage() {
                 <Row k="Token da Pocket" v={state.data.pocketAuthConfigured ? "sim" : "não"} />
                 <Row k="Baby configurada" v={state.data.babyConfigured ? "sim" : "não"} />
                 <Row k="Token da Baby" v={state.data.babyAuthConfigured ? "sim" : "não"} />
+                <Row k="Mini configurada" v={state.data.miniConfigured ? "sim" : "não"} />
+                <Row k="Token da Mini" v={state.data.miniAuthConfigured ? "sim" : "não"} />
                 <Row
                   k="Configuração legada"
                   v={state.data.legacyStationConfigDetected ? "corrigir" : "ausente"}
