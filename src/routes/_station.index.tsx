@@ -13,7 +13,7 @@ import { Row } from "@/components/hestia/shared/Row";
 
 export const Route = createFileRoute("/_station/")({ component: Painel });
 
-const STATION_UI: Array<{
+export const STATION_UI: Array<{
   id: StationId;
   title: string;
   role: string;

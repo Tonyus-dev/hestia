@@ -39,8 +39,6 @@ describe("getServicesStatus", () => {
       { name: "jellyfin", active: true, status: "active" },
       { name: "smbd", active: true, status: "active" },
       { name: "tailscaled", active: true, status: "active" },
-      { name: "hermes", active: true, status: "active" },
-      { name: "telegram-guard", active: true, status: "active" },
     ]);
   });
 
@@ -53,7 +51,7 @@ describe("getServicesStatus", () => {
 
     const { items } = await getServicesStatus();
 
-    expect(items).toHaveLength(5);
+    expect(items).toHaveLength(3);
     expect(items.every((item) => item.active === false && item.status === "unavailable")).toBe(
       true,
     );

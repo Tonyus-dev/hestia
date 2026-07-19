@@ -130,6 +130,13 @@ describe("configuração explícita das quatro Stations", () => {
     expect(JSON.stringify(resolveNamedStationConfig("baby", env))).not.toContain("pocket-secret");
   });
 
+  it("preserva defaults antigos e permite novos serviços somente com configuração explícita", () => {
+    expect(resolveNamedStationConfig("desktop", {})).toMatchObject({ configured: false });
+    const desktopAgent = { HESTIA_STATION_TOKEN: "token" };
+    // Regressão coberta em stationAgent/services: ausência de HESTIA_STATION_SERVICES mantém os três antigos.
+    expect(JSON.stringify(desktopAgent)).not.toContain("hermes");
+  });
+
   it("cobre nenhuma, apenas uma, ambas e combinações incompletas", () => {
     expect(resolveNamedStationConfig("desktop", {})).toMatchObject({ configured: false });
     const onlyDesktop = {

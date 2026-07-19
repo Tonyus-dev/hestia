@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 
-import { ALLOWED_SERVICES } from "./config.js";
+import { ALLOWED_SERVICES, DEFAULT_SERVICES } from "./config.js";
 import {
   applyCodiceCors,
   buildAllowedHosts,
@@ -150,7 +150,7 @@ export function resolveStationAgentConfig(env = process.env) {
   const storagePath = resolve(rawStoragePath);
   const dataDir = resolveDataDir(env);
   const requestedServices = new Set(
-    (env.HESTIA_STATION_SERVICES || ALLOWED_SERVICES.join(","))
+    (env.HESTIA_STATION_SERVICES || DEFAULT_SERVICES.join(","))
       .split(",")
       .map((name) => name.trim())
       .filter(Boolean),
@@ -295,14 +295,20 @@ export function createStationAgent(config, providers = {}) {
     checkedAt: new Date().toISOString(),
   }));
 
-  app.get("/api/station/system/status", async () => readSystem());
+  app.get("/api/station/system/status", async (_request, reply) => {
+    try {
+      return await readSystem();
+    } catch {
+      return reply.code(503).send({ ok: false, error: "system_unavailable" });
+    }
+  });
 
   app.get("/api/station/storage/status", async () =>
     publicStorage(await readStorage([config.storagePath || "/KALINE"])),
   );
 
   app.get("/api/station/services/status", async () =>
-    publicServices(await readServices(config.services || ALLOWED_SERVICES)),
+    publicServices(await readServices(config.services || DEFAULT_SERVICES)),
   );
 
   if (config.organizerEnabled === true) {
