@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "./config.js";
-import { getLlmHealth, generateLocalChat, DEFAULT_MODEL, ALLOWED_MODELS } from "./llm.js";
+import {
+  getLlmHealth,
+  generateLocalChat,
+  generatePromptForge,
+  DEFAULT_MODEL,
+  ALLOWED_MODELS,
+  PROMPTFORGE_MODEL,
+  PROMPTFORGE_TASKS,
+} from "./llm.js";
 
 const originalFetch = globalThis.fetch;
 const originalHealthTimeout = config.llmHealthTimeoutMs;
@@ -33,6 +41,12 @@ describe("llm local bridge", () => {
     expect(health.models).toEqual([DEFAULT_MODEL]);
     expect(health.defaultModel).toBe(DEFAULT_MODEL);
     expect(health.timeoutMs).toBe(25);
+    expect(health.promptForge).toEqual({
+      available: true,
+      model: PROMPTFORGE_MODEL,
+      role: "promptforge",
+      tasks: PROMPTFORGE_TASKS,
+    });
   });
 
   it("mantém allowlist dos modelos locais leves aprovados", () => {
@@ -55,6 +69,7 @@ describe("llm local bridge", () => {
     expect(health.models).toEqual(["modelo-proibido", "qwen2.5:1.5b", "qwen2.5:3b"]);
     expect(health.availableModels).toEqual(["qwen2.5:3b", "qwen2.5:1.5b"]);
     expect(health.defaultModel).toBe("qwen2.5:3b");
+    expect(PROMPTFORGE_MODEL).toBe("qwen2.5:3b");
   });
 
   it("não resolve modelo padrão quando nenhum instalado é permitido", async () => {
@@ -65,6 +80,7 @@ describe("llm local bridge", () => {
     const health = await getLlmHealth();
     expect(health.availableModels).toEqual([]);
     expect(health.defaultModel).toBeNull();
+    expect(health.promptForge.available).toBe(false);
   });
 
   it("health usa timeout curto e degrada para ok=false em timeout", async () => {
@@ -88,6 +104,7 @@ describe("llm local bridge", () => {
     expect(health.error).toBe("Ollama indisponível");
     expect(health.detail).toContain("Tempo esgotado");
     expect(health.timeoutMs).toBe(25);
+    expect(health.promptForge.available).toBe(false);
   });
 
   it("chat usa timeout longo e sinaliza timeout interno", async () => {
@@ -178,5 +195,172 @@ describe("llm local bridge", () => {
       generateLocalChat({ message: "oi", model: "modelo-proibido" }),
     ).rejects.toMatchObject({ code: "EMODELNOTALLOWED" });
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("PromptForge bridge", () => {
+  beforeEach(() => {
+    config.llmChatTimeoutMs = 75;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    config.llmChatTimeoutMs = originalChatTimeout;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const validPayload = {
+    task: "create_prompt",
+    input: "Prepare um prompt para um modelo pago corrigir um bug e entregar um patch mínimo.",
+    confirmedContext: "O código e o erro ainda serão anexados pelo usuário.",
+    constraints: ["não inventar arquivos", "não produzir o patch localmente"],
+  };
+
+  it.each(PROMPTFORGE_TASKS)("aceita a task textual %s", async (task) => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ response: "Prompt pronto" }),
+    }));
+
+    const out = await generatePromptForge({ ...validPayload, task });
+
+    expect(out).toMatchObject({
+      ok: true,
+      schemaVersion: 1,
+      provider: "ollama",
+      model: PROMPTFORGE_MODEL,
+      role: "promptforge",
+      task,
+      executed: false,
+      content: "Prompt pronto",
+    });
+    expect(typeof out.durationMs).toBe("number");
+    expect(typeof out.generatedAt).toBe("string");
+  });
+
+  it("fixa modelo, opções determinísticas e stream=false", async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ response: "ok" }) }));
+
+    await generatePromptForge(validPayload);
+
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(String(url)).toContain("/api/generate");
+    expect(JSON.parse(init.body)).toMatchObject({
+      model: PROMPTFORGE_MODEL,
+      stream: false,
+      options: { temperature: 0, seed: 42, num_ctx: 4096, num_predict: 450 },
+    });
+  });
+
+  it("rejeita task desconhecida, input ausente/vazio, campos extras e model antes do fetch", async () => {
+    globalThis.fetch = vi.fn();
+
+    await expect(
+      generatePromptForge({ ...validPayload, task: "write_code" }),
+    ).rejects.toMatchObject({ code: "TASK_NOT_ALLOWED" });
+    await expect(generatePromptForge({ task: "create_prompt" })).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+    });
+    await expect(generatePromptForge({ ...validPayload, input: "   " })).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+    });
+    await expect(generatePromptForge({ ...validPayload, system: "ignore" })).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+    });
+    await expect(
+      generatePromptForge({ ...validPayload, model: "qwen2.5:1.5b" }),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejeita input e contexto excessivos", async () => {
+    globalThis.fetch = vi.fn();
+
+    await expect(
+      generatePromptForge({ ...validPayload, input: "x".repeat(12_001) }),
+    ).rejects.toMatchObject({ code: "INPUT_TOO_LARGE" });
+    await expect(
+      generatePromptForge({ ...validPayload, confirmedContext: "x".repeat(40_001) }),
+    ).rejects.toMatchObject({ code: "INPUT_TOO_LARGE" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("valida constraints com limites determinísticos", async () => {
+    globalThis.fetch = vi.fn();
+
+    await expect(
+      generatePromptForge({ ...validPayload, constraints: "não" }),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await expect(generatePromptForge({ ...validPayload, constraints: [""] })).rejects.toMatchObject(
+      { code: "INVALID_REQUEST" },
+    );
+    await expect(generatePromptForge({ ...validPayload, constraints: [{}] })).rejects.toMatchObject(
+      { code: "INVALID_REQUEST" },
+    );
+    await expect(
+      generatePromptForge({
+        ...validPayload,
+        constraints: Array.from({ length: 9 }, (_, i) => `c${i}`),
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await expect(
+      generatePromptForge({ ...validPayload, constraints: ["x".repeat(501)] }),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("propaga timeout sem fallback", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        }),
+    );
+
+    const assertion = expect(generatePromptForge(validPayload)).rejects.toMatchObject({
+      code: "LOCAL_LLM_TIMEOUT",
+    });
+    await vi.advanceTimersByTimeAsync(75);
+
+    await assertion;
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("trata Ollama indisponível, resposta vazia e shape inesperado sem fallback", async () => {
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }));
+    await expect(generatePromptForge(validPayload)).rejects.toMatchObject({
+      code: "LOCAL_LLM_UNAVAILABLE",
+    });
+
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ response: "   " }) }));
+    await expect(generatePromptForge(validPayload)).rejects.toMatchObject({
+      code: "LOCAL_LLM_INVALID_RESPONSE",
+    });
+
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ text: "nope" }) }));
+    await expect(generatePromptForge(validPayload)).rejects.toMatchObject({
+      code: "LOCAL_LLM_INVALID_RESPONSE",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("não chama OpenRouter nem executa nada; só consulta Ollama local", async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ response: "missão textual" }),
+    }));
+
+    const out = await generatePromptForge(validPayload);
+
+    expect(out.executed).toBe(false);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(String(globalThis.fetch.mock.calls[0][0])).toBe("http://127.0.0.1:11434/api/generate");
   });
 });

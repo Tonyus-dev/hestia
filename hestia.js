@@ -44,6 +44,7 @@ import {
   ALLOWED_MODELS,
   getLlmHealth,
   generateLocalChat,
+  generatePromptForge,
   normalizeFacet,
   validateChatInput,
 } from "./chama/llm.js";
@@ -297,6 +298,36 @@ app.post("/api/llm/chat", async (req, reply) => {
       reply.code(503).send({
         ok: false,
         code: err.reasonCode === "LLM_TIMEOUT" ? "LLM_TIMEOUT" : "OLLAMA_UNAVAILABLE",
+        error: "Runtime local indisponível.",
+        runtime: "hestia-llm",
+        detail: err.detail,
+      });
+      return;
+    }
+    throw err;
+  }
+});
+
+app.post("/api/llm/prompt-forge", async (req, reply) => {
+  try {
+    return await generatePromptForge(req.body || {});
+  } catch (err) {
+    if (["INVALID_REQUEST", "TASK_NOT_ALLOWED"].includes(err.code)) {
+      reply.code(400).send({ ok: false, code: err.code, error: err.message });
+      return;
+    }
+    if (err.code === "INPUT_TOO_LARGE") {
+      reply.code(413).send({ ok: false, code: err.code, error: err.message });
+      return;
+    }
+    if (err.code === "LOCAL_LLM_INVALID_RESPONSE") {
+      reply.code(502).send({ ok: false, code: err.code, error: err.message });
+      return;
+    }
+    if (["LOCAL_LLM_UNAVAILABLE", "LOCAL_LLM_TIMEOUT"].includes(err.code)) {
+      reply.code(503).send({
+        ok: false,
+        code: err.code,
         error: "Runtime local indisponível.",
         runtime: "hestia-llm",
         detail: err.detail,
