@@ -89,8 +89,8 @@ describe("Console Doctor", () => {
     expect(classifyConsoleStationState(state)).toBe(classification);
   });
 
-  it("usa os quatro IDs canônicos das Stations", async () => {
-    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby"]);
+  it("usa os cinco IDs canônicos das Stations", async () => {
+    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby", "mini"]);
     const script = await readFile(
       join(import.meta.dirname, "..", "scripts", "console-doctor.mjs"),
       "utf8",
@@ -112,7 +112,13 @@ describeDoctorScript("Console Doctor script", () => {
   it("aprova com aviso quando uma Station configurada está indisponível", async () => {
     const runtime = await withDoctorRuntime();
     await withConsole(
-      { desktop: "unavailable", tvbox: "available", pocket: "available", baby: "available" },
+      {
+        desktop: "unavailable",
+        tvbox: "available",
+        pocket: "available",
+        baby: "available",
+        mini: "available",
+      },
       async (baseUrl) => {
         const result = await runDoctor({ baseUrl, ...runtime });
         expect(result.code).toBe(0);
@@ -130,35 +136,67 @@ describeDoctorScript("Console Doctor script", () => {
         tvbox: "available",
         pocket: "not_configured",
         baby: "not_configured",
+        mini: "not_configured",
       },
       async (baseUrl) => {
         const result = await runDoctor({ baseUrl, ...runtime });
         expect(result.code).toBe(0);
         expect(result.stdout).toContain("ok: pocket: not_configured");
         expect(result.stdout).toContain("ok: baby: not_configured");
+        expect(result.stdout).toContain("ok: mini: not_configured");
       },
     );
   });
 
   it.each([
     [
-      { desktop: "available", tvbox: "available", pocket: "unauthorized", baby: "available" },
+      {
+        desktop: "available",
+        tvbox: "available",
+        pocket: "unauthorized",
+        baby: "available",
+        mini: "available",
+      },
       "pocket: unauthorized",
     ],
     [
-      { desktop: "available", tvbox: "incompatible", pocket: "available", baby: "available" },
+      {
+        desktop: "available",
+        tvbox: "incompatible",
+        pocket: "available",
+        baby: "available",
+        mini: "available",
+      },
       "tvbox: incompatible",
     ],
     [
-      { desktop: "available", tvbox: "available", pocket: "http_invalid", baby: "available" },
+      {
+        desktop: "available",
+        tvbox: "available",
+        pocket: "http_invalid",
+        baby: "available",
+        mini: "available",
+      },
       "pocket: contrato inválido",
     ],
     [
-      { desktop: "available", tvbox: "available", pocket: "invalid_contract", baby: "available" },
+      {
+        desktop: "available",
+        tvbox: "available",
+        pocket: "invalid_contract",
+        baby: "available",
+        mini: "available",
+      },
       "pocket: indisponível",
     ],
     [
-      { desktop: "available", tvbox: "available", pocket: "json_invalid", baby: "available" },
+      {
+        desktop: "available",
+        tvbox: "available",
+        pocket: "json_invalid",
+        baby: "available",
+        mini: "available",
+      },
       "Console não respondeu ao Doctor",
     ],
   ])("reprova estado fatal de Station", async (states, message) => {

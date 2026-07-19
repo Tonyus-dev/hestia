@@ -1,6 +1,6 @@
 # Héstia
 
-Héstia é a Console local do notebook que monitora, em modo somente leitura, duas Stations headless: o desktop/servidor e a TV Box. A implantação operacional canônica está em [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Héstia é a Console local do notebook que monitora, em modo somente leitura, cinco Stations headless: desktop/servidor, TV Box, Pocket, Baby e Mini. A implantação operacional canônica está em [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Arquitetura final
 
@@ -9,6 +9,9 @@ Héstia é a Console local do notebook que monitora, em modo somente leitura, du
 | notebook         | Héstia Console visual                         | `127.0.0.1:4517` |
 | desktop/servidor | Station Agent monitor-only                    | `127.0.0.1:4518` |
 | TV Box           | Station Agent monitor-only + Códice read-only | `127.0.0.1:4519` |
+| Pocket           | Station Agent monitor-only                    | `127.0.0.1:4518` |
+| Baby             | Station Agent monitor-only                    | `127.0.0.1:4518` |
+| Mini             | Station Agent sentinela externa               | `127.0.0.1:4518` |
 
 A Console não copia arquivos. A Station não copia arquivos. O Códice não copia arquivos. A sincronização desktop → TV Box continua externa, por rsync/SSH.
 
@@ -41,13 +44,19 @@ O frontend nunca inventa métricas: estados indisponíveis continuam indisponív
 
 ## Configuração da Console
 
-As duas Stations são explícitas e independentes:
+As cinco Stations são explícitas e independentes:
 
 ```dotenv
 HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>
 HESTIA_DESKTOP_TOKEN=<TOKEN_DESKTOP>
 HESTIA_TVBOX_BASE_URL=https://<TVBOX_PRIVADA>
 HESTIA_TVBOX_TOKEN=<TOKEN_TVBOX>
+HESTIA_POCKET_BASE_URL=https://<HOST_PRIVADO_DA_POCKET>
+HESTIA_POCKET_TOKEN=<TOKEN_DA_STATION>
+HESTIA_BABY_BASE_URL=https://<HOST_PRIVADO_DA_BABY>
+HESTIA_BABY_TOKEN=<TOKEN_DA_STATION>
+HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>
+HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>
 HESTIA_STATION_TIMEOUT_MS=5000
 HESTIA_ORGANIZER_TIMEOUT_MS=120000
 ```
@@ -83,6 +92,12 @@ GET /api/stations/baby/health
 GET /api/stations/baby/system/status
 GET /api/stations/baby/storage/status
 GET /api/stations/baby/services/status
+
+GET /api/stations/mini/connection
+GET /api/stations/mini/health
+GET /api/stations/mini/system/status
+GET /api/stations/mini/storage/status
+GET /api/stations/mini/services/status
 ```
 
 Não existe endpoint de descoberta, overview, escrita ou Organizer na Console. O Códice health existe somente para a TV Box.
@@ -99,11 +114,11 @@ GET /api/station/services/status
 GET /api/station/codice/health
 ```
 
-Stations: `desktop` monitora armazenamento e Organizer; `tvbox` monitora Códice read-only; `pocket` é monitor-only para Hermes experimental e vigilância; `baby` é monitor-only para Telegram, monitoramento e Wake-on-LAN. Pocket e Baby não habilitam Organizer, Códice nem ações remotas; monitoram apenas o Agent, sistema, disco raiz agregado e serviços configurados (`tailscaled,hermes` ou `tailscaled,telegram-guard`).
+Stations: `desktop` monitora armazenamento e Organizer; `tvbox` monitora Códice read-only; `pocket` é monitor-only para Hermes experimental e vigilância; `baby` é monitor-only para Telegram, monitoramento e Wake-on-LAN; `mini` é sentinela externa monitor-only. Pocket, Baby e Mini não habilitam Organizer, Códice nem ações remotas; monitoram apenas o Agent, sistema, disco raiz agregado e serviços configurados (`tailscaled,hermes`, `tailscaled,telegram-guard` ou `tailscaled`).
 
-Cada host de Station pode usar a porta local `4518` porque roda em máquina distinta. O Console Doctor percorre as quatro Stations canônicas; Station temporariamente offline gera aviso e não bloqueia atualização da Console, mas configuração inválida, autenticação quebrada e contrato incompatível continuam bloqueando.
+Cada host de Station pode usar a porta local `4518` porque roda em máquina distinta. O Console Doctor percorre as cinco Stations canônicas; Station temporariamente offline gera aviso e não bloqueia atualização da Console, mas configuração inválida, autenticação quebrada e contrato incompatível continuam bloqueando.
 
-Variáveis opcionais da Console para as novas Stations: `HESTIA_POCKET_BASE_URL`, `HESTIA_POCKET_TOKEN`, `HESTIA_BABY_BASE_URL`, `HESTIA_BABY_TOKEN`. Use origens HTTPS privadas exatas; não versionar IPs, hostnames reais ou tokens.
+Variáveis opcionais da Console para as novas Stations: `HESTIA_POCKET_BASE_URL`, `HESTIA_POCKET_TOKEN`, `HESTIA_BABY_BASE_URL`, `HESTIA_BABY_TOKEN`, `HESTIA_MINI_BASE_URL`, `HESTIA_MINI_TOKEN`. Use origens HTTPS privadas exatas; não versionar IPs, hostnames reais ou tokens.
 
 O Agent inicia com `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. As requisições públicas `GET` e `HEAD` de `/api/codice/*` exigem Bearer Supabase válido, `user.id` na allowlist `HESTIA_CODICE_ALLOWED_USER_IDS` e a origem exata configurada. As requisições `OPTIONS` validam apenas o preflight CORS, não exigem Bearer e não consultam o Supabase. Somente chave `sb_publishable_` é aceita; service-role não é usada. Console e Doctor monitoram apenas `GET /api/station/codice/health` com o token da Station, sem JWT de usuário. EPUB e PDF são obrigatórios e TXT é opcional. Não há Range, resposta 206, upload, import ou escrita.
 
@@ -135,4 +150,4 @@ O `.deb` continua sendo da Console, usa em produção somente a arquitetura nati
 
 ## Estado operacional
 
-Testes automatizados e smoke com fixtures sintéticas não validam notebook, desktop ou TV Box físicos. Até executar o checklist completo de [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): **RESULTADO OPERACIONAL: PENDENTE**.
+Testes automatizados e smoke com fixtures sintéticas não validam notebook, desktop, TV Box, Pocket, Baby ou Mini físicos. Até executar o checklist completo de [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): **RESULTADO OPERACIONAL: PENDENTE**.

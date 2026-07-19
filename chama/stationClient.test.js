@@ -108,15 +108,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("configuração explícita das quatro Stations", () => {
-  it("mantém IDs canônicos e isolamento Pocket/Baby", () => {
-    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby"]);
+describe("configuração explícita das cinco Stations", () => {
+  it("mantém IDs canônicos e isolamento Pocket/Baby/Mini", () => {
+    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby", "mini"]);
     const env = {
       NODE_ENV: "test",
       HESTIA_POCKET_BASE_URL: "http://127.0.0.1:4520",
       HESTIA_POCKET_TOKEN: "pocket-secret",
       HESTIA_BABY_BASE_URL: "http://127.0.0.1:4521",
       HESTIA_BABY_TOKEN: "baby-secret",
+      HESTIA_MINI_BASE_URL: "http://127.0.0.1:4522",
+      HESTIA_MINI_TOKEN: "mini-secret",
     };
     expect(resolveNamedStationConfig("pocket", env)).toMatchObject({
       valid: true,
@@ -127,7 +129,14 @@ describe("configuração explícita das quatro Stations", () => {
       token: "baby-secret",
     });
     expect(JSON.stringify(resolveNamedStationConfig("pocket", env))).not.toContain("baby-secret");
+    expect(resolveNamedStationConfig("mini", env)).toMatchObject({
+      valid: true,
+      token: "mini-secret",
+    });
+    expect(JSON.stringify(resolveNamedStationConfig("pocket", env))).not.toContain("baby-secret");
     expect(JSON.stringify(resolveNamedStationConfig("baby", env))).not.toContain("pocket-secret");
+    expect(JSON.stringify(resolveNamedStationConfig("mini", env))).not.toContain("pocket-secret");
+    expect(JSON.stringify(resolveNamedStationConfig("mini", env))).not.toContain("baby-secret");
   });
 
   it("preserva defaults antigos e permite novos serviços somente com configuração explícita", () => {
@@ -146,6 +155,7 @@ describe("configuração explícita das quatro Stations", () => {
     };
     expect(resolveNamedStationConfig("desktop", onlyDesktop)).toMatchObject({ valid: true });
     expect(resolveNamedStationConfig("tvbox", onlyDesktop)).toMatchObject({ configured: false });
+    expect(resolveNamedStationConfig("mini", onlyDesktop)).toMatchObject({ configured: false });
     const both = {
       ...onlyDesktop,
       HESTIA_TVBOX_BASE_URL: "http://127.0.0.1:4519",
@@ -155,7 +165,7 @@ describe("configuração explícita das quatro Stations", () => {
     expect(
       resolveNamedStationConfig("desktop", { HESTIA_DESKTOP_BASE_URL: "https://desktop.example" }),
     ).toMatchObject({ valid: false, errorCode: "STATION_MISCONFIGURED" });
-    expect(resolveNamedStationConfig("tvbox", { HESTIA_TVBOX_TOKEN: "orphan" })).toMatchObject({
+    expect(resolveNamedStationConfig("mini", { HESTIA_MINI_TOKEN: "orphan" })).toMatchObject({
       valid: false,
       errorCode: "STATION_MISCONFIGURED",
     });

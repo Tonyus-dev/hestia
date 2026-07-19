@@ -42,6 +42,13 @@ export const STATION_UI: Array<{
     canonicalStorage: false,
     codice: false,
   },
+  {
+    id: "mini",
+    title: "Mini",
+    role: "Sentinela externa",
+    canonicalStorage: false,
+    codice: false,
+  },
 ];
 
 function Painel() {
@@ -51,7 +58,7 @@ function Painel() {
         <p className="kaline-eyebrow">Console do notebook</p>
         <h1 className="kaline-serif text-3xl text-[color:var(--kaline-text)]">Héstia</h1>
         <p className="text-[13px] text-[color:var(--kaline-muted)]">
-          Monitoramento independente e somente leitura das quatro Stations da Héstia.
+          Monitoramento independente e somente leitura das cinco Stations da Héstia.
         </p>
       </header>
       <section className="grid gap-4 xl:grid-cols-2">
