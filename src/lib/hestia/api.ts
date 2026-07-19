@@ -341,6 +341,30 @@ export type OrganizerPlan = {
   };
 };
 
+export type OrganizerRun = {
+  ok: true;
+  schemaVersion: 1;
+  checkedAt: string;
+  run: {
+    runId: string;
+    planId: string;
+    kind: string;
+    status: string;
+    createdAt: string;
+    appliedAt: string;
+    operations: Array<{
+      source: { kind: string; label: string; relativePath: string };
+      target: { relativePath: string };
+      action: string;
+      status: string;
+      reason: string | null;
+      error: string | null;
+      undoPossible: boolean;
+    }>;
+    summary: { total: number; ok: number; failed: number; skipped: number };
+  };
+};
+
 export type OrganizerRuns = {
   ok: true;
   schemaVersion: 1;
@@ -621,10 +645,21 @@ export const hestiaApi = {
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
-  desktopOrganizerPlan: () =>
+  desktopOrganizerPlan: (extensions: string[] = []) =>
     safePost<OrganizerPlan>(
       "/api/stations/desktop/organizer/plan",
+      { extensions },
       {},
+      ORGANIZER_UI_TIMEOUT_MS,
+    ),
+  desktopOrganizerApply: (body: {
+    planId: string;
+    confirmation: "EFETIVAR";
+    largePlanConfirmation: string | null;
+  }) =>
+    safePost<OrganizerRun>(
+      "/api/stations/desktop/organizer/apply",
+      body,
       {},
       ORGANIZER_UI_TIMEOUT_MS,
     ),

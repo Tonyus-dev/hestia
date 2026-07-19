@@ -329,7 +329,7 @@ async function main() {
   const organizerPlan = await json(consoleBase, "/api/stations/desktop/organizer/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: "{}",
+    body: JSON.stringify({ extensions: [] }),
   });
   ensure(
     organizerPlan.response.status === 200 && organizerPlan.body.plan.dryRun === true,

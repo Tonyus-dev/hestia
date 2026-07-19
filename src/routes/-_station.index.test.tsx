@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hestiaApi, type StationId } from "@/lib/hestia/api";
 import { STATION_UI, StationCard } from "./_station.index";
@@ -118,6 +119,7 @@ describe("monitoramento visual das quatro Stations", () => {
     prepare("tvbox");
     renderCard("tvbox");
     expect(await screen.findByText("TV Box")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /TV Box/i }));
     expect(await screen.findByText("Biblioteca Códice")).toBeTruthy();
     expect(await screen.findByText("epub, pdf")).toBeTruthy();
   });
@@ -159,7 +161,7 @@ describe("monitoramento visual das quatro Stations", () => {
     expect((await screen.findAllByText("Pocket")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("Baby")).length).toBeGreaterThan(0);
     await waitFor(() => expect(hestiaApi.stationConnection).toHaveBeenCalledWith("baby"));
-    expect(screen.getAllByText("indisponível").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("disponível").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("offline").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("online").length).toBeGreaterThan(0);
   });
 });
