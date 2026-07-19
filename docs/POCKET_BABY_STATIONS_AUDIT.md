@@ -10,13 +10,13 @@
 
 ## Registro atual
 
-- Definição de `STATION_IDS`: `desktop`, `tvbox` em `chama/stationClient.js`.
-- Mapeamento de variáveis: `HESTIA_DESKTOP_*` e `HESTIA_TVBOX_*` em `chama/stationClient.js`.
+- Definição de `STATION_IDS`: `desktop`, `tvbox`, `pocket`, `baby` em `chama/stationClient.js`.
+- Mapeamento de variáveis: `HESTIA_DESKTOP_*`, `HESTIA_TVBOX_*`, `HESTIA_POCKET_*` e `HESTIA_BABY_*` em `chama/stationClient.js`.
 - Cliente Station: fetch server-side com Bearer, timeout, redirect manual, request id, limite e contratos em `chama/stationClient.js`.
 - Rotas genéricas: registradas a partir de `STATION_IDS` em `chama/stationRoutes.js`.
 - Rotas especiais: Códice apenas TV Box; Organizer apenas desktop em `chama/stationRoutes.js`.
-- Tipos frontend: `StationId = "desktop" | "tvbox"` em `src/lib/hestia/api.ts`.
-- Cards atuais: dois cards fixos em `src/routes/_station.index.tsx`.
+- Tipos frontend: `StationId = "desktop" | "tvbox" | "pocket" | "baby"` em `src/lib/hestia/api.ts`.
+- Cards atuais: quatro cards a partir do registro de Stations em `src/routes/_station.index.tsx`.
 - Configuração pública: flags desktop/tvbox em `publicStationConfig()`.
 - Env example: variáveis documentadas em README/deploy, sem env example dedicado.
 - Doctor: genérico para Agent em `chama/stationDoctor.js`.
@@ -36,12 +36,7 @@
 
 ## Lacunas
 
-- Pocket ausente: não há ID/config/rota/UI.
-- Baby ausente: não há ID/config/rota/UI.
-- Métricas de sistema ausentes: Agent remoto não expõe CPU/RAM/swap/hostname/uptime/root disk.
-- Serviços novos ausentes da allowlist: `hermes`, `telegram-guard` ausentes.
-- UI fixa em duas Stations: cards hardcoded.
-- Configuração pública fixa em duas Stations: flags só desktop/tvbox.
+- Nenhuma lacuna nova foi aberta por esta correção do Console Doctor.
 
 ## Escopo mínimo
 
@@ -49,3 +44,53 @@
 - Arquivos que não serão tocados: PromptForge, LLM, Klio, Kódice funcional, Organizer funcional, Supabase, identidade visual.
 - Riscos: validação estrita incompatível com resposta real; smoke local pode falhar por ambiente; validação física indisponível neste ambiente.
 - Plano: adicionar IDs e envs; criar contrato read-only genérico; proxyar rota; renderizar quatro cards por registro seguro; ampliar allowlist; atualizar testes/smoke/docs; executar gates; marcar validação física como bloqueada se não disponível.
+
+# Validação física — 2026-07-19
+
+## Console
+
+- Serviço `hestia-console.service` confirmado como enabled/active.
+- Endereço local confirmado em `127.0.0.1:4517`.
+- Node confirmado como v24.18.0.
+- Frontend confirmado como construído.
+- Quatro cards visíveis confirmados.
+- Pocket configurada na Console.
+- Baby configurada na Console.
+
+## Pocket
+
+- Ubuntu 24.04.4 LTS.
+- Arquitetura x86_64.
+- Tailscale enabled/active.
+- Station Agent enabled/active.
+- Agent com bind local em `127.0.0.1:4518`.
+- Exposição privada via Tailscale Serve, sem registrar hostname real; use `<POCKET_TS_HOST_REDACTED>`.
+- Console reconheceu a Station.
+- Métricas reais disponíveis.
+- Serviços configurados: `tailscaled`, `hermes`.
+- `hermes` pode aparecer como `not-installed` sem invalidar o Agent.
+
+## Baby
+
+- Ubuntu 24.04.4 LTS.
+- Arquitetura x86_64.
+- Tailscale enabled/active.
+- Station Agent enabled/active.
+- Agent com bind local em `127.0.0.1:4518`.
+- Exposição privada via Tailscale Serve, sem registrar hostname real; use `<BABY_TS_HOST_REDACTED>`.
+- Console reconheceu a Station.
+- Métricas reais disponíveis.
+- Serviços configurados: `tailscaled`, `telegram-guard`.
+- `telegram-guard` pode aparecer como `not-installed` sem invalidar o Agent.
+
+## PENDENTE DE GATE FÍSICO
+
+- Queda manual independente do Agent.
+- Recuperação após queda.
+- Reboot completo da Pocket.
+- Reboot completo da Baby.
+- Inspeção final de DevTools.
+- Ausência de segredos no navegador.
+- Hermes funcional.
+- Telegram Guard funcional.
+- Wake-on-LAN funcional.

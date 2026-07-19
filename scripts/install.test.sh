@@ -22,7 +22,10 @@ cat > "$BIN/node" <<'EOF'
 case "${1:-}" in
   --check) exit 0;;
   *require-node.mjs) exit 0;;
-  *console-doctor.mjs) [ "${HESTIA_FAKE_DOCTOR_FAIL:-0}" = 1 ] && exit 1; echo "Console Doctor: OK"; exit 0;;
+  *console-doctor.mjs)
+    [ "${HESTIA_FAKE_DOCTOR_FAIL:-0}" = 1 ] && exit 1
+    if [ "${HESTIA_FAKE_DOCTOR_WARNING:-0}" = 1 ]; then echo "aviso: desktop: unavailable"; echo "Console Doctor: OK COM AVISOS"; exit 0; fi
+    echo "Console Doctor: OK"; exit 0;;
 esac
 exit 0
 EOF
@@ -94,6 +97,13 @@ if run_install fresh env HESTIA_FAKE_SYSTEMCTL_FAIL=restart >/dev/null 2>&1; the
 if run_install fresh env HESTIA_FAKE_DOCTOR_FAIL=1 >/dev/null 2>&1; then fail "falha no Doctor foi aceita"; fi
 [ -f "$TEST_ROOT/fresh/runtime/rollback-marker" ] || fail "rollback de Doctor não restaurou runtime"
 [ "$(sha256sum "$TEST_ROOT/fresh/console.env")" = "$env_hash" ] || fail "rollback alterou env"
+
+printf 'runtime-antigo\n' > "$TEST_ROOT/fresh/runtime/sleeping-station-marker"
+output="$(run_install fresh env HESTIA_FAKE_DOCTOR_WARNING=1 2>&1)"
+[[ "$output" = *"Console Doctor: OK COM AVISOS"* ]] || fail "Doctor com Station offline não gerou aviso"
+[ ! -e "$TEST_ROOT/fresh/runtime/sleeping-station-marker" ] || fail "Station offline causou rollback da atualização"
+[ "$(sha256sum "$TEST_ROOT/fresh/console.env")" = "$env_hash" ] || fail "instalação com aviso alterou env"
+
 [ -z "$(find "$TEST_ROOT/fresh" -maxdepth 1 \( -name '*.new.*' -o -name '*.previous.*' \) -print -quit)" ] || fail "temporários de swap sobraram"
 
 mv "$SOURCE" "$TEST_ROOT/source.removed"
