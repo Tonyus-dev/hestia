@@ -21,7 +21,7 @@ export const nav: NavItem[] = [
   { to: "/", label: "Painel", hint: "cockpit" },
   { to: "/sistema", label: "Sistema", hint: "hardware real" },
   { to: "/storage", label: "Storage", hint: "/KALINE" },
-  { to: "/organizador", label: "Organizador", hint: "dry-run remoto" },
+  { to: "/organizador", label: "Organizador", hint: "plano + aplicação" },
   { to: "/assistente", label: "Assistente", hint: "chat llm" },
   { to: "/servicos", label: "Serviços", hint: "status real" },
   { to: "/historico", label: "Histórico", hint: "runs e eventos" },

@@ -102,15 +102,17 @@ export function StationCard({
     services.retry();
     if (codice) codiceHealth.retry();
   };
-  const state = connection.state.status === "ok" ? connection.state.data.state : "loading";
-  const agent = connection.state.status === "ok" && connection.state.data.station;
+  const connectionState =
+    connection.state.status === "ok" ? connection.state.data.state : "loading";
+  const agent = connection.state.status === "ok" ? connection.state.data.station : null;
+  const cardState = stationCardState(connection.state);
 
   return (
-    <DataCard title={title} eyebrow={role} status={state} defaultOpen>
+    <DataCard title={title} eyebrow={role} status={cardState.status} summary={cardState.summary}>
       <ConnectionRows state={connection.state} />
       <Row
         k="Station Agent"
-        v={agent ? "disponível" : state === "loading" ? "consultando…" : "indisponível"}
+        v={agent ? "disponível" : connectionState === "loading" ? "consultando…" : "indisponível"}
       />
       <Row k="Versão do Agent" v={agent?.version || "—"} />
       <SystemRows state={system.state} />
@@ -151,16 +153,36 @@ export function StationCard({
   );
 }
 
+export function stationCardState(state: ApiState<StationConnection>): {
+  summary: string;
+  status: "ok" | "loading" | "unavailable" | "warn" | "error";
+} {
+  if (state.status === "loading") return { summary: "consultando…", status: "loading" };
+  if (state.status !== "ok") return { summary: "offline", status: "unavailable" };
+  const meta: Record<
+    StationConnection["state"],
+    { summary: string; status: "ok" | "unavailable" | "warn" | "error" }
+  > = {
+    available: { summary: "online", status: "ok" },
+    unavailable: { summary: "offline", status: "unavailable" },
+    not_configured: { summary: "não configurada", status: "warn" },
+    misconfigured: { summary: "configuração inválida", status: "error" },
+    unauthorized: { summary: "não autorizada", status: "error" },
+    incompatible: { summary: "incompatível", status: "error" },
+  };
+  return meta[state.data.state];
+}
+
 function ConnectionRows({ state }: { state: ApiState<StationConnection> }) {
   if (state.status === "loading") return <Row k="Conexão" v="consultando…" />;
   if (state.status !== "ok") return <Row k="Conexão" v="indisponível" />;
   const labels: Record<StationConnection["state"], string> = {
-    available: "disponível",
-    unavailable: state.data.code === "STATION_TIMEOUT" ? "timeout" : "indisponível",
+    available: "online",
+    unavailable: state.data.code === "STATION_TIMEOUT" ? "timeout" : "offline",
     not_configured: "não configurada",
     misconfigured: "configuração inválida",
     unauthorized: "não autorizada",
-    incompatible: "contrato incompatível",
+    incompatible: "incompatível",
   };
   return (
     <>

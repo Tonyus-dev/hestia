@@ -41,6 +41,7 @@ const SYSTEM_PATH = "/api/station/system/status";
 const CODICE_HEALTH_PATH = "/api/station/codice/health";
 const ORGANIZER_PLAN_PATH = "/api/station/organizer/plan";
 const ORGANIZER_RUNS_PATH = "/api/station/organizer/runs";
+const ORGANIZER_APPLY_PATH = "/api/station/organizer/apply";
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_ORGANIZER_BODY_BYTES = 4 * 1024 * 1024;
 const SERVICE = "hestia-station-agent";
@@ -614,6 +615,86 @@ function validateOrganizerRuns(body) {
   return { ok: true, schemaVersion: 1, checkedAt: body.checkedAt, items };
 }
 
+function sanitizedOrganizerRunOperation(operation) {
+  if (
+    !isPlainObject(operation) ||
+    !isPlainObject(operation.source) ||
+    !isSafeString(operation.source.kind, { nonEmpty: true }) ||
+    !isSafeString(operation.source.label, { nonEmpty: true }) ||
+    !isSafeRelativePath(operation.source.relativePath) ||
+    !isPlainObject(operation.target) ||
+    !isSafeRelativePath(operation.target.relativePath) ||
+    !ORGANIZER_ACTIONS.has(operation.action) ||
+    !["ok", "failed", "skipped"].includes(operation.status) ||
+    !isSafeNullableString(operation.reason) ||
+    !isSafeNullableString(operation.error) ||
+    typeof operation.undoPossible !== "boolean"
+  )
+    return null;
+  return {
+    source: {
+      kind: operation.source.kind,
+      label: operation.source.label,
+      relativePath: operation.source.relativePath,
+    },
+    target: { relativePath: operation.target.relativePath },
+    action: operation.action,
+    status: operation.status,
+    reason: operation.reason,
+    error: operation.error,
+    undoPossible: operation.undoPossible,
+  };
+}
+
+function validateOrganizerRun(body) {
+  if (
+    !isPlainObject(body) ||
+    containsForbiddenOrganizerData(body) ||
+    body.ok !== true ||
+    body.schemaVersion !== 1 ||
+    !isValidIsoDate(body.checkedAt) ||
+    !isPlainObject(body.run)
+  )
+    return null;
+  const run = body.run;
+  if (
+    !isValidOrganizerId(run.runId) ||
+    !isValidOrganizerId(run.planId) ||
+    !["apply", "undo", "redo"].includes(run.kind) ||
+    !ORGANIZER_RUN_STATUSES.has(run.status) ||
+    !isValidIsoDate(run.createdAt) ||
+    !isValidIsoDate(run.appliedAt) ||
+    !Array.isArray(run.operations) ||
+    !isPlainObject(run.summary)
+  )
+    return null;
+  const operations = run.operations.map(sanitizedOrganizerRunOperation);
+  if (operations.some((operation) => operation === null)) return null;
+  for (const key of ["total", "ok", "failed", "skipped"]) {
+    if (!Number.isInteger(run.summary[key]) || run.summary[key] < 0) return null;
+  }
+  return {
+    ok: true,
+    schemaVersion: 1,
+    checkedAt: body.checkedAt,
+    run: {
+      runId: run.runId,
+      planId: run.planId,
+      kind: run.kind,
+      status: run.status,
+      createdAt: run.createdAt,
+      appliedAt: run.appliedAt,
+      operations,
+      summary: {
+        total: run.summary.total,
+        ok: run.summary.ok,
+        failed: run.summary.failed,
+        skipped: run.summary.skipped,
+      },
+    },
+  };
+}
+
 function isJsonContentType(header) {
   const mediaType = String(header || "")
     .split(";", 1)[0]
@@ -725,6 +806,7 @@ async function fetchJsonResource(path, validate, cfg, options = {}) {
   if (!cfg.configured) return failure("not_configured", STATION_CODES.NOT_CONFIGURED);
   if (!cfg.valid) return failure("misconfigured", cfg.errorCode || STATION_CODES.MISCONFIGURED);
   const finalUrl = new URL(path, cfg.baseUrl);
+  if (options.searchParams) finalUrl.search = options.searchParams.toString();
   if (finalUrl.origin !== cfg.baseUrl.origin || finalUrl.pathname !== path) {
     return failure("misconfigured", STATION_CODES.MISCONFIGURED);
   }
@@ -744,19 +826,47 @@ async function fetchJsonResource(path, validate, cfg, options = {}) {
           : {}),
         ...(options.confirm ? { "X-Hestia-Local-Confirm": "organize" } : {}),
         ...(options.method === "POST" ? { "Content-Type": "application/json" } : {}),
+        ...(options.largePlanConfirmation
+          ? { "X-Hestia-Large-Plan-Confirm": options.largePlanConfirmation }
+          : {}),
       },
-      ...(options.method === "POST" ? { body: "{}" } : {}),
+      ...(options.method === "POST" ? { body: options.body ?? "{}" } : {}),
       redirect: "manual",
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403)
-      return failure("unauthorized", STATION_CODES.AUTH_FAILED);
-    if (response.status >= 300 && response.status < 400)
-      return failure("incompatible", STATION_CODES.REDIRECT_REJECTED);
-    if (!response.ok) {
       return {
-        ...failure("unavailable", STATION_CODES.UNAVAILABLE),
+        ...failure("unauthorized", STATION_CODES.AUTH_FAILED),
         remoteStatus: response.status,
+      };
+    if (response.status >= 300 && response.status < 400)
+      return {
+        ...failure("incompatible", STATION_CODES.REDIRECT_REJECTED),
+        remoteStatus: response.status,
+      };
+    if (!response.ok) {
+      let remoteCode = null;
+      const parsedError = await readLimitedJson(response, options.maxBytes || MAX_BODY_BYTES);
+      if (
+        parsedError.ok &&
+        isPlainObject(parsedError.body) &&
+        isSafeString(parsedError.body.code)
+      ) {
+        remoteCode = parsedError.body.code;
+      }
+      const statusCode =
+        response.status === 401 || response.status === 403
+          ? STATION_CODES.AUTH_FAILED
+          : response.status >= 300 && response.status < 400
+            ? STATION_CODES.REDIRECT_REJECTED
+            : remoteCode || STATION_CODES.UNAVAILABLE;
+      return {
+        ...failure(
+          response.status === 401 || response.status === 403 ? "unauthorized" : "unavailable",
+          statusCode,
+        ),
+        remoteStatus: response.status,
+        remoteCode,
       };
     }
     const parsed = await readLimitedJson(response, options.maxBytes || MAX_BODY_BYTES);
@@ -814,7 +924,7 @@ export async function fetchTvboxCodiceHealth(stationConfig) {
   }
 }
 
-export async function fetchDesktopOrganizerPlan(stationConfig) {
+export async function fetchDesktopOrganizerPlan(stationConfig, extensions = []) {
   if (stationConfig?.stationId !== "desktop")
     return failure("misconfigured", STATION_CODES.MISCONFIGURED);
   const result = await fetchJsonResource(
@@ -825,6 +935,33 @@ export async function fetchDesktopOrganizerPlan(stationConfig) {
       method: "POST",
       auth: true,
       confirm: true,
+      maxBytes: MAX_ORGANIZER_BODY_BYTES,
+      timeoutMs: stationConfig.organizerTimeoutMs,
+      searchParams: extensions.length
+        ? new URLSearchParams({ extensions: extensions.join(",") })
+        : undefined,
+    },
+  );
+  if (!result.ok) return result;
+  return result.resource;
+}
+
+export async function fetchDesktopOrganizerApply(
+  stationConfig,
+  { planId, largePlanConfirmation = null } = {},
+) {
+  if (stationConfig?.stationId !== "desktop")
+    return failure("misconfigured", STATION_CODES.MISCONFIGURED);
+  const result = await fetchJsonResource(
+    ORGANIZER_APPLY_PATH,
+    validateOrganizerRun,
+    stationConfig,
+    {
+      method: "POST",
+      auth: true,
+      confirm: true,
+      body: JSON.stringify({ planId, mode: "apply" }),
+      largePlanConfirmation,
       maxBytes: MAX_ORGANIZER_BODY_BYTES,
       timeoutMs: stationConfig.organizerTimeoutMs,
     },

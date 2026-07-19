@@ -305,7 +305,7 @@ describe("hestiaApi — fluxos remotos fixos", () => {
       "http://localhost:8080/api/stations/desktop/organizer/runs",
       "http://localhost:8080/api/stations/desktop/organizer/plan",
     ]);
-    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toEqual({});
+    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toEqual({ extensions: [] });
   });
 
   it("mantém o plano ativo até o timeout próprio sem alterar o timeout comum", async () => {
@@ -323,7 +323,7 @@ describe("hestiaApi — fluxos remotos fixos", () => {
     expect(String(fetchSpy.mock.calls[0][0])).toBe(
       "http://localhost:8080/api/stations/desktop/organizer/plan",
     );
-    expect(JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))).toEqual({});
+    expect(JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))).toEqual({ extensions: [] });
 
     await vi.advanceTimersByTimeAsync(3_500);
     expect(signals[0].aborted).toBe(false);
