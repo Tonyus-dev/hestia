@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { getCapabilities } from "./capabilities.js";
 
 describe("getCapabilities", () => {
-  it("retorna capabilities com mode 'notebook-console'", () => {
+  it("retorna capabilities com mode 'tvbox-console'", () => {
     const caps = getCapabilities();
-    expect(caps.mode).toBe("notebook-console");
+    expect(caps.mode).toBe("tvbox-console");
   });
 
   it("habilita leitura de health/metrics/events/snapshots/logs/config", () => {
@@ -17,7 +17,16 @@ describe("getCapabilities", () => {
     expect(caps.reading.config).toBe(true);
   });
 
-  it("declara apenas Hermes como escrita local controlada no Console do notebook", () => {
+  it("declara ausência de poder arbitrário", () => {
+    const caps = getCapabilities();
+    expect(caps.writing.executeCommands).toBe(false);
+    expect(caps.writing.configureServices).toBe(false);
+    expect(caps.writing.manageBackups).toBe(false);
+    expect(caps.writing.modifyStorage).toBe(false);
+    expect(caps.writing.manageUsers).toBe(false);
+  });
+
+  it("declara apenas Hermes como escrita local controlada no Console da TV Box", () => {
     const caps = getCapabilities();
     expect(caps.writing.executeCommands).toBe(false);
     expect(caps.writing.configureServices).toBe(false);

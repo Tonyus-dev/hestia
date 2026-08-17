@@ -11,7 +11,6 @@ export type NavItem = {
     | "/config"
     | "/endpoints"
     | "/codice"
-    | "/organizador"
     | "/assistente";
   label: string;
   hint?: string;
@@ -21,7 +20,6 @@ export const nav: NavItem[] = [
   { to: "/", label: "Painel", hint: "cockpit" },
   { to: "/sistema", label: "Sistema", hint: "hardware real" },
   { to: "/storage", label: "Storage", hint: "/KALINE" },
-  { to: "/organizador", label: "Organizador", hint: "plano + aplicação" },
   { to: "/assistente", label: "Assistente", hint: "chat llm" },
   { to: "/servicos", label: "Serviços", hint: "status real" },
   { to: "/historico", label: "Histórico", hint: "runs e eventos" },
@@ -35,7 +33,7 @@ export const HESTIA = {
   agentName: "Chama Local",
   subtitle: "Console visual da Héstia Console com Chama Local embutida",
   motto:
-    "Héstia é o Console do notebook. A Chama é o pulso local. Presence consulta. Kaline decide.",
+    "Héstia é o Console da TV Box. A Chama é o pulso local. Presence consulta. Kaline decide.",
   waiting: "Aguardando Chama Local",
   readonly: "Modo protegido: leitura por padrão; apenas Hermes mantém escrita local controlada.",
   footer: "Héstia é o Console. Chama pulsa. Console mostra. Presence consulta.",
@@ -51,6 +49,8 @@ export const HESTIA = {
   babyAuthConfigured: false,
   miniConfigured: false,
   miniAuthConfigured: false,
+  maxConfigured: false,
+  maxAuthConfigured: false,
   stationTimeoutMs: 5000,
   services: ["tailscaled"],
   endpoints: [
@@ -103,7 +103,7 @@ export const HESTIA = {
       method: "GET",
       group: "Leitura / diagnóstico",
       path: "/api/services/bindings",
-      purpose: "serviços locais observados pelo notebook",
+      purpose: "serviços locais observados pela TV Box",
       fields: ["id", "label", "role"],
     },
     {
@@ -134,6 +134,8 @@ export const HESTIA = {
         "babyAuthConfigured",
         "miniConfigured",
         "miniAuthConfigured",
+        "maxConfigured",
+        "maxAuthConfigured",
         "stationTimeoutMs",
         "services",
       ],

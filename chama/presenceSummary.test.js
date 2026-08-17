@@ -46,7 +46,7 @@ describe("getPresenceSummary", () => {
     expect(typeof summary.servicesSummary.active).toBe("number");
   });
 
-  it("não contém storageSummary no Console do notebook", async () => {
+  it("não contém storageSummary no Console da TV Box", async () => {
     const summary = await getPresenceSummary(tmpDir);
     expect(summary).not.toHaveProperty("storageSummary");
   });

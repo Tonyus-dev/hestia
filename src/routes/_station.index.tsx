@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   hestiaApi,
@@ -6,6 +7,9 @@ import {
   type StationId,
   type StationStorage,
   type StationSystem,
+  type PresenceEvent,
+  type PresenceEventsResult,
+  type Config,
 } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { DataCard } from "@/components/hestia/shared/DataCard";
@@ -23,7 +27,7 @@ export const STATION_UI: Array<{
   {
     id: "desktop",
     title: "Servidor",
-    role: "Armazenamento e Organizer",
+    role: "Armazenamento principal",
     canonicalStorage: true,
     codice: false,
   },
@@ -38,7 +42,7 @@ export const STATION_UI: Array<{
   {
     id: "baby",
     title: "Baby",
-    role: "Telegram, monitoramento e Wake-on-LAN",
+    role: "Station",
     canonicalStorage: false,
     codice: false,
   },
@@ -49,18 +53,226 @@ export const STATION_UI: Array<{
     canonicalStorage: false,
     codice: false,
   },
+  {
+    id: "max",
+    title: "Max",
+    role: "Computação cloud sob demanda",
+    canonicalStorage: false,
+    codice: false,
+  },
 ];
 
+function formatDuration(ms?: number) {
+  if (ms == null) return "";
+  const totalSeconds = Math.floor(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}m ${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  const remMinutes = minutes % 60;
+  return `${hours}h ${remMinutes}m`;
+}
+
+function computeGuardianSummary(events: PresenceEvent[]) {
+  const activeIncidents: Array<{ type: string; name: string; timestamp: string; code?: string }> =
+    [];
+  const recentRecoveries: Array<{
+    type: string;
+    name: string;
+    timestamp: string;
+    durationMs?: number;
+  }> = [];
+  let wakeRequestedEvent: PresenceEvent | null = null;
+
+  const seen = new Set<string>();
+
+  for (const event of events) {
+    if (event.type === "wake.requested" && !wakeRequestedEvent) {
+      wakeRequestedEvent = event;
+    }
+    const isDown = event.type.endsWith(".down");
+    const isUp = event.type.endsWith(".up");
+    const isStation = event.type.startsWith("station");
+    const name = isStation ? event.data?.station : event.data?.service;
+
+    if (!name) continue;
+
+    const key = `${event.type.split(".")[0]}:${name}`;
+
+    if (isUp) {
+      if (!seen.has(key)) {
+        seen.add(key);
+        recentRecoveries.push({
+          type: event.type,
+          name,
+          timestamp: event.timestamp,
+          durationMs: event.data?.durationMs,
+        });
+      }
+    } else if (isDown) {
+      const isResolved = seen.has(event.type.replace(".down", ".up"));
+      if (!isResolved && !seen.has(key)) {
+        seen.add(key);
+        activeIncidents.push({
+          type: event.type,
+          name,
+          timestamp: event.timestamp,
+          code: event.data?.code,
+        });
+      }
+    }
+  }
+
+  return { activeIncidents, recentRecoveries, wakeRequestedEvent };
+}
+
+function GuardianSummaryCard({
+  configState,
+  eventsState,
+}: {
+  configState: ApiState<Config>;
+  eventsState: ApiState<PresenceEventsResult>;
+}) {
+  if (configState.status === "loading" || eventsState.status === "loading") {
+    return (
+      <div className="p-4 rounded-xl border border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-obsidian)]/40 text-[color:var(--kaline-muted)] text-xs">
+        Carregando resumo do guardião…
+      </div>
+    );
+  }
+  if (configState.status !== "ok" || eventsState.status !== "ok") {
+    return null;
+  }
+
+  const config = configState.data;
+  const events = eventsState.data.events;
+
+  const { activeIncidents, recentRecoveries, wakeRequestedEvent } = computeGuardianSummary(events);
+
+  const stationsKeys = ["desktop", "tvbox", "pocket", "baby", "mini", "max"] as const;
+  const configuredCount = stationsKeys.filter((k) => config[`${k}Configured`]).length;
+  const activeStationIncidents = activeIncidents.filter((i) => i.type.startsWith("station"));
+  const onlineCount = Math.max(0, configuredCount - activeStationIncidents.length);
+
+  const hasCritical = activeIncidents.length > 0;
+
+  return (
+    <div
+      className={`p-5 rounded-xl border ${
+        hasCritical
+          ? "border-red-900/60 bg-red-950/10"
+          : "border-[color:var(--kaline-border-copper)] bg-[color:var(--kaline-obsidian)]/40"
+      } space-y-4`}
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--kaline-text)]">
+          Resumo do Guardião
+        </h2>
+        <span
+          className={`text-xs px-2.5 py-0.5 rounded font-mono ${
+            hasCritical
+              ? "bg-red-500/10 text-red-400 border border-red-500/20"
+              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+          }`}
+        >
+          {hasCritical ? "Falha crítica ativa" : "Infraestrutura estável"}
+        </span>
+      </div>
+
+      <div className="space-y-2.5 text-xs text-[color:var(--kaline-muted)]">
+        {/* 1. Wake Event Status */}
+        {wakeRequestedEvent && (
+          <div className="flex items-start gap-2 text-amber-400">
+            <span className="font-bold">•</span>
+            <span>
+              <strong>Despertar solicitado:</strong> Servidor iniciando (pacote WoL transmitido às{" "}
+              {new Date(wakeRequestedEvent.timestamp).toLocaleTimeString()})
+            </span>
+          </div>
+        )}
+
+        {/* 2. Active Incidents */}
+        {activeIncidents.map((incident, idx) => {
+          const isStation = incident.type.startsWith("station");
+          const target = isStation ? incident.name.toUpperCase() : incident.name;
+          const displayCode = incident.code === "AUTH_FAILED" ? " (Erro de Autenticação)" : "";
+          return (
+            <div key={idx} className="flex items-start gap-2 text-red-400">
+              <span className="font-bold">•</span>
+              <span>
+                <strong>Incidente ativo:</strong>{" "}
+                {isStation ? `Estação ${target}` : `Serviço ${target}`} offline desde{" "}
+                {new Date(incident.timestamp).toLocaleTimeString()}
+                {displayCode}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* 3. Nodes Offline Unexpectedly */}
+        {activeStationIncidents.length > 0 && (
+          <div className="text-[11px] text-red-500/80 italic pl-3">
+            Atenção: {activeStationIncidents.length} de {configuredCount} nós configurados
+            encontram-se offline de forma inesperada.
+          </div>
+        )}
+
+        {/* 4. Recent Recoveries */}
+        {recentRecoveries.slice(0, 3).map((recovery, idx) => {
+          const isStation = recovery.type.startsWith("station");
+          const target = isStation ? recovery.name.toUpperCase() : recovery.name;
+          const durationStr = formatDuration(recovery.durationMs);
+          return (
+            <div key={idx} className="flex items-start gap-2 text-emerald-400/95">
+              <span className="font-bold">•</span>
+              <span>
+                {isStation ? `Estação ${target}` : `Serviço ${target}`} recuperado(a)
+                {durationStr ? ` após ${durationStr}` : ""}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* 5. Nodes Offline by Choice */}
+        {(!config.maxConfigured || !config.maxAuthConfigured) && (
+          <div className="flex items-start gap-2 text-[color:var(--kaline-faint)]">
+            <span>•</span>
+            <span>
+              MAX suspensa / offline por escolha (computação cloud sob demanda disponível para
+              despertar).
+            </span>
+          </div>
+        )}
+
+        {/* 6. General State */}
+        <div className="pt-2 border-t border-[color:var(--kaline-border-copper)]/10 text-[11px] text-[color:var(--kaline-faint)] flex justify-between">
+          <span>
+            {onlineCount} de 6 nós ativos ({configuredCount} configurados)
+          </span>
+          <span>Héstia observa e solicita · O Guardião autoriza</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Painel() {
+  const configState = useApi(() => hestiaApi.config(), []);
+  const eventsState = useApi(() => hestiaApi.recentEvents(50), []);
+
   return (
     <div className="space-y-6">
       <header>
-        <p className="kaline-eyebrow">Console do notebook</p>
+        <p className="kaline-eyebrow">Console da TV Box (Héstia Host)</p>
         <h1 className="kaline-serif text-3xl text-[color:var(--kaline-text)]">Héstia</h1>
         <p className="text-[13px] text-[color:var(--kaline-muted)]">
-          Monitoramento independente e somente leitura das cinco Stations da Héstia.
+          Monitoramento independente e somente leitura das seis Stations da Héstia.
         </p>
       </header>
+
+      <GuardianSummaryCard configState={configState} eventsState={eventsState} />
+
       <section className="grid gap-4 xl:grid-cols-2">
         {STATION_UI.map((station) => (
           <StationCard key={station.id} {...station} />
@@ -114,6 +326,29 @@ export function StationCard({
   const agent = connection.state.status === "ok" ? connection.state.data.station : null;
   const cardState = stationCardState(connection.state);
 
+  const [wakeState, setWakeState] = useState<{
+    loading: boolean;
+    message?: string;
+    error?: string;
+  }>({ loading: false });
+
+  const handleWakeServer = async () => {
+    setWakeState({ loading: true });
+    const res = await hestiaApi.wakeServer();
+    if (res.status === "ok" && res.data.ok) {
+      setWakeState({ loading: false, message: "Despertar solicitado com sucesso!" });
+      retry();
+    } else {
+      const err =
+        res.status === "unavailable"
+          ? res.message
+          : res.status === "ok"
+            ? res.data.error || "Falha ao solicitar despertar"
+            : "Erro de conexão";
+      setWakeState({ loading: false, error: err });
+    }
+  };
+
   return (
     <DataCard title={title} eyebrow={role} status={cardState.status} summary={cardState.summary}>
       <ConnectionRows state={connection.state} />
@@ -145,9 +380,26 @@ export function StationCard({
           v={services.state.status === "loading" ? "consultando…" : "indisponível"}
         />
       )}
-      {id === "desktop" && <Row k="Organizer" v="exclusivo do servidor" />}
       {codice && <Row k="Biblioteca Códice" v={codiceLabel(codiceHealth.state)} />}
       <Row k="Última atualização" v={latestCheckedAt(connection.state, system.state)} />
+      {id === "desktop" && cardState.status !== "ok" && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={handleWakeServer}
+            disabled={wakeState.loading}
+            className="w-full rounded bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-60 transition-colors"
+          >
+            {wakeState.loading ? "Enviando Magic Packet WoL…" : "Acordar servidor"}
+          </button>
+          {wakeState.message && (
+            <p className="mt-1.5 text-[11px] text-emerald-400 font-mono">{wakeState.message}</p>
+          )}
+          {wakeState.error && (
+            <p className="mt-1.5 text-[11px] text-red-400 font-mono">{wakeState.error}</p>
+          )}
+        </div>
+      )}
       <button
         type="button"
         onClick={retry}
@@ -173,9 +425,10 @@ export function stationCardState(state: ApiState<StationConnection>): {
     available: { summary: "online", status: "ok" },
     unavailable: { summary: "offline", status: "unavailable" },
     not_configured: { summary: "não configurada", status: "warn" },
+    expected_offline: { summary: "offline por escolha", status: "warn" },
     misconfigured: { summary: "configuração inválida", status: "error" },
     unauthorized: { summary: "não autorizada", status: "error" },
-    incompatible: { summary: "incompatível", status: "error" },
+    incompatible: { summary: "incompatible", status: "error" },
   };
   return meta[state.data.state];
 }
@@ -187,9 +440,10 @@ function ConnectionRows({ state }: { state: ApiState<StationConnection> }) {
     available: "online",
     unavailable: state.data.code === "STATION_TIMEOUT" ? "timeout" : "offline",
     not_configured: "não configurada",
+    expected_offline: "offline por escolha",
     misconfigured: "configuração inválida",
     unauthorized: "não autorizada",
-    incompatible: "incompatível",
+    incompatible: "incompatible",
   };
   return (
     <>

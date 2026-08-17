@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, unlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import net from "node:net";
 import http from "node:http";
 import { tmpdir } from "node:os";
@@ -181,28 +181,21 @@ async function main() {
   const epubPath = join(tvboxRoot, "codice", "epub", "fixture.epub");
   const pdfPath = join(tvboxRoot, "codice", "pdf", "fixture.pdf");
   const txtPath = join(tvboxRoot, "codice", "txt", "fixture.txt");
-  const organizerSource = join(desktopRoot, "entrada", "manual", "organizar.txt");
   const epub = Buffer.from("EPUB sintético PR42\n");
   const pdf = Buffer.from("%PDF sintético PR42\n");
   const txt = Buffer.from("TXT sintético PR42\n");
   await mkdir(desktopRoot, { recursive: true });
-  await mkdir(dirname(organizerSource), { recursive: true });
   await mkdir(dirname(epubPath), { recursive: true });
   await mkdir(dirname(pdfPath), { recursive: true });
   await mkdir(dirname(txtPath), { recursive: true });
   await writeFile(epubPath, epub);
   await writeFile(pdfPath, pdf);
   await writeFile(txtPath, txt);
-  await writeFile(organizerSource, "Organizer dry-run\n");
-  const old = new Date(Date.now() - 120_000);
-  await utimes(organizerSource, old, old);
-
   const desktopEnv = cleanEnvironment({
     NODE_ENV: "test",
     HESTIA_STATION_HOST: HOST,
     HESTIA_STATION_PORT: String(desktopPort),
     HESTIA_STATION_TOKEN: desktopToken,
-    HESTIA_STATION_ORGANIZER_ENABLED: "1",
     HESTIA_STATION_CODICE_ENABLED: "0",
     HESTIA_STORAGE_PATH: desktopRoot,
     HESTIA_DATA_DIR: join(root, "desktop", "data"),
@@ -213,7 +206,6 @@ async function main() {
       HESTIA_STATION_HOST: HOST,
       HESTIA_STATION_PORT: String(tvboxPort),
       HESTIA_STATION_TOKEN: tvboxToken,
-      HESTIA_STATION_ORGANIZER_ENABLED: "0",
       HESTIA_STATION_CODICE_ENABLED: "1",
       HESTIA_CODICE_CORS_ORIGIN: codiceOrigin,
       HESTIA_CODICE_SUPABASE_URL: `http://${HOST}:${authPort}`,
@@ -227,7 +219,6 @@ async function main() {
     HESTIA_STATION_HOST: HOST,
     HESTIA_STATION_PORT: String(pocketPort),
     HESTIA_STATION_TOKEN: pocketToken,
-    HESTIA_STATION_ORGANIZER_ENABLED: "0",
     HESTIA_STATION_CODICE_ENABLED: "0",
     HESTIA_STATION_SERVICES: "tailscaled,hermes",
     HESTIA_STORAGE_PATH: join(root, "pocket", "root-disk"),
@@ -238,7 +229,6 @@ async function main() {
     HESTIA_STATION_HOST: HOST,
     HESTIA_STATION_PORT: String(babyPort),
     HESTIA_STATION_TOKEN: babyToken,
-    HESTIA_STATION_ORGANIZER_ENABLED: "0",
     HESTIA_STATION_CODICE_ENABLED: "0",
     HESTIA_STATION_SERVICES: "tailscaled,telegram-guard",
     HESTIA_STORAGE_PATH: join(root, "baby", "root-disk"),
@@ -249,7 +239,6 @@ async function main() {
     HESTIA_STATION_HOST: HOST,
     HESTIA_STATION_PORT: String(miniPort),
     HESTIA_STATION_TOKEN: miniToken,
-    HESTIA_STATION_ORGANIZER_ENABLED: "0",
     HESTIA_STATION_CODICE_ENABLED: "0",
     HESTIA_STATION_SERVICES: "tailscaled",
     HESTIA_STORAGE_PATH: join(root, "mini", "root-disk"),
@@ -294,7 +283,7 @@ async function main() {
   await wait(miniBase, "/api/station/health", { token: miniToken, process: mini });
   await wait(consoleBase, "/api/health", { process: consoleProcess });
   ensure((await fetch(`${consoleBase}/`)).status === 200, "interface da Console não abriu");
-  for (const path of ["/codice", "/organizador", "/config", "/manifest.webmanifest", "/rede/"]) {
+  for (const path of ["/codice", "/historico", "/config", "/manifest.webmanifest", "/rede/"]) {
     ensure((await fetch(`${consoleBase}${path}`)).status === 200, `${path} não abriu`);
   }
 
@@ -311,7 +300,7 @@ async function main() {
     babyBase,
     miniBase,
   ];
-  for (const id of ["desktop", "tvbox", "pocket", "baby", "mini"]) {
+  for (const id of ["desktop", "tvbox", "pocket", "baby", "mini", "max"]) {
     for (const suffix of [
       "connection",
       "health",
@@ -320,7 +309,11 @@ async function main() {
       "services/status",
     ]) {
       const result = await json(consoleBase, `/api/stations/${id}/${suffix}`);
-      ensure(result.response.status === 200, `${id}/${suffix} falhou`);
+      if (id === "max" && suffix !== "connection") {
+        ensure(result.response.status === 503, `${id}/${suffix} deveria retornar 503`);
+      } else {
+        ensure(result.response.status === 200, `${id}/${suffix} falhou`);
+      }
       sanitized(result.text, secrets, `${id}/${suffix}`);
     }
   }
@@ -354,19 +347,13 @@ async function main() {
     body: JSON.stringify({ extensions: [] }),
   });
   ensure(
-    organizerPlan.response.status === 200 && organizerPlan.body.plan.dryRun === true,
-    `Organizer plan pela Console falhou (${organizerPlan.response.status} ${organizerPlan.body.code || organizerPlan.body.error || "sem código"})`,
-  );
-  ensure(organizerPlan.body.plan.summary.planned > 0, "Organizer não propôs ação real");
-  sanitized(organizerPlan.text, secrets, "Organizer plan");
-  ensure(
-    (await readFile(organizerSource, "utf8")) === "Organizer dry-run\n",
-    "Organizer dry-run alterou arquivo",
+    organizerPlan.response.status === 404,
+    `Organizer plan pela Console deveria retornar 404 (recebido: ${organizerPlan.response.status})`,
   );
   const organizerRuns = await json(consoleBase, "/api/stations/desktop/organizer/runs");
   ensure(
-    organizerRuns.response.status === 200 && Array.isArray(organizerRuns.body.items),
-    "Organizer runs pela Console falhou",
+    organizerRuns.response.status === 404,
+    `Organizer runs pela Console deveria retornar 404 (recebido: ${organizerRuns.response.status})`,
   );
   ensure(
     (await json(desktopBase, "/api/codice/health")).response.status === 404,
@@ -537,7 +524,7 @@ async function main() {
   await rm(root, { recursive: true, force: true });
   root = undefined;
   console.log(
-    "Station Smoke: OK — Console + desktop + TV Box + Pocket + Baby + Mini, Organizer dry-run e Códice autenticado com health interno",
+    "Station Smoke: OK — Console + desktop + TV Box + Pocket + Baby + Mini e Códice autenticado com health interno",
   );
 }
 

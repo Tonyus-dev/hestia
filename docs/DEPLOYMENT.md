@@ -2,9 +2,9 @@
 
 ## Arquitetura
 
-- `127.0.0.1:4517`: Héstia Console no notebook; monitora as cinco Stations.
-- `127.0.0.1:4518`: Station Agent no desktop; monitor-only, sem Organizer e sem Códice.
-- `127.0.0.1:4519`: Station Agent na TV Box; monitor-only e Códice read-only.
+- `127.0.0.1:4517`: Héstia Console na TV Box; monitora e serve a rede interna.
+- `127.0.0.1:4518`: Station Agent no desktop; monitor-only, sem Códice.
+- A TV Box concentra o Códice e a Console em uma única máquina física.
 
 Console, Station e Códice não copiam arquivos. A cópia desktop → TV Box continua externa, por rsync/SSH.
 
@@ -19,40 +19,32 @@ Console, Station e Códice não copiam arquivos. A cópia desktop → TV Box con
 ## Ordem recomendada de implantação
 
 1. Desktop/servidor;
-2. TV Box;
+2. TV Box (Console + Códice);
 3. Pocket/Baby/Mini quando usadas;
-4. Tailscale e acesso privado;
-5. Notebook/Console;
+4. Tailscale Serve e acesso privado.
 6. Gate físico completo.
 
-As Stations não dependem da Console. Por isso, instale e valide primeiro o
-desktop em `127.0.0.1:4518` e depois a TV Box em `127.0.0.1:4519`. Só então
-configure manualmente a rede privada e instale a Console com as URLs e
-tokens reais de cada Station usada. Esta é uma sequência operacional, não uma automação.
+A Console depende da disponibilidade das Stations, mas todas operam isoladamente. Instale e valide primeiro o desktop em `127.0.0.1:4518` e depois a Console na TV Box em `127.0.0.1:4517`. A TV Box concentra a Console e a Station em um só ambiente. Só então configure manualmente a rede privada (Tailscale Serve) para acesso externo.
 
 ### 1. Desktop/servidor
 
 Instale a Station em `127.0.0.1:4518`, confirme o runtime em `/opt`, serviço
-ativo e execute o Doctor instalado. Confirme também Organizer e Códice em 404
+ativo e execute o Doctor instalado. Confirme Códice em 404
 e que o token próprio não aparece em logs.
 
-### 2. TV Box
+### 2. TV Box (Console)
 
-Instale a Station em `127.0.0.1:4519`, confirme o runtime mínimo em `/opt` e
-configure explicitamente `HESTIA_STATION_ORGANIZER_ENABLED=0`,
-`HESTIA_STATION_CODICE_ENABLED=1`, `HESTIA_STORAGE_PATH=/KALINE`,
-`HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>` e
-`HESTIA_CODICE_SUPABASE_URL=https://<PROJETO>.supabase.co`,
-`HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<CHAVE>`,
-`HESTIA_CODICE_ALLOWED_USER_IDS=<UUID_SUPABASE>` e
-`HESTIA_STATION_ALLOWED_HOSTS=<HOST_PRIVADO>`. Execute o Doctor instalado e
-valide health, storage, services e Códice.
+Instale a Console na TV Box em `127.0.0.1:4517`, confirme o runtime em `/opt` e
+configure explicitamente o `/etc/default/hestia-console` com os tokens reais:
+`HESTIA_HOST=127.0.0.1` e `HESTIA_PORT=4517`. Execute o Doctor instalado e valide health, storage e services.
+
+A Héstia Console expõe a interface PWA. Configure os acessos às Stations no próprio arquivo de ambiente.
 
 ### 3. Mini sentinela externa
 
 A Mini usa o `hestia-station-agent` genérico em Debian 13 como sentinela externa. Instale com porta local `4518`, serviço não-root, token criado localmente, bind em loopback e acesso remoto somente pela rede privada configurada pelo usuário; nenhum IP público, hostname privado real ou token deve entrar no código.
 
-Configuração esperada na Mini: `HESTIA_STATION_HOST=127.0.0.1`, `HESTIA_STATION_PORT=4518`, `HESTIA_STATION_ORGANIZER_ENABLED=0`, `HESTIA_STATION_CODICE_ENABLED=0` e `HESTIA_STATION_SERVICES=tailscaled`. Configure somente a Console com `HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>` e `HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>`. A Console deve obter sistema, arquitetura, RAM, swap, CPU, disco, uptime e `tailscaled` da resposta real do Agent.
+Configuração esperada na Mini: `HESTIA_STATION_HOST=127.0.0.1`, `HESTIA_STATION_PORT=4518`, `HESTIA_STATION_CODICE_ENABLED=0` e `HESTIA_STATION_SERVICES=tailscaled`. Configure somente a Console com `HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>` e `HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>`. A Console deve obter sistema, arquitetura, RAM, swap, CPU, disco, uptime e `tailscaled` da resposta real do Agent.
 
 ### 4. Rede privada
 
@@ -60,44 +52,15 @@ Depois das Stations funcionarem localmente, configure Tailscale e acesso
 privado manualmente. Valide os dois endpoints, hosts permitidos exatos e que o
 acesso não é público. A Héstia não automatiza esse passo.
 
-### 5. Notebook/Console
+### 5. Tailscale Serve
 
-Somente depois de obter as URLs privadas e tokens independentes,
-instale a Console e execute o Doctor instalado em `/opt`. A Console depende das
-Stations; as Stations não dependem da Console.
-
-## Notebook
+Depois das Stations funcionarem localmente, configure o `tailscale serve` na TV Box para expor a porta 4517 via HTTPS privado:
 
 ```bash
-git clone https://github.com/Tonyus-dev/hestia.git
-cd hestia
-sudo npm run install:local
-sudoedit /etc/default/hestia-console
-sudo systemctl restart hestia-console
-sudo systemctl is-active --quiet hestia-console
-sudo /usr/bin/env node \
-  /opt/hestia-console/scripts/console-doctor.mjs \
-  --require-systemd
+sudo tailscale serve --bg 4517
 ```
 
-Configure separadamente, sem reutilizar tokens:
-
-```dotenv
-HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>
-HESTIA_DESKTOP_TOKEN=<TOKEN_DESKTOP>
-HESTIA_TVBOX_BASE_URL=https://<TVBOX_PRIVADA>
-HESTIA_TVBOX_TOKEN=<TOKEN_TVBOX>
-HESTIA_POCKET_BASE_URL=https://<HOST_PRIVADO_DA_POCKET>
-HESTIA_POCKET_TOKEN=<TOKEN_DA_STATION>
-HESTIA_BABY_BASE_URL=https://<HOST_PRIVADO_DA_BABY>
-HESTIA_BABY_TOKEN=<TOKEN_DA_STATION>
-HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>
-HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>
-HESTIA_STATION_TIMEOUT_MS=5000
-HESTIA_ORGANIZER_TIMEOUT_MS=120000
-```
-
-Acesse somente `http://127.0.0.1:4517` no notebook.
+Acesse a URL HTTPS gerada no celular. Valide a funcionalidade de PWA (manifest, service worker e instalação na home screen).
 
 ## Desktop
 
@@ -113,23 +76,23 @@ sudo /usr/bin/env node \
   --require-systemd
 ```
 
-Confirme `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`.
+Confirme `HESTIA_STATION_CODICE_ENABLED=0`.
 
-## TV Box
+## TV Box (Console)
 
 ```bash
 git clone https://github.com/Tonyus-dev/hestia.git
 cd hestia
-sudo HESTIA_STATION_PORT=4519 npm run station:install
-sudoedit /etc/default/hestia-station-agent
-sudo systemctl restart hestia-station-agent
-sudo systemctl is-active --quiet hestia-station-agent
+sudo npm run install:local
+sudoedit /etc/default/hestia-console
+sudo systemctl restart hestia-console
+sudo systemctl is-active --quiet hestia-console
 sudo /usr/bin/env node \
-  /opt/hestia-station/scripts/station-doctor.mjs \
+  /opt/hestia-console/scripts/console-doctor.mjs \
   --require-systemd
 ```
 
-Configure `HESTIA_STATION_ORGANIZER_ENABLED=0`, `HESTIA_STATION_CODICE_ENABLED=1`, `HESTIA_STORAGE_PATH=/KALINE`, `HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>`, `HESTIA_CODICE_SUPABASE_URL=https://<PROJETO>.supabase.co`, `HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<CHAVE>`, `HESTIA_CODICE_ALLOWED_USER_IDS=<UUID_SUPABASE>` e os hosts privados permitidos. Use somente publishable key; nunca service-role. EPUB e PDF são obrigatórios; TXT é opcional. O instalador não instala LibreOffice nem frontend na Station.
+Configure `HESTIA_STATION_CODICE_ENABLED=1`, `HESTIA_STORAGE_PATH=/KALINE`, `HESTIA_CODICE_CORS_ORIGIN=https://<ORIGEM_WEB_DO_CODICE>`, `HESTIA_CODICE_SUPABASE_URL=https://<PROJETO>.supabase.co`, `HESTIA_CODICE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_<CHAVE>`, `HESTIA_CODICE_ALLOWED_USER_IDS=<UUID_SUPABASE>` e os hosts privados permitidos. Use somente publishable key; nunca service-role. EPUB e PDF são obrigatórios; TXT é opcional. O instalador não instala LibreOffice nem frontend na Station.
 
 `HESTIA_CODICE_CORS_ORIGIN` é a origem exata do aplicativo web Códice executado no navegador. As requisições públicas `GET` e `HEAD` de `/api/codice/*` exigem Bearer Supabase válido e `user.id` na allowlist. As requisições `OPTIONS` validam somente o preflight CORS, sem Bearer e sem consulta ao Supabase. A Console e o Doctor consultam `/api/station/codice/health` server-to-server com o token da Station; não possuem JWT Supabase e não expõem biblioteca ou livros. A API é somente leitura e entrega bytes completos: não há Range, 206, upload ou import.
 
@@ -145,7 +108,7 @@ Atualize o checkout e execute novamente o mesmo instalador. Os paths operacionai
 
 O pacote Debian da Console usa somente a arquitetura nativa de `dpkg --print-architecture` em produção. O teste `armhf` da CI valida apenas nome e metadata do pacote, não execução ou build em ARM. O `postinst` falha se Node.js `>=22.13.0`, serviço ativo ou Console Doctor não forem confirmados.
 
-O Organizer permanece disponível apenas como opt-in interno do Agent. As instalações atuais mantêm `HESTIA_STATION_ORGANIZER_ENABLED=0`; a Console não expõe proxy ou interface de escrita.
+O Organizer foi removido do produto. Se variáveis legadas como `HESTIA_STATION_ORGANIZER_ENABLED` ainda estiverem nos arquivos de ambiente, podem ser removidas com segurança; a Console não expõe proxy ou interface de escrita.
 
 O Doctor do checkout é ferramenta de desenvolvimento. O gate pós-instalação deve
 sempre executar diretamente o Doctor instalado em `/opt`.
@@ -178,7 +141,7 @@ O modo padrão remove unit e runtime, preservando configuração e token. `--pur
 
 - [ ] runtime em `/opt/hestia-station`, porta 4518;
 - [ ] health, storage e services reais;
-- [ ] Organizer e Códice retornam 404;
+- [ ] Códice retorna 404;
 - [ ] Tailscale privado e reboot validados.
 
 ### TV Box

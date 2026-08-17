@@ -82,24 +82,6 @@ function requestWithHost(baseUrl, host) {
 }
 
 describe("Station Agent", () => {
-  it("desativa o Organizer por padrão e aceita somente 0 ou 1", () => {
-    const base = { HESTIA_STATION_TOKEN: token };
-    expect(resolveStationAgentConfig(base).organizerEnabled).toBe(false);
-    expect(
-      resolveStationAgentConfig({ ...base, HESTIA_STATION_ORGANIZER_ENABLED: "0" })
-        .organizerEnabled,
-    ).toBe(false);
-    expect(
-      resolveStationAgentConfig({ ...base, HESTIA_STATION_ORGANIZER_ENABLED: "1" })
-        .organizerEnabled,
-    ).toBe(true);
-    for (const value of ["", "true", "false", "yes", "on", "2", " 1"]) {
-      expect(() =>
-        resolveStationAgentConfig({ ...base, HESTIA_STATION_ORGANIZER_ENABLED: value }),
-      ).toThrow("HESTIA_STATION_ORGANIZER_ENABLED deve ser 0 ou 1");
-    }
-  });
-
   it("desativa o Códice por padrão e aceita somente 0 ou 1", () => {
     const base = { HESTIA_STATION_TOKEN: token };
     expect(resolveStationAgentConfig(base).codiceEnabled).toBe(false);
@@ -358,64 +340,6 @@ describe("Station Agent", () => {
     expect(await response.json()).toEqual({ ok: false, error: "not_found" });
   });
 
-  it("mantém monitoramento e não registra nem executa o Organizer por padrão", async () => {
-    const organizerProviders = {
-      generateOrganizerPlan: vi.fn(),
-      writePlan: vi.fn(),
-      claimAndApplyOrganizerPlan: vi.fn(),
-      getOrganizerRuns: vi.fn(),
-      getOrganizerRun: vi.fn(),
-      undoOrganizerRun: vi.fn(),
-      redoOrganizerRun: vi.fn(),
-    };
-    const { baseUrl } = await start(
-      { storagePath: "/private/station-storage", services: [] },
-      {
-        ...organizerProviders,
-        getStorageStatus: async () => ({
-          checkedAt: new Date().toISOString(),
-          items: [{ exists: false, status: "missing" }],
-        }),
-        getServicesStatus: async () => ({ items: [] }),
-      },
-    );
-
-    for (const path of [
-      "/api/station/health",
-      "/api/station/storage/status",
-      "/api/station/services/status",
-      "/api/station/system/status",
-    ]) {
-      expect((await authenticated(baseUrl, path)).status).toBe(200);
-    }
-
-    for (const [method, path] of [
-      ["POST", "/api/station/organizer/plan"],
-      ["POST", "/api/station/organizer/apply"],
-      ["GET", "/api/station/organizer/runs"],
-      ["GET", "/api/station/organizer/runs/run_1_deadbeef"],
-      ["POST", "/api/station/organizer/runs/run_1_deadbeef/undo"],
-      ["POST", "/api/station/organizer/runs/undo_1_deadbeef/redo"],
-    ]) {
-      const response = await fetch(`${baseUrl}${path}`, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "X-Hestia-Local-Confirm": "organize",
-        },
-        ...(method === "POST" ? { body: "{}" } : {}),
-      });
-      expect(response.status).toBe(404);
-      const body = await response.json();
-      expect(body).toEqual({ ok: false, error: "not_found" });
-      expect(JSON.stringify(body)).not.toContain(token);
-      expect(JSON.stringify(body)).not.toContain("/private/station-storage");
-    }
-    for (const provider of Object.values(organizerProviders))
-      expect(provider).not.toHaveBeenCalled();
-  });
-
   it("mantém o Códice ausente por padrão sem exigir Bearer nesse namespace", async () => {
     const { baseUrl } = await start();
     for (const [method, path] of [
@@ -447,7 +371,6 @@ describe("Station Agent", () => {
       storagePath: root,
       codiceEnabled: true,
       codiceCorsOrigin: origin,
-      organizerEnabled: false,
       services: [],
     });
     const health = await fetch(`${baseUrl}/api/codice/health`);
@@ -539,8 +462,6 @@ describe("Station Agent", () => {
     }
     expect((await fetch(`${baseUrl}/api/station/health`)).status).toBe(401);
     expect((await authenticated(baseUrl, "/api/station/health")).status).toBe(200);
-    expect((await fetch(`${baseUrl}/api/station/organizer/runs`)).status).toBe(401);
-    expect((await authenticated(baseUrl, "/api/station/organizer/runs")).status).toBe(404);
   });
 
   it("isola Supabase Auth do token administrativo e reutiliza o health interno", async () => {

@@ -15,8 +15,6 @@ import { getServicesStatus } from "./services.js";
 import { getStationSystemStatus } from "./systemStatus.js";
 import { getStorageStatus } from "./storage.js";
 import { ensureDataDir, resolveDataDir } from "./dataDir.js";
-import { config as sharedConfig } from "./config.js";
-import { registerStationOrganizerRoutes } from "./stationOrganizerRoutes.js";
 import { createCodiceHealthHandler, registerCodiceReadOnlyRoutes } from "./codiceReadOnlyRoutes.js";
 import { authenticateCodiceRequest, isValidCodiceUserId } from "./codiceAuth.js";
 
@@ -25,13 +23,6 @@ const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8
 
 function configError(message) {
   throw new Error(`[Station Agent] ${message}`);
-}
-
-function parseOrganizerEnabled(value) {
-  if (value === undefined) return false;
-  if (value === "0") return false;
-  if (value === "1") return true;
-  configError("HESTIA_STATION_ORGANIZER_ENABLED deve ser 0 ou 1.");
 }
 
 function parseCodiceEnabled(value) {
@@ -128,7 +119,6 @@ export function resolveStationAgentConfig(env = process.env) {
   const port = Number(portRaw);
   const token = env.HESTIA_STATION_TOKEN;
   const allowedHosts = env.HESTIA_STATION_ALLOWED_HOSTS?.trim() || "";
-  const organizerEnabled = parseOrganizerEnabled(env.HESTIA_STATION_ORGANIZER_ENABLED);
   const codiceEnabled = parseCodiceEnabled(env.HESTIA_STATION_CODICE_ENABLED);
   const codiceCorsOrigin = codiceEnabled
     ? resolveCodiceCorsOrigin(env.HESTIA_CODICE_CORS_ORIGIN, env.NODE_ENV)
@@ -177,9 +167,7 @@ export function resolveStationAgentConfig(env = process.env) {
     allowedHosts,
     storagePath,
     dataDir,
-    storageSources: sharedConfig.storageSources,
     services,
-    organizerEnabled,
     codiceEnabled,
     codiceCorsOrigin,
     codiceSupabaseUrl,
@@ -310,18 +298,6 @@ export function createStationAgent(config, providers = {}) {
   app.get("/api/station/services/status", async () =>
     publicServices(await readServices(config.services || DEFAULT_SERVICES)),
   );
-
-  if (config.organizerEnabled === true) {
-    registerStationOrganizerRoutes(
-      app,
-      {
-        dataDir: config.dataDir || resolveDataDir(),
-        storagePath: config.storagePath || "/KALINE",
-        storageSources: config.storageSources || [],
-      },
-      providers,
-    );
-  }
 
   if (config.codiceEnabled === true) {
     const storageRoot = config.storagePath || "/KALINE";

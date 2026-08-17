@@ -1,4 +1,4 @@
-// Chama Local — manifesto estático do Console do notebook.
+// Chama Local — manifesto estático do Console da TV Box.
 // Conteúdo versionado no git, não em disco — mesma lógica que config.js.
 import { getPresenceServiceBindings } from "./serviceBindings.js";
 
@@ -12,7 +12,7 @@ export function getManifest() {
         {
           name: "Héstia",
           role: "host",
-          description: "Console local do notebook",
+          description: "Console local da TV Box",
         },
         {
           name: "Héstia Console",

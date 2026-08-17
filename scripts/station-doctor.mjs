@@ -7,7 +7,6 @@ Opções:
   --env-file <path>
   --require-systemd
   --timeout-ms <n>
-  --expect-organizer <enabled|disabled>
   --help`;
 
 let options;

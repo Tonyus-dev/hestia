@@ -18,7 +18,7 @@ const RECOGNIZED_KEYS = new Set([
   "HESTIA_STATION_HOST",
   "HESTIA_STATION_PORT",
   "HESTIA_STATION_TOKEN",
-  "HESTIA_STATION_ORGANIZER_ENABLED",
+
   "HESTIA_STATION_CODICE_ENABLED",
   "HESTIA_CODICE_CORS_ORIGIN",
   "HESTIA_CODICE_SUPABASE_URL",
@@ -71,7 +71,7 @@ export function parseStationDoctorArgs(argv) {
     envFile: DEFAULT_STATION_ENV_FILE,
     requireSystemd: false,
     timeoutMs: DEFAULT_TIMEOUT_MS,
-    expectOrganizer: null,
+
     help: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -88,12 +88,6 @@ export function parseStationDoctorArgs(argv) {
         throw new Error("--timeout-ms deve estar entre 1000 e 30000");
       }
       options.timeoutMs = value;
-    } else if (argument === "--expect-organizer") {
-      const value = argv[++index];
-      if (value !== "enabled" && value !== "disabled") {
-        throw new Error("--expect-organizer aceita enabled ou disabled");
-      }
-      options.expectOrganizer = value;
     } else {
       throw new Error(`argumento desconhecido: ${argument}`);
     }
@@ -158,7 +152,7 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
   const envFile = options.envFile || DEFAULT_STATION_ENV_FILE;
   const requireSystemd = options.requireSystemd === true;
   const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
-  const expectOrganizer = options.expectOrganizer || null;
+
   const processEnv = dependencies.processEnv || process.env;
   const runExecFile = dependencies.execFile || execFile;
   const lines = [];
@@ -208,14 +202,6 @@ export async function runStationDoctor(options = {}, dependencies = {}) {
     config = resolveStationAgentConfig(agentEnv);
     if (!isAbsolute(config.storagePath)) throw new Error("storage root não é absoluto");
     ok("configuração válida");
-    if (expectOrganizer === "enabled") {
-      if (config.organizerEnabled) ok("Organizer habilitado conforme esperado");
-      else bad("Organizer deveria estar habilitado nesta instalação");
-    } else if (expectOrganizer === "disabled") {
-      if (config.organizerEnabled) bad("Organizer deveria estar desativado nesta instalação");
-      else ok("Organizer desativado conforme esperado");
-    } else if (config.organizerEnabled) ok("Organizer habilitado");
-    else ok("Organizer desativado");
   } catch (error) {
     bad(String(error.message || "configuração inválida").replace(/^\[Station Agent\]\s*/, ""));
     return finish();

@@ -18,6 +18,6 @@ export function getCapabilities() {
       manageUsers: false,
       processHermes: true,
     },
-    mode: "notebook-console",
+    mode: "tvbox-console",
   };
 }

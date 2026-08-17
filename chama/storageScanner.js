@@ -4,7 +4,7 @@
 // Nunca segue symlink recursivamente nesta PR. `scanPath`/`scanStorageModel`/`scanConfiguredSources`
 // nunca devolvem lista de arquivos, só resumo agregado (contagem/bytes/extensões) — mesmo em
 // endpoints locais, não só na Presence. `listFiles` é a exceção deliberada: devolve paths reais,
-// mas é só para uso interno de chama/organizerPlan.js (nunca ligado a nenhum endpoint Presence).
+// mas é só para uso interno do módulo chama (nunca ligado a nenhum endpoint Presence).
 import { readdir, stat, lstat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { getStorageModel } from "./storageModel.js";
@@ -166,7 +166,7 @@ export async function scanPath(targetPath, limits = DEFAULT_INDEX_LIMITS) {
   };
 }
 
-// Lista arquivos reais (path/ext/size) — só para uso interno de organizerPlan.js.
+// Lista arquivos reais (path/ext/size) — só para uso interno do módulo chama.
 // Nunca expor diretamente num endpoint (Presence ou local).
 export async function listFiles(targetPath, limits = DEFAULT_INDEX_LIMITS) {
   const result = await walkTarget(targetPath, limits);

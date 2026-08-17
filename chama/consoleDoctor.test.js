@@ -89,8 +89,8 @@ describe("Console Doctor", () => {
     expect(classifyConsoleStationState(state)).toBe(classification);
   });
 
-  it("usa os cinco IDs canônicos das Stations", async () => {
-    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby", "mini"]);
+  it("usa os seis IDs canônicos das Stations", async () => {
+    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby", "mini", "max"]);
     const script = await readFile(
       join(import.meta.dirname, "..", "scripts", "console-doctor.mjs"),
       "utf8",
@@ -118,6 +118,7 @@ describeDoctorScript("Console Doctor script", () => {
         pocket: "available",
         baby: "available",
         mini: "available",
+        max: "available",
       },
       async (baseUrl) => {
         const result = await runDoctor({ baseUrl, ...runtime });
@@ -137,6 +138,7 @@ describeDoctorScript("Console Doctor script", () => {
         pocket: "not_configured",
         baby: "not_configured",
         mini: "not_configured",
+        max: "not_configured",
       },
       async (baseUrl) => {
         const result = await runDoctor({ baseUrl, ...runtime });
@@ -144,6 +146,7 @@ describeDoctorScript("Console Doctor script", () => {
         expect(result.stdout).toContain("ok: pocket: not_configured");
         expect(result.stdout).toContain("ok: baby: not_configured");
         expect(result.stdout).toContain("ok: mini: not_configured");
+        expect(result.stdout).toContain("ok: max: not_configured");
       },
     );
   });
@@ -156,6 +159,7 @@ describeDoctorScript("Console Doctor script", () => {
         pocket: "unauthorized",
         baby: "available",
         mini: "available",
+        max: "available",
       },
       "pocket: unauthorized",
     ],
@@ -166,6 +170,7 @@ describeDoctorScript("Console Doctor script", () => {
         pocket: "available",
         baby: "available",
         mini: "available",
+        max: "available",
       },
       "tvbox: incompatible",
     ],
@@ -176,6 +181,7 @@ describeDoctorScript("Console Doctor script", () => {
         pocket: "http_invalid",
         baby: "available",
         mini: "available",
+        max: "available",
       },
       "pocket: contrato inválido",
     ],
@@ -186,6 +192,7 @@ describeDoctorScript("Console Doctor script", () => {
         pocket: "invalid_contract",
         baby: "available",
         mini: "available",
+        max: "available",
       },
       "pocket: indisponível",
     ],
@@ -196,6 +203,7 @@ describeDoctorScript("Console Doctor script", () => {
         pocket: "json_invalid",
         baby: "available",
         mini: "available",
+        max: "available",
       },
       "Console não respondeu ao Doctor",
     ],

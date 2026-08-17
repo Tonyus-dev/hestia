@@ -1,4 +1,4 @@
-// Chama Local — vínculos read-only com serviços já existentes no notebook.
+// Chama Local — vínculos read-only com serviços já existentes na TV Box.
 // Não instala, não configura, não inicia/para/reinicia nenhum destes serviços.
 
 export function getServiceBindings() {

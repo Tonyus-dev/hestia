@@ -53,7 +53,7 @@ export const config = {
   version: pkg.version || "0.1.0",
   host,
   port,
-  mode: "Console do notebook: leitura local para saúde, hardware, logs, configuração e serviços.",
+  mode: "Console da TV Box: leitura local para saúde, hardware, logs, configuração e serviços.",
   readonly: true,
   readonlyByDefault: true,
   controlledWrites: true,

@@ -226,13 +226,33 @@ export type HermesStatus = {
 
 export type StationState =
   | "not_configured"
+  | "expected_offline"
   | "misconfigured"
   | "available"
   | "unavailable"
   | "unauthorized"
   | "incompatible";
 
-export type StationId = "desktop" | "tvbox" | "pocket" | "baby" | "mini";
+export type StationId = "desktop" | "tvbox" | "pocket" | "baby" | "mini" | "max";
+
+export type PresenceEvent = {
+  timestamp: string;
+  type: "service.down" | "service.up" | "station.down" | "station.up" | string;
+  visibility: string;
+  data?: {
+    service?: string;
+    station?: string;
+    from?: string;
+    to?: string;
+    code?: string;
+    durationMs?: number;
+  };
+};
+
+export type PresenceEventsResult = {
+  events: PresenceEvent[];
+  limit: number;
+};
 
 export type StationHealth = {
   ok: true;
@@ -309,78 +329,6 @@ export type StationCodiceHealth = {
   checkedAt: string;
 };
 
-export type OrganizerPlan = {
-  ok: true;
-  schemaVersion: 1;
-  checkedAt: string;
-  plan: {
-    planId: string;
-    generatedAt: string;
-    dryRun: true;
-    requiresExtraConfirmation: boolean;
-    planned: number;
-    items: Array<{
-      id: string;
-      source: { kind: string; label: string; relativePath: string };
-      target: { relativePath: string };
-      action: string;
-      reason: string | null;
-      risk: string;
-      status: string;
-      size: number;
-      mtimeIso?: string | null;
-      ignoredReason: string | null;
-    }>;
-    summary: {
-      total: number;
-      planned: number;
-      conflicts: number;
-      ignored: number;
-      quarantined: number;
-      byExtension: Record<string, number>;
-      byTargetArea: Record<string, number>;
-    };
-  };
-};
-
-export type OrganizerRun = {
-  ok: true;
-  schemaVersion: 1;
-  checkedAt: string;
-  run: {
-    runId: string;
-    planId: string;
-    kind: string;
-    status: string;
-    createdAt: string;
-    appliedAt: string;
-    operations: Array<{
-      source: { kind: string; label: string; relativePath: string };
-      target: { relativePath: string };
-      action: string;
-      status: string;
-      reason: string | null;
-      error: string | null;
-      undoPossible: boolean;
-    }>;
-    summary: { total: number; ok: number; failed: number; skipped: number };
-  };
-};
-
-export type OrganizerRuns = {
-  ok: true;
-  schemaVersion: 1;
-  checkedAt: string;
-  items: Array<{
-    runId: string;
-    status: string;
-    undoOf: string | null;
-    undoneBy: string | null;
-    redoOf: string | null;
-    redoneBy: string | null;
-  }>;
-};
-
 export type Config = {
   appName: string;
   serverName: string;
@@ -402,6 +350,8 @@ export type Config = {
   babyAuthConfigured: boolean;
   miniConfigured: boolean;
   miniAuthConfigured: boolean;
+  maxConfigured: boolean;
+  maxAuthConfigured: boolean;
   stationTimeoutMs: number;
   legacyStationConfigDetected: boolean;
   services: string[];
@@ -444,7 +394,6 @@ export type StorageScan = {
 };
 
 const DEFAULT_TIMEOUT_MS = 3500;
-const ORGANIZER_UI_TIMEOUT_MS = 610_000;
 const CHAMA_PORT = 4517;
 
 /**
@@ -640,6 +589,10 @@ export const hestiaApi = {
   logs: (tail?: number) =>
     safeFetch<Logs>(tail ? `/api/logs?tail=${Math.max(1, Math.min(200, tail | 0))}` : "/api/logs"),
   config: () => safeFetch<Config>("/api/config"),
+  recentEvents: (limit?: number) =>
+    safeFetch<PresenceEventsResult>(
+      limit ? `/api/presence/events/recent?limit=${limit}` : "/api/presence/events/recent",
+    ),
   stationConnection: (id: StationId) =>
     safeFetch<StationConnection>(`/api/stations/${id}/connection`),
   stationHealth: (id: StationId) => safeFetch<StationHealth>(`/api/stations/${id}/health`),
@@ -649,25 +602,11 @@ export const hestiaApi = {
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
-  desktopOrganizerPlan: (extensions: string[] = []) =>
-    safePost<OrganizerPlan>(
-      "/api/stations/desktop/organizer/plan",
-      { extensions },
+  wakeServer: () =>
+    safePost<{ ok: boolean; state?: string; target?: string; message?: string; error?: string }>(
+      "/api/actions/wake-server",
       {},
-      ORGANIZER_UI_TIMEOUT_MS,
     ),
-  desktopOrganizerApply: (body: {
-    planId: string;
-    confirmation: "EFETIVAR";
-    largePlanConfirmation: string | null;
-  }) =>
-    safePost<OrganizerRun>(
-      "/api/stations/desktop/organizer/apply",
-      body,
-      {},
-      ORGANIZER_UI_TIMEOUT_MS,
-    ),
-  desktopOrganizerRuns: () => safeFetch<OrganizerRuns>("/api/stations/desktop/organizer/runs"),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;

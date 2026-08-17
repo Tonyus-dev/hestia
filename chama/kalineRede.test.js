@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 describe("Kaline Rede", () => {
-  it("abre Servidor e TV Box na Console e Organizer em /organizador", () => {
+  it("abre Servidor e TV Box na Console e Histórico em /historico", () => {
     const { document, open } = load({ "note.hestia": "https://console.example" });
     buttonIn(document, '[aria-label="Servidor"]', "Abrir na Héstia").click();
     buttonIn(document, '[aria-label="TV Box"]', "Abrir na Héstia").click();
@@ -48,12 +48,12 @@ describe("Kaline Rede", () => {
       "https://console.example/",
       "https://console.example/",
     ]);
-    const organizer = [...document.querySelectorAll("#quick-grid .qa")].find((item) =>
-      item.textContent.includes("Organizador"),
+    const historico = [...document.querySelectorAll("#quick-grid .qa")].find((item) =>
+      item.textContent.includes("Histórico"),
     );
-    organizer.querySelector("button").click();
+    historico.querySelector("button").click();
     expect(open).toHaveBeenLastCalledWith(
-      "https://console.example/organizador",
+      "https://console.example/historico",
       "_blank",
       "noopener,noreferrer",
     );

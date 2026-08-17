@@ -2,13 +2,13 @@ import { describe, it, expect } from "vitest";
 import { getServiceBindings, getPresenceServiceBindings } from "./serviceBindings.js";
 
 describe("getServiceBindings", () => {
-  it("retorna apenas serviços padrão do notebook", () => {
+  it("retorna apenas serviços padrão da TV Box", () => {
     const bindings = getServiceBindings();
     expect(bindings).toHaveLength(1);
     expect(bindings.map((b) => b.id)).toEqual(["tailscale"]);
   });
 
-  it("usa serviceName da allowlist do notebook", () => {
+  it("usa serviceName da allowlist da TV Box", () => {
     const bindings = getServiceBindings();
     const byId = Object.fromEntries(bindings.map((b) => [b.id, b.serviceName]));
     expect(byId).toEqual({ tailscale: "tailscaled" });

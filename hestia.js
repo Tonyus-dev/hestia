@@ -1,5 +1,5 @@
-// Héstia Console — servidor local Fastify que embute a Chama Local
-// e serve o frontend buildado como console puro do notebook.
+// Héstia Console — CLI server. Importa endpoints read-only da Chama Local
+// e serve o frontend buildado como console puro da TV Box.
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { fileURLToPath } from "node:url";

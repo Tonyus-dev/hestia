@@ -30,7 +30,7 @@ node "$SOURCE_DIR/scripts/require-node.mjs" || fail "versão do Node incompatív
 BUILD_USER="${SUDO_USER:-}"
 [ -n "$BUILD_USER" ] && [ "$(id -u "$BUILD_USER")" -ne 0 ] || fail "execute via sudo a partir de um usuário não-root."
 BUILD_HOME="$(getent passwd "$BUILD_USER" | cut -d: -f6)"
-run_as_builder() { runuser -u "$BUILD_USER" -- env -u npm_config_cache -u NPM_CONFIG_CACHE HOME="$BUILD_HOME" "$@"; }
+run_as_builder() { runuser -u "$BUILD_USER" -- env -u npm_config_cache -u NPM_CONFIG_CACHE HOME="$BUILD_HOME" "$@" < /dev/null; }
 
 if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
   hestia_assert_regular_config_file "$ENV_FILE"
@@ -74,9 +74,13 @@ cleanup_install() {
 }
 trap cleanup_install EXIT
 
-log "instalando dependências reproduzivelmente e buildando sem root"
-run_as_builder npm --prefix "$SOURCE_DIR" ci --ignore-scripts --no-audit --no-fund
-run_as_builder npm --prefix "$SOURCE_DIR" run build
+log "instalando dependências reproduzivelmente e validando build"
+if [ -d "$SOURCE_DIR/dist/client" ] && [ -d "$SOURCE_DIR/dist/server" ]; then
+  log "reaproveitando build SSR pré-compilado em dist/"
+else
+  run_as_builder npm --prefix "$SOURCE_DIR" ci --ignore-scripts --no-audit --no-fund
+  run_as_builder npm --prefix "$SOURCE_DIR" run build
+fi
 [ -d "$SOURCE_DIR/dist/client" ] && [ -d "$SOURCE_DIR/dist/server" ] || fail "build SSR ausente."
 
 STAGING="$(mktemp -d)"
@@ -103,6 +107,7 @@ if [ ! -e "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<'EOF'
 HESTIA_HOST=127.0.0.1
 HESTIA_PORT=4517
+HESTIA_ALLOW_LAN=0
 
 # HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>
 # HESTIA_DESKTOP_TOKEN=<TOKEN_DESKTOP>

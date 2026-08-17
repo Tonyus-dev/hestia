@@ -57,9 +57,9 @@ function EndpointsPage() {
         <h1 className="kaline-serif text-3xl md:text-4xl text-[color:var(--kaline-text)]">
           Contratos da Chama
         </h1>
-        <p className="mt-2 text-[13px] text-[color:var(--kaline-muted)] max-w-2xl">
-          Endpoints de leitura local do notebook. Recursos de Estação serão configurados em etapa
-          posterior.
+        <p className="text-stone-400 text-sm md:text-base max-w-2xl text-center">
+          Endpoints de leitura local da TV Box. Recursos de Estação serão configurados em etapa
+          posterior do roadmap de unificação arquitetural.
         </p>
       </header>
 

@@ -10,8 +10,6 @@ Restart=on-failure
 RestartSec=3
 StateDirectory=hestia-console
 LogsDirectory=hestia-console
-Environment=HESTIA_HOST=127.0.0.1
-Environment=HESTIA_PORT=4517
 Environment=NODE_ENV=production
 EnvironmentFile=-/etc/default/hestia-console
 User=__SERVICE_USER__

@@ -96,14 +96,15 @@ function renderCard(id: StationId) {
   render(<StationCard {...station} />);
 }
 
-describe("monitoramento visual das cinco Stations", () => {
-  it("mantém registro visual com cinco cards", () => {
+describe("monitoramento visual das seis Stations", () => {
+  it("mantém registro visual com seis cards", () => {
     expect(STATION_UI.map((station) => station.id)).toEqual([
       "desktop",
       "tvbox",
       "pocket",
       "baby",
       "mini",
+      "max",
     ]);
     expect(STATION_UI.map((station) => station.title)).toEqual([
       "Servidor",
@@ -111,6 +112,7 @@ describe("monitoramento visual das cinco Stations", () => {
       "Pocket",
       "Baby",
       "Mini",
+      "Max",
     ]);
   });
 
@@ -131,20 +133,23 @@ describe("monitoramento visual das cinco Stations", () => {
     expect(await screen.findByText("epub, pdf")).toBeTruthy();
   });
 
-  it("Pocket, Baby e Mini não consultam Códice, Organizer nem /KALINE", async () => {
+  it("Pocket, Baby, Mini e Max não consultam Códice, Organizer nem /KALINE", async () => {
     prepare("pocket");
     renderCard("pocket");
     renderCard("baby");
     renderCard("mini");
+    renderCard("max");
     expect((await screen.findAllByText("Pocket")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("Baby")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("Mini")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Max")).length).toBeGreaterThan(0);
     expect(hestiaApi.tvboxCodiceHealth).not.toHaveBeenCalled();
     expect(screen.queryByText("Organizer")).toBeNull();
     await waitFor(() => expect(hestiaApi.stationSystem).toHaveBeenCalledWith("pocket"));
     expect(hestiaApi.stationStorage).not.toHaveBeenCalledWith("pocket");
     expect(hestiaApi.stationStorage).not.toHaveBeenCalledWith("baby");
     expect(hestiaApi.stationStorage).not.toHaveBeenCalledWith("mini");
+    expect(hestiaApi.stationStorage).not.toHaveBeenCalledWith("max");
     expect(hestiaApi.tvboxCodiceHealth).not.toHaveBeenCalled();
   });
 

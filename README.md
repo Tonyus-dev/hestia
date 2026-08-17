@@ -1,17 +1,35 @@
 # Héstia
 
-Héstia é a Console local do notebook que monitora, em modo somente leitura, cinco Stations headless: desktop/servidor, TV Box, Pocket, Baby e Mini. A implantação operacional canônica está em [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Héstia é a Console local da TV Box que monitora, em modo somente leitura, seis Stations headless: desktop/servidor, TV Box, Pocket, Baby, Mini e MAX. A implantação operacional canônica está em [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+> **Héstia permite que recursos computacionais permaneçam desligados ou suspensos quando não são necessários, sem perder sua operabilidade. Quando o Guardião precisa de um recurso, Héstia pode solicitar seu despertar por um fluxo explicitamente autorizado e verificar se ele realmente retornou.**
+>
+> **Héstia observa, apresenta e solicita. Ela não executa arbitrariamente.**
+>
+> *Héstia não mantém as máquinas acordadas. Ela mantém a infraestrutura disponível para ser acordada.*
+
+```text
+Héstia mostra.
+Baby controla.
+TV Box age dentro da LAN.
+Mini verifica de fora.
+Servidor trabalha e preserva.
+Pocket hospeda Khora.
+MAX processa sob demanda.
+O Guardião autoriza.
+```
 
 ## Arquitetura final
 
 | Máquina          | Papel                                         | Bind canônico    |
 | ---------------- | --------------------------------------------- | ---------------- |
-| notebook         | Héstia Console visual                         | `127.0.0.1:4517` |
+| TV Box           | Héstia Console visual                         | `127.0.0.1:4517` |
 | desktop/servidor | Station Agent monitor-only                    | `127.0.0.1:4518` |
 | TV Box           | Station Agent monitor-only + Códice read-only | `127.0.0.1:4519` |
-| Pocket           | Station Agent monitor-only                    | `127.0.0.1:4518` |
-| Baby             | Station Agent monitor-only                    | `127.0.0.1:4518` |
+| Pocket           | Station Agent monitor-only (Khora)            | `127.0.0.1:4518` |
+| Baby             | Station Agent monitor-only (Controle/WoL)     | `127.0.0.1:4518` |
 | Mini             | Station Agent sentinela externa               | `127.0.0.1:4518` |
+| MAX              | Station Agent computação cloud sob demanda    | `127.0.0.1:4518` |
 
 A Console não copia arquivos. A Station não copia arquivos. O Códice não copia arquivos. A sincronização desktop → TV Box continua externa, por rsync/SSH.
 
@@ -58,12 +76,9 @@ HESTIA_BABY_TOKEN=<TOKEN_DA_STATION>
 HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>
 HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>
 HESTIA_STATION_TIMEOUT_MS=5000
-HESTIA_ORGANIZER_TIMEOUT_MS=120000
 ```
 
 As variáveis legadas singulares não são migradas nem usadas pelo runtime. O Doctor rejeita sua presença com uma orientação de correção. Tokens e URLs ficam somente no processo server-side e nunca são devolvidos ao navegador.
-
-`HESTIA_ORGANIZER_TIMEOUT_MS` aceita de 5000 a 600000 ms e vale somente para gerar o plano. A leitura curta de runs e os endpoints de health, storage, services e connection continuam usando `HESTIA_STATION_TIMEOUT_MS`.
 
 ## API da Console para as Stations
 
@@ -100,7 +115,7 @@ GET /api/stations/mini/storage/status
 GET /api/stations/mini/services/status
 ```
 
-Não existe endpoint de descoberta, overview, escrita ou Organizer na Console. O Códice health existe somente para a TV Box.
+Não existe endpoint de descoberta, overview ou escrita na Console. O Códice health existe somente para a TV Box.
 
 ## API interna do Station Agent
 
@@ -114,13 +129,19 @@ GET /api/station/services/status
 GET /api/station/codice/health
 ```
 
-Stations: `desktop` monitora armazenamento e Organizer; `tvbox` monitora Códice read-only; `pocket` é monitor-only para Hermes experimental e vigilância; `baby` é monitor-only para Telegram, monitoramento e Wake-on-LAN; `mini` é sentinela externa monitor-only. Pocket, Baby e Mini não habilitam Organizer, Códice nem ações remotas; monitoram apenas o Agent, sistema, disco raiz agregado e serviços configurados (`tailscaled,hermes`, `tailscaled,telegram-guard` ou `tailscaled`).
+Stations: `desktop` monitora armazenamento principal; `tvbox` monitora Códice read-only; `pocket` é monitor-only para Hermes experimental e vigilância; `baby` é monitor-only para Telegram, monitoramento e Wake-on-LAN; `mini` é sentinela externa monitor-only; `max` é computação cloud sob demanda. Pocket, Baby, Mini e Max não habilitam Códice nem ações de escrita local direta; monitoram apenas o Agent, sistema, disco raiz e serviços configurados.
 
-Cada host de Station pode usar a porta local `4518` porque roda em máquina distinta. O Console Doctor percorre as cinco Stations canônicas; Station temporariamente offline gera aviso e não bloqueia atualização da Console, mas configuração inválida, autenticação quebrada e contrato incompatível continuam bloqueando.
+Cada host de Station pode usar a porta local `4518` porque roda em máquina distinta. O Console Doctor percorre as seis Stations canônicas; Station temporariamente offline gera aviso e não bloqueia atualização da Console, mas configuração inválida, autenticação quebrada e contrato incompatível continuam bloqueando.
 
-Variáveis opcionais da Console para as novas Stations: `HESTIA_POCKET_BASE_URL`, `HESTIA_POCKET_TOKEN`, `HESTIA_BABY_BASE_URL`, `HESTIA_BABY_TOKEN`, `HESTIA_MINI_BASE_URL`, `HESTIA_MINI_TOKEN`. Use origens HTTPS privadas exatas; não versionar IPs, hostnames reais ou tokens.
+Variáveis opcionais da Console para as novas Stations: `HESTIA_POCKET_BASE_URL`, `HESTIA_POCKET_TOKEN`, `HESTIA_BABY_BASE_URL`, `HESTIA_BABY_TOKEN`, `HESTIA_MINI_BASE_URL`, `HESTIA_MINI_TOKEN`, `HESTIA_MAX_BASE_URL`, `HESTIA_MAX_TOKEN`. Use origens HTTPS privadas exatas; não versionar IPs, hostnames reais ou tokens.
 
-O Agent inicia com `HESTIA_STATION_ORGANIZER_ENABLED=0` e `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. As requisições públicas `GET` e `HEAD` de `/api/codice/*` exigem Bearer Supabase válido, `user.id` na allowlist `HESTIA_CODICE_ALLOWED_USER_IDS` e a origem exata configurada. As requisições `OPTIONS` validam apenas o preflight CORS, não exigem Bearer e não consultam o Supabase. Somente chave `sb_publishable_` é aceita; service-role não é usada. Console e Doctor monitoram apenas `GET /api/station/codice/health` com o token da Station, sem JWT de usuário. EPUB e PDF são obrigatórios e TXT é opcional. Não há Range, resposta 206, upload, import ou escrita.
+### Contrato do Wake-Server
+- **Ação:** Acionamento de Wake-on-LAN (WoL) para estações adormecidas.
+- **Rota:** `POST /api/stations/:id/wake` (Consumidor: Héstia Console; Executor: Baby/WoL relay).
+- **Parâmetros:** Rota com o ID da estação a ser acordada.
+- **Resposta Esperada:** `202 Accepted` com corpo `{ "ok": true, "status": "pending", "station": "<id>" }` em caso de envio agendado de WoL, ou `501 Not Implemented` nesta etapa.
+
+O Agent inicia com `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. As requisições públicas `GET` e `HEAD` de `/api/codice/*` exigem Bearer Supabase válido, `user.id` na allowlist `HESTIA_CODICE_ALLOWED_USER_IDS` e a origem exata configurada. As requisições `OPTIONS` validam apenas o preflight CORS, não exigem Bearer e não consultam o Supabase. Somente chave `sb_publishable_` é aceita; service-role não é usada. Console e Doctor monitoram apenas `GET /api/station/codice/health` com o token da Station, sem JWT de usuário. EPUB e PDF são obrigatórios e TXT é opcional. Não há Range, resposta 206, upload, import ou escrita.
 
 Esta proteção não deve ser implantada isoladamente: o cliente Kódice ainda precisa ser atualizado para enviar o Bearer Supabase, e a implantação deve ser coordenada com essa mudança.
 
@@ -150,4 +171,4 @@ O `.deb` continua sendo da Console, usa em produção somente a arquitetura nati
 
 ## Estado operacional
 
-Testes automatizados e smoke com fixtures sintéticas não validam notebook, desktop, TV Box, Pocket, Baby ou Mini físicos. Até executar o checklist completo de [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): **RESULTADO OPERACIONAL: PENDENTE**.
+Testes automatizados e smoke com fixtures sintéticas não validam TV Box, desktop, TV Box (Station), Pocket, Baby ou Mini físicas. Até executar o checklist completo de [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): **RESULTADO OPERACIONAL: PENDENTE**.

@@ -53,29 +53,6 @@ const codice = {
   libraryAvailable: true,
   formats: ["epub", "pdf"],
 };
-const organizerPlan = {
-  ok: true,
-  schemaVersion: 1,
-  checkedAt,
-  plan: {
-    planId: "plan_123_abcdef12",
-    generatedAt: checkedAt,
-    dryRun: true,
-    requiresExtraConfirmation: false,
-    planned: 0,
-    items: [],
-    summary: {
-      total: 0,
-      planned: 0,
-      conflicts: 0,
-      ignored: 0,
-      quarantined: 0,
-      byExtension: {},
-      byTargetArea: {},
-    },
-  },
-};
-const organizerRuns = { ok: true, schemaVersion: 1, checkedAt, items: [] };
 const response = (body) =>
   new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
 
@@ -110,8 +87,12 @@ describe("rotas plurais da Console", () => {
       HESTIA_POCKET_TOKEN: "pocket-token",
       HESTIA_BABY_BASE_URL: "http://127.0.0.1:4521",
       HESTIA_BABY_TOKEN: "baby-token",
+      HESTIA_MINI_BASE_URL: "http://127.0.0.1:4522",
+      HESTIA_MINI_TOKEN: "mini-token",
+      HESTIA_MAX_BASE_URL: "http://127.0.0.1:4523",
+      HESTIA_MAX_TOKEN: "max-token",
     });
-    for (const id of ["desktop", "tvbox", "pocket", "baby"]) {
+    for (const id of ["desktop", "tvbox", "pocket", "baby", "mini", "max"]) {
       for (const suffix of [
         "connection",
         "health",
@@ -121,70 +102,30 @@ describe("rotas plurais da Console", () => {
       ]) {
         expect((await server.inject(`/api/stations/${id}/${suffix}`)).statusCode).toBe(200);
       }
+      expect(
+        (await server.inject({ method: "POST", url: `/api/stations/${id}/wake` })).statusCode,
+      ).toBe(404);
     }
     expect((await server.inject("/api/stations/tvbox/codice/health")).statusCode).toBe(200);
     expect((await server.inject("/api/stations/desktop/codice/health")).statusCode).toBe(404);
     expect((await server.inject("/api/stations/pocket/codice/health")).statusCode).toBe(404);
-    expect((await server.inject("/api/stations/baby/organizer/runs")).statusCode).toBe(404);
     expect((await server.inject("/api/stations/outro/health")).statusCode).toBe(404);
     expect((await server.inject("/api/station/health")).statusCode).toBe(404);
-    expect(
-      (await server.inject({ method: "POST", url: "/api/station/organizer/plan" })).statusCode,
-    ).toBe(404);
-  });
 
-  it("proxya apenas plan e runs do Organizer desktop com Bearer server-side", async () => {
-    const calls = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url, init = {}) => {
-        calls.push({ url: String(url), init });
-        return response(new URL(url).pathname.endsWith("/plan") ? organizerPlan : organizerRuns);
-      }),
-    );
-    const server = app({
+    const wakeResNoMac = await server.inject({ method: "POST", url: "/api/actions/wake-server" });
+    expect(wakeResNoMac.statusCode).toBe(400);
+
+    const serverWithMac = app({
       NODE_ENV: "test",
-      HESTIA_DESKTOP_BASE_URL: "http://127.0.0.1:4518",
-      HESTIA_DESKTOP_TOKEN: "desktop-secret",
+      HESTIA_WAKE_SERVER_MAC: "00:11:22:33:44:55",
+      HESTIA_WAKE_BROADCAST_IP: "127.0.0.1",
     });
-    const plan = await server.inject({
+    const wakeResOk = await serverWithMac.inject({
       method: "POST",
-      url: "/api/stations/desktop/organizer/plan",
-      payload: { extensions: [] },
+      url: "/api/actions/wake-server",
     });
-    const runs = await server.inject("/api/stations/desktop/organizer/runs");
-    expect(plan.statusCode).toBe(200);
-    expect(runs.statusCode).toBe(200);
-    expect(calls[0].init.headers.Authorization).toBe("Bearer desktop-secret");
-    expect(calls[0].init.headers["X-Hestia-Local-Confirm"]).toBe("organize");
-    expect(calls[0].init.body).toBe("{}");
-    expect(calls[1].init.headers.Authorization).toBe("Bearer desktop-secret");
-    expect(`${plan.body}${runs.body}`).not.toContain("desktop-secret");
-    expect(
-      (
-        await server.inject({
-          method: "POST",
-          url: "/api/stations/desktop/organizer/plan",
-          payload: { path: "/tmp" },
-        })
-      ).statusCode,
-    ).toBe(400);
-    expect((await server.inject("/api/stations/tvbox/organizer/runs")).statusCode).toBe(404);
-  });
-
-  it("distingue Organizer desativado de Station indisponível", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("not found", { status: 404 })),
-    );
-    const server = app({
-      NODE_ENV: "test",
-      HESTIA_DESKTOP_BASE_URL: "http://127.0.0.1:4518",
-      HESTIA_DESKTOP_TOKEN: "desktop-secret",
-    });
-    const result = await server.inject("/api/stations/desktop/organizer/runs");
-    expect(result.statusCode).toBe(503);
-    expect(result.json()).toMatchObject({ code: "ORGANIZER_DISABLED", state: "disabled" });
+    expect(wakeResOk.statusCode).toBe(200);
+    expect(JSON.parse(wakeResOk.body).state).toBe("wake_requested");
   });
 
   it("mantém uma Station válida quando a outra está inválida e não vaza configuração", async () => {
@@ -207,179 +148,5 @@ describe("rotas plurais da Console", () => {
     const serialized = `${desktop.body}${tvbox.body}`;
     expect(serialized).not.toContain(secret);
     expect(serialized).not.toContain("127.0.0.1:4519");
-  });
-});
-
-describe("contrato Console Organizer plan/apply", () => {
-  it("normaliza filtro, envia query e mantém body remoto vazio", async () => {
-    const calls = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url, init = {}) => {
-        calls.push({ url: String(url), init });
-        return response(organizerPlan);
-      }),
-    );
-    const server = app({
-      NODE_ENV: "test",
-      HESTIA_DESKTOP_BASE_URL: "http://127.0.0.1:4518",
-      HESTIA_DESKTOP_TOKEN: "desktop-secret",
-    });
-    const result = await server.inject({
-      method: "POST",
-      url: "/api/stations/desktop/organizer/plan",
-      payload: { extensions: [".MKV", ".mkv", ".srt"] },
-    });
-    expect(result.statusCode).toBe(200);
-    expect(new URL(calls[0].url).search).toBe("?extensions=.mkv%2C.srt");
-    expect(calls[0].init.body).toBe("{}");
-    expect(`${result.body}`).not.toContain("desktop-secret");
-  });
-
-  it("rejeita filtro inválido, chave extra e excesso", async () => {
-    const server = app({ NODE_ENV: "test" });
-    for (const payload of [
-      { extensions: ["mkv"] },
-      { extensions: [".mk v"] },
-      { extensions: [".mkv"], path: "/tmp" },
-      { extensions: Array.from({ length: 101 }, (_, i) => `.x${i}`) },
-    ]) {
-      const result = await server.inject({
-        method: "POST",
-        url: "/api/stations/desktop/organizer/plan",
-        payload,
-      });
-      expect(result.statusCode).toBe(400);
-    }
-  });
-
-  it("proxya apply real com body mínimo, confirmação e header grande opcional", async () => {
-    const calls = [];
-    const run = {
-      ok: true,
-      schemaVersion: 1,
-      checkedAt,
-      run: {
-        runId: "org_123_abcdef12",
-        planId: "plan_123_abcdef12",
-        kind: "apply",
-        status: "applied",
-        createdAt: checkedAt,
-        appliedAt: checkedAt,
-        operations: [],
-        summary: { total: 0, ok: 0, failed: 0, skipped: 0 },
-      },
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url, init = {}) => {
-        calls.push({ url: String(url), init });
-        return response(run);
-      }),
-    );
-    const server = app({
-      NODE_ENV: "test",
-      HESTIA_DESKTOP_BASE_URL: "http://127.0.0.1:4518",
-      HESTIA_DESKTOP_TOKEN: "desktop-secret",
-    });
-    const plain = await server.inject({
-      method: "POST",
-      url: "/api/stations/desktop/organizer/apply",
-      payload: {
-        planId: "plan_123_abcdef12",
-        confirmation: "EFETIVAR",
-        largePlanConfirmation: null,
-      },
-    });
-    const large = await server.inject({
-      method: "POST",
-      url: "/api/stations/desktop/organizer/apply",
-      payload: {
-        planId: "plan_123_abcdef12",
-        confirmation: "EFETIVAR",
-        largePlanConfirmation: "plan_123_abcdef12",
-      },
-    });
-    expect(plain.statusCode).toBe(200);
-    expect(large.statusCode).toBe(200);
-    expect(new URL(calls[0].url).pathname).toBe("/api/station/organizer/apply");
-    expect(JSON.parse(calls[0].init.body)).toEqual({ planId: "plan_123_abcdef12", mode: "apply" });
-    expect(calls[0].init.headers["X-Hestia-Local-Confirm"]).toBe("organize");
-    expect(calls[0].init.headers["X-Hestia-Large-Plan-Confirm"]).toBeUndefined();
-    expect(calls[1].init.headers["X-Hestia-Large-Plan-Confirm"]).toBe("plan_123_abcdef12");
-    expect(`${plain.body}${large.body}`).not.toContain("desktop-secret");
-    expect(
-      (
-        await server.inject({
-          method: "POST",
-          url: "/api/stations/tvbox/organizer/apply",
-          payload: {},
-        })
-      ).statusCode,
-    ).toBe(404);
-  });
-
-  it("rejeita apply com planId, confirmação, chaves e paths inválidos", async () => {
-    const server = app({ NODE_ENV: "test" });
-    for (const payload of [
-      { planId: "bad", confirmation: "EFETIVAR", largePlanConfirmation: null },
-      { planId: "plan_123_abcdef12", confirmation: "APLICAR", largePlanConfirmation: null },
-      {
-        planId: "plan_123_abcdef12",
-        confirmation: "EFETIVAR",
-        largePlanConfirmation: "plan_999_abcdef12",
-      },
-      {
-        planId: "plan_123_abcdef12",
-        confirmation: "EFETIVAR",
-        largePlanConfirmation: null,
-        path: "/tmp",
-      },
-      {
-        planId: "plan_123_abcdef12",
-        confirmation: "EFETIVAR",
-        largePlanConfirmation: null,
-        items: [],
-      },
-    ]) {
-      const result = await server.inject({
-        method: "POST",
-        url: "/api/stations/desktop/organizer/apply",
-        payload,
-      });
-      expect(result.statusCode).toBe(400);
-    }
-  });
-
-  it("preserva erros de domínio do apply sem virar disabled", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({ ok: false, code: "EPLANNOTFOUND", error: "Plano não encontrado" }),
-            {
-              status: 404,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-      ),
-    );
-    const server = app({
-      NODE_ENV: "test",
-      HESTIA_DESKTOP_BASE_URL: "http://127.0.0.1:4518",
-      HESTIA_DESKTOP_TOKEN: "desktop-secret",
-    });
-    const result = await server.inject({
-      method: "POST",
-      url: "/api/stations/desktop/organizer/apply",
-      payload: {
-        planId: "plan_123_abcdef12",
-        confirmation: "EFETIVAR",
-        largePlanConfirmation: null,
-      },
-    });
-    expect(result.statusCode).toBe(404);
-    expect(result.json()).toMatchObject({ code: "EPLANNOTFOUND" });
   });
 });

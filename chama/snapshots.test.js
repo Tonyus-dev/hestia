@@ -5,6 +5,7 @@ import { mkdtemp } from "node:fs";
 import { tmpdir } from "node:os";
 import {
   diffServiceTransitions,
+  diffStationTransitions,
   generateSnapshot,
   writeSnapshot,
   getLatestSnapshot,
@@ -79,6 +80,39 @@ describe("diffServiceTransitions", () => {
 
     const transitions = diffServiceTransitions(null, curr);
     expect(transitions).toHaveLength(0);
+  });
+});
+
+describe("diffStationTransitions", () => {
+  it("detecta station.up e station.down", () => {
+    const prev = {
+      stations: {
+        desktop: { state: "available", code: null },
+        tvbox: { state: "unavailable", code: "STATION_TIMEOUT" },
+      },
+    };
+    const curr = {
+      stations: {
+        desktop: { state: "unavailable", code: "STATION_TIMEOUT" },
+        tvbox: { state: "available", code: null },
+      },
+    };
+    const transitions = diffStationTransitions(prev, curr);
+    expect(transitions).toHaveLength(2);
+    expect(transitions.find((t) => t.id === "desktop")).toEqual({
+      id: "desktop",
+      from: "available",
+      to: "unavailable",
+      code: "STATION_TIMEOUT",
+      transition: "down",
+    });
+    expect(transitions.find((t) => t.id === "tvbox")).toEqual({
+      id: "tvbox",
+      from: "unavailable",
+      to: "available",
+      code: null,
+      transition: "up",
+    });
   });
 });
 
