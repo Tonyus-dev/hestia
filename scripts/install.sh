@@ -104,7 +104,7 @@ if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
 fi
 if [ ! -e "$ENV_FILE" ]; then
   install -m 0600 -o root -g root /dev/null "$ENV_FILE"
-  cat > "$ENV_FILE" <<'EOF'
+  cat > "$ENV_FILE" <<EOF
 HESTIA_HOST=127.0.0.1
 HESTIA_PORT=4517
 HESTIA_ALLOW_LAN=0
@@ -112,8 +112,9 @@ HESTIA_ALLOW_LAN=0
 # HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>
 # HESTIA_DESKTOP_TOKEN=<TOKEN_DESKTOP>
 
-# HESTIA_TVBOX_BASE_URL=https://<TVBOX_PRIVADA>
-# HESTIA_TVBOX_TOKEN=<TOKEN_TVBOX>
+HESTIA_TVBOX_BASE_URL=http://127.0.0.1:4519
+HESTIA_TVBOX_TOKEN=
+
 # HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>
 # HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>
 
@@ -123,6 +124,20 @@ EOF
   log "configuração criada em $ENV_FILE"
 else
   log "configuração existente preservada em $ENV_FILE"
+fi
+
+if grep -Eq '^# HESTIA_TVBOX_BASE_URL=' "$ENV_FILE" || grep -Eq '^# HESTIA_TVBOX_TOKEN=' "$ENV_FILE"; then
+  sed -i 's/^# HESTIA_TVBOX_BASE_URL=.*/HESTIA_TVBOX_BASE_URL=http:\/\/127.0.0.1:4519/' "$ENV_FILE"
+  sed -i 's/^# HESTIA_TVBOX_TOKEN=.*/HESTIA_TVBOX_TOKEN=/' "$ENV_FILE"
+fi
+
+TVBOX_TOKEN=""
+if [ -f "/etc/default/hestia-station-agent" ]; then
+  TVBOX_TOKEN="$(grep '^HESTIA_STATION_TOKEN=' /etc/default/hestia-station-agent | cut -d= -f2- || true)"
+fi
+if [ -n "$TVBOX_TOKEN" ] && grep -Eq '^HESTIA_TVBOX_TOKEN=$' "$ENV_FILE"; then
+  sed -i "s/^HESTIA_TVBOX_TOKEN=\$/HESTIA_TVBOX_TOKEN=$TVBOX_TOKEN/" "$ENV_FILE"
+  log "Token do Station Agent local importado para $ENV_FILE"
 fi
 chown root:root "$ENV_FILE"
 chmod 0600 "$ENV_FILE"
