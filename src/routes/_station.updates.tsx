@@ -20,6 +20,7 @@ const STATION_NAMES: Record<string, string> = {
   baby: "Baby",
   mini: "Mini",
   max: "MAX",
+  note: "Notebook",
 };
 
 type SelectedStationModal = {
@@ -153,6 +154,7 @@ function UpdatesSummary() {
   const babyUpdates = useApi(() => hestiaApi.stationUpdates("baby"));
   const miniUpdates = useApi(() => hestiaApi.stationUpdates("mini"));
   const maxUpdates = useApi(() => hestiaApi.stationUpdates("max"));
+  const noteUpdates = useApi(() => hestiaApi.stationUpdates("note"));
 
   const allUpdatesState = [
     desktopUpdates.state,
@@ -161,15 +163,22 @@ function UpdatesSummary() {
     babyUpdates.state,
     miniUpdates.state,
     maxUpdates.state,
+    noteUpdates.state,
   ];
 
   let totalUpdatesCount = 0;
   let totalSecurityCount = 0;
+  let latestCheckedAt: string | null = null;
 
   for (const st of allUpdatesState) {
     if (st.status === "ok" && st.data.ok === true) {
       totalUpdatesCount += st.data.totalUpdates;
       totalSecurityCount += st.data.securityUpdates || 0;
+      if (st.data.checkedAt) {
+        if (!latestCheckedAt || new Date(st.data.checkedAt) > new Date(latestCheckedAt)) {
+          latestCheckedAt = st.data.checkedAt;
+        }
+      }
     }
   }
 
@@ -207,7 +216,7 @@ function UpdatesSummary() {
           Última consulta
         </p>
         <p className="mt-2 text-xs font-mono text-[color:var(--kaline-muted)]">
-          {new Date().toLocaleTimeString()}
+          {latestCheckedAt ? new Date(latestCheckedAt).toLocaleTimeString() : "—"}
         </p>
       </div>
     </div>

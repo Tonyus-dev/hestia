@@ -8,7 +8,8 @@ describe("navegação principal", () => {
     expect(nav.some((item) => item.to === "/codice")).toBe(false);
     expect(nav.some((item) => item.label === "Códice")).toBe(false);
     expect(nav.some((item) => item.to === "/organizador")).toBe(false);
-    expect(nav.some((item) => item.to === "/assistente")).toBe(true);
+    expect(nav.some((item) => item.to === "/assistente")).toBe(false);
+    expect(existsSync(join(process.cwd(), "src/routes/_station.assistente.tsx"))).toBe(false);
     expect(existsSync(join(process.cwd(), "src/routes/_station.codice.tsx"))).toBe(true);
   });
 });

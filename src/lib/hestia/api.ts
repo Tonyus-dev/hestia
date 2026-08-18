@@ -233,8 +233,16 @@ export type StationState =
   | "unauthorized"
   | "incompatible";
 
-export type StationId = "desktop" | "tvbox" | "pocket" | "baby" | "mini" | "max";
-export const STATION_IDS: StationId[] = ["desktop", "tvbox", "pocket", "baby", "mini", "max"];
+export type StationId = "desktop" | "tvbox" | "pocket" | "baby" | "mini" | "max" | "note";
+export const STATION_IDS: StationId[] = [
+  "desktop",
+  "tvbox",
+  "pocket",
+  "baby",
+  "mini",
+  "max",
+  "note",
+];
 
 export type PresenceEvent = {
   timestamp: string;

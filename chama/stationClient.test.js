@@ -49,8 +49,8 @@ afterEach(() => {
 });
 
 describe("configuração explícita das cinco Stations", () => {
-  it("mantém IDs canônicos e isolamento Pocket/Baby/Mini/Max", () => {
-    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby", "mini", "max"]);
+  it("mantém IDs canônicos e isolamento de todas as Stations", () => {
+    expect(STATION_IDS).toEqual(["desktop", "tvbox", "pocket", "baby", "mini", "max", "note"]);
     const env = {
       NODE_ENV: "test",
       HESTIA_POCKET_BASE_URL: "http://127.0.0.1:4520",

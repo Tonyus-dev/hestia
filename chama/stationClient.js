@@ -18,7 +18,15 @@ export const STATION_CODES = Object.freeze({
   CONTRACT_MISMATCH: "STATION_CONTRACT_MISMATCH",
 });
 
-export const STATION_IDS = Object.freeze(["desktop", "tvbox", "pocket", "baby", "mini", "max"]);
+export const STATION_IDS = Object.freeze([
+  "desktop",
+  "tvbox",
+  "pocket",
+  "baby",
+  "mini",
+  "max",
+  "note",
+]);
 const STATION_ENV = Object.freeze({
   desktop: ["HESTIA_DESKTOP_BASE_URL", "HESTIA_DESKTOP_TOKEN"],
   tvbox: ["HESTIA_TVBOX_BASE_URL", "HESTIA_TVBOX_TOKEN"],
@@ -26,6 +34,7 @@ const STATION_ENV = Object.freeze({
   baby: ["HESTIA_BABY_BASE_URL", "HESTIA_BABY_TOKEN"],
   mini: ["HESTIA_MINI_BASE_URL", "HESTIA_MINI_TOKEN"],
   max: ["HESTIA_MAX_BASE_URL", "HESTIA_MAX_TOKEN"],
+  note: ["HESTIA_NOTE_BASE_URL", "HESTIA_NOTE_TOKEN"],
 });
 const LEGACY_KEYS = Object.freeze(["HESTIA_STATION_BASE_URL", "HESTIA_STATION_TOKEN"]);
 
@@ -654,6 +663,7 @@ export function publicStationConfig(env = process.env) {
   const baby = resolveNamedStationConfig("baby", env);
   const mini = resolveNamedStationConfig("mini", env);
   const max = resolveNamedStationConfig("max", env);
+  const note = resolveNamedStationConfig("note", env);
   return {
     desktopConfigured: desktop.configured,
     desktopAuthConfigured: Boolean(env.HESTIA_DESKTOP_TOKEN?.trim()),
@@ -667,6 +677,8 @@ export function publicStationConfig(env = process.env) {
     miniAuthConfigured: Boolean(env.HESTIA_MINI_TOKEN?.trim()),
     maxConfigured: max.configured,
     maxAuthConfigured: Boolean(env.HESTIA_MAX_TOKEN?.trim()),
+    noteConfigured: note.configured,
+    noteAuthConfigured: Boolean(env.HESTIA_NOTE_TOKEN?.trim()),
     stationTimeoutMs: desktop.timeoutMs,
     legacyStationConfigDetected: hasLegacyStationConfig(env),
   };

@@ -96,8 +96,8 @@ function renderCard(id: StationId) {
   render(<StationCard {...station} />);
 }
 
-describe("monitoramento visual das seis Stations", () => {
-  it("mantém registro visual com seis cards", () => {
+describe("monitoramento visual das sete Stations", () => {
+  it("mantém registro visual com sete cards", () => {
     expect(STATION_UI.map((station) => station.id)).toEqual([
       "desktop",
       "tvbox",
@@ -105,6 +105,7 @@ describe("monitoramento visual das seis Stations", () => {
       "baby",
       "mini",
       "max",
+      "note",
     ]);
     expect(STATION_UI.map((station) => station.title)).toEqual([
       "Servidor",
@@ -113,6 +114,7 @@ describe("monitoramento visual das seis Stations", () => {
       "Baby",
       "Mini",
       "Max",
+      "Notebook",
     ]);
   });
 
