@@ -4,6 +4,7 @@
 export type NavItem = {
   to:
     | "/"
+    | "/updates"
     | "/sistema"
     | "/storage"
     | "/servicos"
@@ -18,6 +19,7 @@ export type NavItem = {
 
 export const nav: NavItem[] = [
   { to: "/", label: "Painel", hint: "cockpit" },
+  { to: "/updates", label: "Updates", hint: "updates do dia" },
   { to: "/sistema", label: "Sistema", hint: "hardware real" },
   { to: "/storage", label: "Storage", hint: "/KALINE" },
   { to: "/assistente", label: "Assistente", hint: "chat llm" },

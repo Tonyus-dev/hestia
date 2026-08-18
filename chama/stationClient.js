@@ -36,6 +36,7 @@ const HEALTH_PATH = "/api/station/health";
 const STORAGE_PATH = "/api/station/storage/status";
 const SERVICES_PATH = "/api/station/services/status";
 const SYSTEM_PATH = "/api/station/system/status";
+const UPDATES_PATH = "/api/station/updates";
 const CODICE_HEALTH_PATH = "/api/station/codice/health";
 const MAX_BODY_BYTES = 64 * 1024;
 const SERVICE = "hestia-station-agent";
@@ -361,6 +362,61 @@ function validateStationSystem(body) {
   };
 }
 
+function validateStationUpdates(body) {
+  if (!isPlainObject(body)) return null;
+  if (body.ok === false && body.status === "unsupported") {
+    return {
+      ok: false,
+      status: "unsupported",
+      reason: typeof body.reason === "string" ? body.reason : "APT_NOT_AVAILABLE",
+      checkedAt: isValidIsoDate(body.checkedAt) ? body.checkedAt : new Date().toISOString(),
+    };
+  }
+  if (
+    body.ok !== true ||
+    body.schemaVersion !== 1 ||
+    body.status !== "ok" ||
+    !isValidIsoDate(body.checkedAt) ||
+    !Array.isArray(body.updates) ||
+    !Number.isInteger(body.totalUpdates) ||
+    typeof body.rebootRequired !== "boolean"
+  ) {
+    return null;
+  }
+  const updates = [];
+  for (const item of body.updates) {
+    if (
+      !isPlainObject(item) ||
+      typeof item.package !== "string" ||
+      !item.package.trim() ||
+      typeof item.installedVersion !== "string" ||
+      typeof item.candidateVersion !== "string" ||
+      !(item.security === true || item.security === null)
+    ) {
+      return null;
+    }
+    updates.push({
+      package: item.package,
+      installedVersion: item.installedVersion,
+      candidateVersion: item.candidateVersion,
+      security: item.security,
+    });
+  }
+  return {
+    ok: true,
+    schemaVersion: 1,
+    status: "ok",
+    checkedAt: body.checkedAt,
+    updates,
+    totalUpdates: body.totalUpdates,
+    securityUpdates:
+      typeof body.securityUpdates === "number"
+        ? body.securityUpdates
+        : updates.filter((item) => item.security === true).length,
+    rebootRequired: body.rebootRequired,
+  };
+}
+
 function validateCodiceHealth(body) {
   if (
     !isPlainObject(body) ||
@@ -560,6 +616,16 @@ export async function fetchStationSystemStatus(stationConfig) {
   if (!result.ok) return result;
   const { resource, ...metadata } = result;
   return { ...metadata, system: resource };
+}
+
+export async function fetchStationUpdates(stationConfig) {
+  const result = await fetchStationResource(UPDATES_PATH, validateStationUpdates, stationConfig);
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  if (resource?.status === "unsupported") {
+    return { ...metadata, ok: false, updates: resource };
+  }
+  return { ...metadata, updates: resource };
 }
 
 export async function getStationConnectionStatus(stationConfig) {

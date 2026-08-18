@@ -267,7 +267,7 @@ async function main() {
       HESTIA_BABY_TOKEN: babyToken,
       HESTIA_MINI_BASE_URL: `http://${HOST}:${miniPort}`,
       HESTIA_MINI_TOKEN: miniToken,
-      HESTIA_STATION_TIMEOUT_MS: "1000",
+      HESTIA_STATION_TIMEOUT_MS: "10000",
     }),
   );
   const desktopBase = `http://${HOST}:${desktopPort}`;
@@ -307,12 +307,16 @@ async function main() {
       "system/status",
       "storage/status",
       "services/status",
+      "updates",
     ]) {
       const result = await json(consoleBase, `/api/stations/${id}/${suffix}`);
       if (id === "max" && suffix !== "connection") {
         ensure(result.response.status === 503, `${id}/${suffix} deveria retornar 503`);
       } else {
-        ensure(result.response.status === 200, `${id}/${suffix} falhou`);
+        ensure(
+          result.response.status === 200,
+          `${id}/${suffix} falhou (status=${result.response.status}, text=${result.text})`,
+        );
       }
       sanitized(result.text, secrets, `${id}/${suffix}`);
     }

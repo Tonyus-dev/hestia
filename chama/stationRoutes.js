@@ -4,6 +4,7 @@ import {
   fetchStationServicesStatus,
   fetchStationStorageStatus,
   fetchStationSystemStatus,
+  fetchStationUpdates,
   fetchTvboxCodiceHealth,
   getStationConnectionStatus,
   resolveNamedStationConfig,
@@ -43,6 +44,12 @@ function registerNamedStationRoutes(app, stationId, env) {
   app.get(`${prefix}/services/status`, async (_request, reply) => {
     const result = await fetchStationServicesStatus(config());
     return result.ok ? result.services : unavailable(reply, result, `${stationId} services`);
+  });
+  app.get(`${prefix}/updates`, async (_request, reply) => {
+    const result = await fetchStationUpdates(config());
+    return result.ok || result.updates?.status === "unsupported"
+      ? result.updates
+      : unavailable(reply, result, `${stationId} updates`);
   });
 }
 

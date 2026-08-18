@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StationRouteImport } from './routes/_station'
 import { Route as StationIndexRouteImport } from './routes/_station.index'
+import { Route as StationUpdatesRouteImport } from './routes/_station.updates'
 import { Route as StationStorageRouteImport } from './routes/_station.storage'
 import { Route as StationSistemaRouteImport } from './routes/_station.sistema'
 import { Route as StationServicosRouteImport } from './routes/_station.servicos'
@@ -28,6 +29,11 @@ const StationRoute = StationRouteImport.update({
 const StationIndexRoute = StationIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => StationRoute,
+} as any)
+const StationUpdatesRoute = StationUpdatesRouteImport.update({
+  id: '/updates',
+  path: '/updates',
   getParentRoute: () => StationRoute,
 } as any)
 const StationStorageRoute = StationStorageRouteImport.update({
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/servicos': typeof StationServicosRoute
   '/sistema': typeof StationSistemaRoute
   '/storage': typeof StationStorageRoute
+  '/updates': typeof StationUpdatesRoute
 }
 export interface FileRoutesByTo {
   '/assistente': typeof StationAssistenteRoute
@@ -98,6 +105,7 @@ export interface FileRoutesByTo {
   '/servicos': typeof StationServicosRoute
   '/sistema': typeof StationSistemaRoute
   '/storage': typeof StationStorageRoute
+  '/updates': typeof StationUpdatesRoute
   '/': typeof StationIndexRoute
 }
 export interface FileRoutesById {
@@ -112,6 +120,7 @@ export interface FileRoutesById {
   '/_station/servicos': typeof StationServicosRoute
   '/_station/sistema': typeof StationSistemaRoute
   '/_station/storage': typeof StationStorageRoute
+  '/_station/updates': typeof StationUpdatesRoute
   '/_station/': typeof StationIndexRoute
 }
 export interface FileRouteTypes {
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | '/servicos'
     | '/sistema'
     | '/storage'
+    | '/updates'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/assistente'
@@ -138,6 +148,7 @@ export interface FileRouteTypes {
     | '/servicos'
     | '/sistema'
     | '/storage'
+    | '/updates'
     | '/'
   id:
     | '__root__'
@@ -151,6 +162,7 @@ export interface FileRouteTypes {
     | '/_station/servicos'
     | '/_station/sistema'
     | '/_station/storage'
+    | '/_station/updates'
     | '/_station/'
   fileRoutesById: FileRoutesById
 }
@@ -172,6 +184,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof StationIndexRouteImport
+      parentRoute: typeof StationRoute
+    }
+    '/_station/updates': {
+      id: '/_station/updates'
+      path: '/updates'
+      fullPath: '/updates'
+      preLoaderRoute: typeof StationUpdatesRouteImport
       parentRoute: typeof StationRoute
     }
     '/_station/storage': {
@@ -250,6 +269,7 @@ interface StationRouteChildren {
   StationServicosRoute: typeof StationServicosRoute
   StationSistemaRoute: typeof StationSistemaRoute
   StationStorageRoute: typeof StationStorageRoute
+  StationUpdatesRoute: typeof StationUpdatesRoute
   StationIndexRoute: typeof StationIndexRoute
 }
 
@@ -263,6 +283,7 @@ const StationRouteChildren: StationRouteChildren = {
   StationServicosRoute: StationServicosRoute,
   StationSistemaRoute: StationSistemaRoute,
   StationStorageRoute: StationStorageRoute,
+  StationUpdatesRoute: StationUpdatesRoute,
   StationIndexRoute: StationIndexRoute,
 }
 

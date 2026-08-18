@@ -234,6 +234,7 @@ export type StationState =
   | "incompatible";
 
 export type StationId = "desktop" | "tvbox" | "pocket" | "baby" | "mini" | "max";
+export const STATION_IDS: StationId[] = ["desktop", "tvbox", "pocket", "baby", "mini", "max"];
 
 export type PresenceEvent = {
   timestamp: string;
@@ -328,6 +329,31 @@ export type StationCodiceHealth = {
   formats: Array<"epub" | "pdf" | "txt">;
   checkedAt: string;
 };
+
+export type UpdatePackageItem = {
+  package: string;
+  installedVersion: string;
+  candidateVersion: string;
+  security: true | null;
+};
+
+export type StationUpdates =
+  | {
+      ok: true;
+      schemaVersion: 1;
+      status: "ok";
+      checkedAt: string;
+      updates: UpdatePackageItem[];
+      totalUpdates: number;
+      securityUpdates: number | null;
+      rebootRequired: boolean;
+    }
+  | {
+      ok: false;
+      status: "unsupported";
+      reason: string;
+      checkedAt?: string;
+    };
 
 export type Config = {
   appName: string;
@@ -601,6 +627,7 @@ export const hestiaApi = {
   stationSystem: (id: StationId) => safeFetch<StationSystem>(`/api/stations/${id}/system/status`),
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
+  stationUpdates: (id: StationId) => safeFetch<StationUpdates>(`/api/stations/${id}/updates`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
   wakeServer: () =>
     safePost<{ ok: boolean; state?: string; target?: string; message?: string; error?: string }>(
