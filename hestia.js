@@ -160,7 +160,10 @@ app.addHook("onRequest", async (req, reply) => {
 });
 
 // --- Rate limit simples para /api/* — evita martelamento acidental/abusivo. -
-const apiRateLimiter = new RateLimiter({ windowMs: 10_000, max: 60 });
+const apiRateLimiter = new RateLimiter({
+  windowMs: 10_000,
+  max: Number(process.env.HESTIA_RATE_LIMIT_MAX) || (process.env.NODE_ENV === "test" ? 500 : 200),
+});
 setInterval(() => apiRateLimiter.sweep(), 60_000).unref();
 app.addHook("onRequest", async (req, reply) => {
   if (!req.url.startsWith("/api/")) return;

@@ -46,6 +46,7 @@ const STORAGE_PATH = "/api/station/storage/status";
 const SERVICES_PATH = "/api/station/services/status";
 const SYSTEM_PATH = "/api/station/system/status";
 const UPDATES_PATH = "/api/station/updates";
+const TUNNEL_PATH = "/api/station/tunnel/status";
 const CODICE_HEALTH_PATH = "/api/station/codice/health";
 const MAX_BODY_BYTES = 64 * 1024;
 const SERVICE = "hestia-station-agent";
@@ -426,6 +427,41 @@ function validateStationUpdates(body) {
   };
 }
 
+function validateStationTunnel(body) {
+  if (!isPlainObject(body)) return null;
+  if (body.ok !== true || body.schemaVersion !== 1 || !isValidIsoDate(body.checkedAt)) {
+    return null;
+  }
+  if (!isPlainObject(body.tunnel) || !isPlainObject(body.publicRoute)) {
+    return null;
+  }
+  return {
+    ok: true,
+    schemaVersion: 1,
+    status: typeof body.status === "string" ? body.status : "ok",
+    checkedAt: body.checkedAt,
+    tunnel: {
+      name: typeof body.tunnel.name === "string" ? body.tunnel.name : "cloudflared",
+      connected: Boolean(body.tunnel.connected),
+      haConnections: Number.isInteger(body.tunnel.haConnections) ? body.tunnel.haConnections : 0,
+      protocol: typeof body.tunnel.protocol === "string" ? body.tunnel.protocol : "unknown",
+      edgeColo: typeof body.tunnel.edgeColo === "string" ? body.tunnel.edgeColo : null,
+    },
+    publicRoute: {
+      hostname: typeof body.publicRoute.hostname === "string" ? body.publicRoute.hostname : null,
+      status:
+        typeof body.publicRoute.status === "string" ? body.publicRoute.status : "not_configured",
+      httpStatus: Number.isInteger(body.publicRoute.httpStatus)
+        ? body.publicRoute.httpStatus
+        : null,
+      latencyMs: Number.isInteger(body.publicRoute.latencyMs) ? body.publicRoute.latencyMs : null,
+      checkedAt: isValidIsoDate(body.publicRoute.checkedAt)
+        ? body.publicRoute.checkedAt
+        : body.checkedAt,
+    },
+  };
+}
+
 function validateCodiceHealth(body) {
   if (
     !isPlainObject(body) ||
@@ -635,6 +671,13 @@ export async function fetchStationUpdates(stationConfig) {
     return { ...metadata, ok: false, updates: resource };
   }
   return { ...metadata, updates: resource };
+}
+
+export async function fetchStationTunnelStatus(stationConfig) {
+  const result = await fetchStationResource(TUNNEL_PATH, validateStationTunnel, stationConfig);
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  return { ...metadata, tunnelStatus: resource };
 }
 
 export async function getStationConnectionStatus(stationConfig) {

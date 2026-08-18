@@ -336,6 +336,7 @@ async function main() {
       "storage/status",
       "services/status",
       "updates",
+      "tunnel/status",
     ]) {
       const result = await json(consoleBase, `/api/stations/${id}/${suffix}`);
       if (id === "max" && suffix !== "connection") {

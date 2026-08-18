@@ -345,6 +345,31 @@ export type UpdatePackageItem = {
   security: true | null;
 };
 
+export type TunnelConnectorInfo = {
+  name: string;
+  connected: boolean;
+  haConnections: number;
+  protocol: string;
+  edgeColo: string | null;
+};
+
+export type PublicRouteInfo = {
+  hostname: string | null;
+  status: "ok" | "degraded" | "unavailable" | "not_configured";
+  httpStatus: number | null;
+  latencyMs: number | null;
+  checkedAt: string;
+};
+
+export type StationTunnelStatus = {
+  ok: true;
+  schemaVersion: 1;
+  status: string;
+  checkedAt: string;
+  tunnel: TunnelConnectorInfo;
+  publicRoute: PublicRouteInfo;
+};
+
 export type StationUpdates =
   | {
       ok: true;
@@ -636,6 +661,8 @@ export const hestiaApi = {
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   stationUpdates: (id: StationId) => safeFetch<StationUpdates>(`/api/stations/${id}/updates`),
+  stationTunnelStatus: (id: StationId) =>
+    safeFetch<StationTunnelStatus>(`/api/stations/${id}/tunnel/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
   wakeServer: () =>
     safePost<{ ok: boolean; state?: string; target?: string; message?: string; error?: string }>(

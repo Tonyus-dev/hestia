@@ -261,7 +261,7 @@ function GuardianSummaryCard({
         {/* 6. General State */}
         <div className="pt-2 border-t border-[color:var(--kaline-border-copper)]/10 text-[11px] text-[color:var(--kaline-faint)] flex justify-between">
           <span>
-            {onlineCount} de 6 nós ativos ({configuredCount} configurados)
+            {onlineCount} de 7 nós ativos ({configuredCount} configurados)
           </span>
           <span>Héstia observa e solicita · O Guardião autoriza</span>
         </div>
@@ -280,7 +280,7 @@ function Painel() {
         <p className="kaline-eyebrow">Console da TV Box (Héstia Host)</p>
         <h1 className="kaline-serif text-3xl text-[color:var(--kaline-text)]">Héstia</h1>
         <p className="text-[13px] text-[color:var(--kaline-muted)]">
-          Monitoramento independente e somente leitura das seis Stations da Héstia.
+          Monitoramento independente e somente leitura das sete Stations da Héstia.
         </p>
       </header>
 
@@ -321,18 +321,21 @@ export function StationCard({
     codice ? hestiaApi.tvboxCodiceHealth : async () => ({ status: "idle" as const }),
     [codice],
   );
+  const tunnel = useApi(() => hestiaApi.stationTunnelStatus(id), [id]);
   const refreshing =
     connection.refreshing ||
     system.refreshing ||
     (canonicalStorage && storage.refreshing) ||
     services.refreshing ||
-    (codice && codiceHealth.refreshing);
+    (codice && codiceHealth.refreshing) ||
+    tunnel.refreshing;
   const retry = () => {
     connection.retry();
     system.retry();
     if (canonicalStorage) storage.retry();
     services.retry();
     if (codice) codiceHealth.retry();
+    tunnel.retry();
   };
   const connectionState =
     connection.state.status === "ok" ? connection.state.data.state : "loading";
@@ -394,6 +397,24 @@ export function StationCard({
         />
       )}
       {codice && <Row k="Biblioteca Códice" v={codiceLabel(codiceHealth.state)} />}
+      {tunnel.state.status === "ok" && tunnel.state.data.tunnel.connected && (
+        <>
+          <Row
+            k="Cloudflare Tunnel"
+            v={`${tunnel.state.data.tunnel.name} · ${tunnel.state.data.tunnel.haConnections}/4 HA (${tunnel.state.data.tunnel.protocol})`}
+          />
+          <Row
+            k="Rota Pública"
+            v={
+              tunnel.state.data.publicRoute.status === "ok"
+                ? `${tunnel.state.data.publicRoute.hostname} · PASS (${tunnel.state.data.publicRoute.latencyMs}ms)`
+                : tunnel.state.data.publicRoute.status === "not_configured"
+                  ? "não configurada"
+                  : `${tunnel.state.data.publicRoute.hostname || "pública"} · DEGRADADA`
+            }
+          />
+        </>
+      )}
       <Row k="Última atualização" v={latestCheckedAt(connection.state, system.state)} />
       {id === "desktop" && cardState.status !== "ok" && (
         <div className="mt-3">
