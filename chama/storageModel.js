@@ -44,8 +44,7 @@ const FOLDERS = [
     label: "Dispositivos",
     relativePath: "entrada/dispositivos",
     category: "entrada",
-    purpose:
-      "Arquivos vindos de celular, pendrive, HD externo, TV Box ou outro dispositivo.",
+    purpose: "Arquivos vindos de celular, pendrive, HD externo, TV Box ou outro dispositivo.",
     required: true,
     serviceHints: ["samba"],
   }),

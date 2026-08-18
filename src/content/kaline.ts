@@ -32,8 +32,7 @@ export const HESTIA = {
   serverName: "Héstia Console",
   agentName: "Chama Local",
   subtitle: "Console visual da Héstia Console com Chama Local embutida",
-  motto:
-    "Héstia é o Console da TV Box. A Chama é o pulso local. Presence consulta. Kaline decide.",
+  motto: "Héstia é o Console da TV Box. A Chama é o pulso local. Presence consulta. Kaline decide.",
   waiting: "Aguardando Chama Local",
   readonly: "Modo protegido: leitura por padrão; apenas Hermes mantém escrita local controlada.",
   footer: "Héstia é o Console. Chama pulsa. Console mostra. Presence consulta.",
