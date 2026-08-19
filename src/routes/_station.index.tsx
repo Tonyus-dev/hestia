@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   hestiaApi,
@@ -374,16 +374,69 @@ export function StationCard({
 
   const [wakeState, setWakeState] = useState<{
     loading: boolean;
+    waking?: boolean;
+    sleeping?: boolean;
+    attempt?: number;
     message?: string;
     error?: string;
   }>({ loading: false });
 
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearPollTimer = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => clearPollTimer();
+  }, []);
+
+  useEffect(() => {
+    if (wakeState.waking && connection.state.status === "ok" && connection.state.data.state === "available") {
+      clearPollTimer();
+      setWakeState({ loading: false, waking: false, message: "Servidor online e pronto!" });
+    } else if (wakeState.sleeping && connection.state.status !== "ok") {
+      clearPollTimer();
+      setWakeState({ loading: false, sleeping: false, message: "Servidor em repouso." });
+    }
+  }, [connection.state, wakeState.waking, wakeState.sleeping]);
+
   const handleWakeServer = async () => {
-    setWakeState({ loading: true });
+    clearPollTimer();
+    setWakeState({ loading: true, message: "Transmitindo Magic Packet WoL…" });
     const res = await hestiaApi.wakeServer();
     if (res.status === "ok" && res.data.ok) {
-      setWakeState({ loading: false, message: "Despertar solicitado com sucesso!" });
+      let attempt = 1;
+      const maxAttempts = 12;
+      setWakeState({
+        loading: true,
+        waking: true,
+        attempt: 1,
+        message: `Magic Packet WoL transmitido! Aguardando servidor inicializar (${attempt}/${maxAttempts})…`,
+      });
       retry();
+
+      pollTimerRef.current = setInterval(async () => {
+        attempt += 1;
+        if (attempt > maxAttempts) {
+          clearPollTimer();
+          setWakeState({
+            loading: false,
+            waking: false,
+            error: "Servidor não respondeu após 60s. Verifique cabos de rede/energia.",
+          });
+        } else {
+          setWakeState((prev) => ({
+            ...prev,
+            attempt,
+            message: `Magic Packet WoL transmitido! Aguardando servidor inicializar (${attempt}/${maxAttempts})…`,
+          }));
+          retry();
+        }
+      }, 5000);
     } else {
       const err =
         res.status === "unavailable"
@@ -396,11 +449,33 @@ export function StationCard({
   };
 
   const handleSleepServer = async () => {
-    setWakeState({ loading: true });
+    clearPollTimer();
+    setWakeState({ loading: true, message: "Solicitando repouso do Servidor…" });
     const res = await hestiaApi.sleepServer();
     if (res.status === "ok" && res.data.ok) {
-      setWakeState({ loading: false, message: "Solicitação de repouso enviada!" });
+      let attempt = 1;
+      const maxAttempts = 8;
+      setWakeState({
+        loading: true,
+        sleeping: true,
+        attempt: 1,
+        message: "Comando de repouso transmitido! Aguardando servidor desligar…",
+      });
       retry();
+
+      pollTimerRef.current = setInterval(async () => {
+        attempt += 1;
+        if (attempt > maxAttempts) {
+          clearPollTimer();
+          setWakeState({
+            loading: false,
+            sleeping: false,
+            message: "Comando de repouso enviado ao Servidor.",
+          });
+        } else {
+          retry();
+        }
+      }, 3000);
     } else {
       const err =
         res.status === "unavailable"
@@ -472,7 +547,11 @@ export function StationCard({
               disabled={wakeState.loading}
               className="w-full rounded bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-60 transition-colors"
             >
-              {wakeState.loading ? "Enviando Magic Packet WoL…" : "Acordar servidor"}
+              {wakeState.waking
+                ? `Despertando servidor… (${wakeState.attempt || 1}/12)`
+                : wakeState.loading
+                  ? "Enviando Magic Packet WoL…"
+                  : "Acordar servidor"}
             </button>
           ) : (
             <button
@@ -481,7 +560,11 @@ export function StationCard({
               disabled={wakeState.loading}
               className="w-full rounded bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-600/40 px-3 py-2 text-xs font-semibold text-zinc-300 disabled:opacity-60 transition-colors"
             >
-              {wakeState.loading ? "Enviando comando de repouso…" : "Dormir servidor"}
+              {wakeState.sleeping
+                ? "Colocando em repouso…"
+                : wakeState.loading
+                  ? "Enviando comando de repouso…"
+                  : "Dormir servidor"}
             </button>
           )}
           {wakeState.message && (
