@@ -382,6 +382,14 @@ function validateStationUpdates(body) {
       checkedAt: isValidIsoDate(body.checkedAt) ? body.checkedAt : new Date().toISOString(),
     };
   }
+  if (body.ok === false && body.status === "error") {
+    return {
+      ok: false,
+      status: "error",
+      reason: typeof body.reason === "string" ? body.reason : "APT_EXEC_FAILED",
+      checkedAt: isValidIsoDate(body.checkedAt) ? body.checkedAt : new Date().toISOString(),
+    };
+  }
   if (
     body.ok !== true ||
     body.schemaVersion !== 1 ||
@@ -667,7 +675,7 @@ export async function fetchStationUpdates(stationConfig) {
   const result = await fetchStationResource(UPDATES_PATH, validateStationUpdates, stationConfig);
   if (!result.ok) return result;
   const { resource, ...metadata } = result;
-  if (resource?.status === "unsupported") {
+  if (resource?.status === "unsupported" || resource?.status === "error") {
     return { ...metadata, ok: false, updates: resource };
   }
   return { ...metadata, updates: resource };

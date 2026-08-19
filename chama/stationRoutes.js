@@ -48,7 +48,9 @@ function registerNamedStationRoutes(app, stationId, env) {
   });
   app.get(`${prefix}/updates`, async (_request, reply) => {
     const result = await fetchStationUpdates(config());
-    return result.ok || result.updates?.status === "unsupported"
+    return result.ok ||
+      result.updates?.status === "unsupported" ||
+      result.updates?.status === "error"
       ? result.updates
       : unavailable(reply, result, `${stationId} updates`);
   });

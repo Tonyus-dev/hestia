@@ -4,6 +4,7 @@ import {
   fetchStationHealth,
   fetchStationServicesStatus,
   fetchStationStorageStatus,
+  fetchStationUpdates,
   fetchTvboxCodiceHealth,
   hasLegacyStationConfig,
   resolveNamedStationConfig,
@@ -276,5 +277,67 @@ describe("cliente reutilizável e isolado", () => {
     } else {
       expect(result).toMatchObject({ ok: false, code: "STATION_CONTRACT_MISMATCH" });
     }
+  });
+
+  it("propaga status 'unsupported' da Station sem mascarar como contract mismatch", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          ok: false,
+          status: "unsupported",
+          reason: "APT_NOT_AVAILABLE",
+          checkedAt: now(),
+        }),
+      ),
+    );
+    const config = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    const result = await fetchStationUpdates(config);
+    expect(result).toMatchObject({
+      ok: false,
+      updates: { ok: false, status: "unsupported", reason: "APT_NOT_AVAILABLE" },
+    });
+  });
+
+  it("propaga status 'error' (APT_EXEC_FAILED) sem regredir para unsupported", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          ok: false,
+          status: "error",
+          reason: "APT_EXEC_FAILED",
+          checkedAt: now(),
+        }),
+      ),
+    );
+    const config = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    const result = await fetchStationUpdates(config);
+    expect(result).toMatchObject({
+      ok: false,
+      updates: { ok: false, status: "error", reason: "APT_EXEC_FAILED" },
+    });
+    expect(result.updates.status).not.toBe("unsupported");
+  });
+
+  it("rejeita respostas de updates com status desconhecido como contract mismatch", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({ ok: false, status: "nonsense", reason: "WHATEVER", checkedAt: now() }),
+      ),
+    );
+    const config = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    const result = await fetchStationUpdates(config);
+    expect(result).toMatchObject({ ok: false, code: "STATION_CONTRACT_MISMATCH" });
   });
 });

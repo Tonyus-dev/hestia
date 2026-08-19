@@ -5,10 +5,11 @@ import { nav } from "./kaline";
 
 describe("navegação principal", () => {
   it("oculta o Códice legado sem remover sua rota de compatibilidade", () => {
-    expect(nav.some((item) => item.to === "/codice")).toBe(false);
+    const navPaths = nav.map((item) => String(item.to));
+    expect(navPaths).not.toContain("/codice");
     expect(nav.some((item) => item.label === "Códice")).toBe(false);
-    expect(nav.some((item) => item.to === "/organizador")).toBe(false);
-    expect(nav.some((item) => item.to === "/assistente")).toBe(false);
+    expect(navPaths).not.toContain("/organizador");
+    expect(navPaths).not.toContain("/assistente");
     expect(existsSync(join(process.cwd(), "src/routes/_station.assistente.tsx"))).toBe(false);
     expect(existsSync(join(process.cwd(), "src/routes/_station.codice.tsx"))).toBe(true);
   });

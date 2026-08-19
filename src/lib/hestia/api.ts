@@ -374,6 +374,12 @@ export type StationUpdates =
       status: "unsupported";
       reason: string;
       checkedAt?: string;
+    }
+  | {
+      ok: false;
+      status: "error";
+      reason: string;
+      checkedAt?: string;
     };
 
 export type Config = {
@@ -399,6 +405,8 @@ export type Config = {
   miniAuthConfigured: boolean;
   maxConfigured: boolean;
   maxAuthConfigured: boolean;
+  noteConfigured: boolean;
+  noteAuthConfigured: boolean;
   stationTimeoutMs: number;
   legacyStationConfigDetected: boolean;
   services: string[];
@@ -691,7 +699,7 @@ export const hestiaLegacyApi = {
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
 
   codiceLibrary: () => safeFetch<CodiceLibrary>("/api/codice/library"),
-  codiceImport: async (file: File, name: string) => {
+  codiceImport: async (file: File, name: string): Promise<ApiState<CodiceImportResult>> => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
     const url = `${base}/api/codice/import?name=${encodeURIComponent(name)}`;
     const controller = new AbortController();

@@ -279,8 +279,8 @@ function GuardianSummaryCard({
 }
 
 function Painel() {
-  const configState = useApi(() => hestiaApi.config(), []);
-  const eventsState = useApi(() => hestiaApi.recentEvents(50), []);
+  const { state: configState } = useApi(() => hestiaApi.config(), []);
+  const { state: eventsState } = useApi(() => hestiaApi.recentEvents(50), []);
 
   return (
     <div className="space-y-6">

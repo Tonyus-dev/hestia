@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { hestiaApi, type StationId } from "@/lib/hestia/api";
+import { hestiaApi, type StationId, type StationSystem } from "@/lib/hestia/api";
 import { STATION_UI, StationCard } from "./_station.index";
 
 vi.mock("@/lib/hestia/api", async (original) => {
@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 function system() {
-  return ok({
+  const data: StationSystem = {
     ok: true,
     schemaVersion: 1,
     checkedAt: at,
@@ -44,7 +44,8 @@ function system() {
       swap: { totalBytes: 0, usedBytes: 0, freeBytes: 0, usedPercent: 0 },
       rootDisk: { totalBytes: 100, usedBytes: 10, freeBytes: 90, usedPercent: 10 },
     },
-  });
+  };
+  return ok(data);
 }
 
 function prepare(id: StationId, state: "available" | "unavailable" = "available") {

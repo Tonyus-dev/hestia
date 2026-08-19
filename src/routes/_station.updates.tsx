@@ -244,6 +244,7 @@ function StationUpdateCard({
   const updatesData: StationUpdates | null = upd.state.status === "ok" ? upd.state.data : null;
 
   const isUnsupported = updatesData?.ok === false && updatesData?.status === "unsupported";
+  const isUpdateError = updatesData?.ok === false && updatesData?.status === "error";
   const isOkUpdates = updatesData?.ok === true && updatesData?.status === "ok";
 
   const handleRefresh = () => {
@@ -299,6 +300,13 @@ function StationUpdateCard({
           <div className="p-3 rounded border border-amber-500/20 bg-amber-500/5 text-amber-400 text-xs flex items-center justify-between">
             <span className="font-semibold uppercase tracking-wider text-[10px]">Updates</span>
             <span className="font-mono">NÃO SUPORTADO ({updatesData.reason})</span>
+          </div>
+        )}
+
+        {isUpdateError && (
+          <div className="p-3 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs flex items-center justify-between">
+            <span className="font-semibold uppercase tracking-wider text-[10px]">Updates</span>
+            <span className="font-mono">FALHA NA CONSULTA ({updatesData.reason})</span>
           </div>
         )}
 

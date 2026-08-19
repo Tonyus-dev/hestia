@@ -44,7 +44,7 @@ else
 fi
 
 [ -w "$KALINE_ROOT" ] && ok "$KALINE_ROOT gravável pelo usuário atual" || warn "$KALINE_ROOT não é gravável pelo usuário atual"
-[ -d "$KALINE_ROOT/entrada" ] && ok "$KALINE_ROOT/entrada existe" || warn "$KALINE_ROOT/entrada ausente; rode npm run kaline:init"
+[ -d "$KALINE_ROOT/entrada" ] && ok "$KALINE_ROOT/entrada existe" || warn "$KALINE_ROOT/entrada ausente; crie o diretório manualmente ou configure HESTIA_STORAGE_PATH"
 if command -v findmnt >/dev/null 2>&1 && findmnt -n -T "$KALINE_ROOT" >/dev/null 2>&1; then
   fs="$(findmnt -n -T "$KALINE_ROOT" -o FSTYPE 2>/dev/null | head -n1)"
   ok "$KALINE_ROOT fstype=$fs"
