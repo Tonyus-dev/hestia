@@ -160,7 +160,8 @@ async function main() {
   const pocketToken = randomBytes(32).toString("hex");
   const babyToken = randomBytes(32).toString("hex");
   const miniToken = randomBytes(32).toString("hex");
-  const [consolePort, desktopPort, tvboxPort, pocketPort, babyPort, miniPort, authPort] =
+  const noteToken = randomBytes(32).toString("hex");
+  const [consolePort, desktopPort, tvboxPort, pocketPort, babyPort, miniPort, notePort, authPort] =
     await Promise.all([
       freePort(),
       freePort(),
@@ -169,9 +170,19 @@ async function main() {
       freePort(),
       freePort(),
       freePort(),
+      freePort(),
     ]);
-  const ports = [consolePort, desktopPort, tvboxPort, pocketPort, babyPort, miniPort, authPort];
-  ensure(new Set(ports).size === 7, "portas do smoke colidiram");
+  const ports = [
+    consolePort,
+    desktopPort,
+    tvboxPort,
+    pocketPort,
+    babyPort,
+    miniPort,
+    notePort,
+    authPort,
+  ];
+  ensure(new Set(ports).size === 8, "portas do smoke colidiram");
   const allowedUserId = "11111111-1111-4111-8111-111111111111";
   const deniedUserId = "22222222-2222-4222-8222-222222222222";
   const codiceOrigin = "https://codice-web.example.test";
@@ -220,7 +231,7 @@ async function main() {
     HESTIA_STATION_PORT: String(pocketPort),
     HESTIA_STATION_TOKEN: pocketToken,
     HESTIA_STATION_CODICE_ENABLED: "0",
-    HESTIA_STATION_SERVICES: "tailscaled,hermes",
+    HESTIA_STATION_SERVICES: "tailscaled,telegram-guard",
     HESTIA_STORAGE_PATH: join(root, "pocket", "root-disk"),
     HESTIA_DATA_DIR: join(root, "pocket", "data"),
   });
@@ -244,11 +255,22 @@ async function main() {
     HESTIA_STORAGE_PATH: join(root, "mini", "root-disk"),
     HESTIA_DATA_DIR: join(root, "mini", "data"),
   });
+  const noteEnv = cleanEnvironment({
+    NODE_ENV: "test",
+    HESTIA_STATION_HOST: HOST,
+    HESTIA_STATION_PORT: String(notePort),
+    HESTIA_STATION_TOKEN: noteToken,
+    HESTIA_STATION_CODICE_ENABLED: "0",
+    HESTIA_STATION_SERVICES: "tailscaled",
+    HESTIA_STORAGE_PATH: join(root, "note", "root-disk"),
+    HESTIA_DATA_DIR: join(root, "note", "data"),
+  });
   let desktop = start("desktop Station", "station.js", desktopEnv);
   let tvbox = start("TV Box Station", "station.js", tvboxEnv());
   let pocket = start("Pocket Station", "station.js", pocketEnv);
   let baby = start("Baby Station", "station.js", babyEnv);
   let mini = start("Mini Station", "station.js", miniEnv);
+  let note = start("Note Station", "station.js", noteEnv);
   const consoleProcess = start(
     "Console",
     "hestia.js",
@@ -267,7 +289,9 @@ async function main() {
       HESTIA_BABY_TOKEN: babyToken,
       HESTIA_MINI_BASE_URL: `http://${HOST}:${miniPort}`,
       HESTIA_MINI_TOKEN: miniToken,
-      HESTIA_STATION_TIMEOUT_MS: "1000",
+      HESTIA_NOTE_BASE_URL: `http://${HOST}:${notePort}`,
+      HESTIA_NOTE_TOKEN: noteToken,
+      HESTIA_STATION_TIMEOUT_MS: "10000",
     }),
   );
   const desktopBase = `http://${HOST}:${desktopPort}`;
@@ -275,12 +299,14 @@ async function main() {
   const pocketBase = `http://${HOST}:${pocketPort}`;
   const babyBase = `http://${HOST}:${babyPort}`;
   const miniBase = `http://${HOST}:${miniPort}`;
+  const noteBase = `http://${HOST}:${notePort}`;
   const consoleBase = `http://${HOST}:${consolePort}`;
   await wait(desktopBase, "/api/station/health", { token: desktopToken, process: desktop });
   await wait(tvboxBase, "/api/station/health", { token: tvboxToken, process: tvbox });
   await wait(pocketBase, "/api/station/health", { token: pocketToken, process: pocket });
   await wait(babyBase, "/api/station/health", { token: babyToken, process: baby });
   await wait(miniBase, "/api/station/health", { token: miniToken, process: mini });
+  await wait(noteBase, "/api/station/health", { token: noteToken, process: note });
   await wait(consoleBase, "/api/health", { process: consoleProcess });
   ensure((await fetch(`${consoleBase}/`)).status === 200, "interface da Console não abriu");
   for (const path of ["/codice", "/historico", "/config", "/manifest.webmanifest", "/rede/"]) {
@@ -294,25 +320,32 @@ async function main() {
     pocketToken,
     babyToken,
     miniToken,
+    noteToken,
     desktopBase,
     tvboxBase,
     pocketBase,
     babyBase,
     miniBase,
+    noteBase,
   ];
-  for (const id of ["desktop", "tvbox", "pocket", "baby", "mini", "max"]) {
+  for (const id of ["desktop", "tvbox", "pocket", "baby", "mini", "note", "max"]) {
     for (const suffix of [
       "connection",
       "health",
       "system/status",
       "storage/status",
       "services/status",
+      "updates",
+      "tunnel/status",
     ]) {
       const result = await json(consoleBase, `/api/stations/${id}/${suffix}`);
       if (id === "max" && suffix !== "connection") {
         ensure(result.response.status === 503, `${id}/${suffix} deveria retornar 503`);
       } else {
-        ensure(result.response.status === 200, `${id}/${suffix} falhou`);
+        ensure(
+          result.response.status === 200,
+          `${id}/${suffix} falhou (status=${result.response.status}, text=${result.text})`,
+        );
       }
       sanitized(result.text, secrets, `${id}/${suffix}`);
     }
@@ -516,6 +549,7 @@ async function main() {
   await stop(pocket);
   await stop(baby);
   await stop(mini);
+  await stop(note);
   await stop(consoleProcess);
   for (const server of servers.splice(0)) await new Promise((resolve) => server.close(resolve));
   await reusable(ports);

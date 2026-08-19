@@ -149,4 +149,48 @@ describe("rotas plurais da Console", () => {
     expect(serialized).not.toContain(secret);
     expect(serialized).not.toContain("127.0.0.1:4519");
   });
+
+  it("encaminha status 'unsupported' e 'error' do /api/station/updates sem cair em unavailable", async () => {
+    const unsupportedBody = {
+      ok: false,
+      status: "unsupported",
+      reason: "APT_NOT_AVAILABLE",
+      checkedAt,
+    };
+    const errorBody = {
+      ok: false,
+      status: "error",
+      reason: "APT_EXEC_FAILED",
+      checkedAt,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) => {
+        const path = new URL(url).pathname;
+        if (path.endsWith("/updates")) return response(errorBody);
+        return response(health);
+      }),
+    );
+    const server = app({
+      NODE_ENV: "test",
+      HESTIA_DESKTOP_BASE_URL: "http://127.0.0.1:4518",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    const errRes = await server.inject("/api/stations/desktop/updates");
+    expect(errRes.statusCode).toBe(200);
+    expect(JSON.parse(errRes.body)).toEqual(errorBody);
+
+    vi.unstubAllGlobals();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) => {
+        const path = new URL(url).pathname;
+        if (path.endsWith("/updates")) return response(unsupportedBody);
+        return response(health);
+      }),
+    );
+    const unsupRes = await server.inject("/api/stations/desktop/updates");
+    expect(unsupRes.statusCode).toBe(200);
+    expect(JSON.parse(unsupRes.body)).toEqual(unsupportedBody);
+  });
 });

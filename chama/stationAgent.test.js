@@ -255,9 +255,9 @@ describe("Station Agent", () => {
     expect(
       resolveStationAgentConfig({
         ...base,
-        HESTIA_STATION_SERVICES: "tailscaled,hermes",
+        HESTIA_STATION_SERVICES: "tailscaled,telegram-guard",
       }).services,
-    ).toEqual(["tailscaled", "hermes"]);
+    ).toEqual(["tailscaled", "telegram-guard"]);
     expect(
       resolveStationAgentConfig({
         ...base,

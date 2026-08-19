@@ -23,42 +23,63 @@ export const STATION_UI: Array<{
   role: string;
   canonicalStorage: boolean;
   codice: boolean;
+  tunnelMonitored: boolean;
 }> = [
   {
     id: "desktop",
     title: "Servidor",
-    role: "Armazenamento principal",
+    role: "/KALINE · backup · processamento · serviços pesados sob demanda · Ash Gate",
     canonicalStorage: true,
     codice: false,
+    tunnelMonitored: false,
   },
-  { id: "tvbox", title: "TV Box", role: "Códice read-only", canonicalStorage: true, codice: true },
+  {
+    id: "tvbox",
+    title: "TV Box",
+    role: "Héstia Console · Ash runtime · executor LAN/WoL · infraestrutura doméstica",
+    canonicalStorage: true,
+    codice: false,
+    tunnelMonitored: true,
+  },
   {
     id: "pocket",
     title: "Pocket",
-    role: "Hermes experimental e vigilância",
+    role: "ZeroClaw · Khora",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: false,
   },
   {
     id: "baby",
     title: "Baby",
-    role: "Station",
+    role: "Reserva cloud",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: false,
   },
   {
     id: "mini",
     title: "Mini",
-    role: "Sentinela externa",
+    role: "Kódice",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: false,
   },
   {
     id: "max",
     title: "Max",
-    role: "Computação cloud sob demanda",
+    role: "Cauldron / Kallistis VTT",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: true,
+  },
+  {
+    id: "note",
+    title: "Notebook",
+    role: "Workstation principal de desenvolvimento",
+    canonicalStorage: false,
+    codice: false,
+    tunnelMonitored: false,
   },
 ];
 
@@ -150,7 +171,7 @@ function GuardianSummaryCard({
 
   const { activeIncidents, recentRecoveries, wakeRequestedEvent } = computeGuardianSummary(events);
 
-  const stationsKeys = ["desktop", "tvbox", "pocket", "baby", "mini", "max"] as const;
+  const stationsKeys = ["desktop", "tvbox", "pocket", "baby", "mini", "max", "note"] as const;
   const configuredCount = stationsKeys.filter((k) => config[`${k}Configured`]).length;
   const activeStationIncidents = activeIncidents.filter((i) => i.type.startsWith("station"));
   const onlineCount = Math.max(0, configuredCount - activeStationIncidents.length);
@@ -248,7 +269,7 @@ function GuardianSummaryCard({
         {/* 6. General State */}
         <div className="pt-2 border-t border-[color:var(--kaline-border-copper)]/10 text-[11px] text-[color:var(--kaline-faint)] flex justify-between">
           <span>
-            {onlineCount} de 6 nós ativos ({configuredCount} configurados)
+            {onlineCount} de 7 nós ativos ({configuredCount} configurados)
           </span>
           <span>Héstia observa e solicita · O Guardião autoriza</span>
         </div>
@@ -258,8 +279,8 @@ function GuardianSummaryCard({
 }
 
 function Painel() {
-  const configState = useApi(() => hestiaApi.config(), []);
-  const eventsState = useApi(() => hestiaApi.recentEvents(50), []);
+  const { state: configState } = useApi(() => hestiaApi.config(), []);
+  const { state: eventsState } = useApi(() => hestiaApi.recentEvents(50), []);
 
   return (
     <div className="space-y-6">
@@ -267,7 +288,7 @@ function Painel() {
         <p className="kaline-eyebrow">Console da TV Box (Héstia Host)</p>
         <h1 className="kaline-serif text-3xl text-[color:var(--kaline-text)]">Héstia</h1>
         <p className="text-[13px] text-[color:var(--kaline-muted)]">
-          Monitoramento independente e somente leitura das seis Stations da Héstia.
+          Monitoramento independente e somente leitura das sete Stations da Héstia.
         </p>
       </header>
 
@@ -288,12 +309,14 @@ export function StationCard({
   role,
   canonicalStorage,
   codice,
+  tunnelMonitored,
 }: {
   id: StationId;
   title: string;
   role: string;
   canonicalStorage: boolean;
   codice: boolean;
+  tunnelMonitored: boolean;
 }) {
   const connection = useApi(() => hestiaApi.stationConnection(id), [id]);
   const system = useApi(() => hestiaApi.stationSystem(id), [id]);
@@ -308,18 +331,26 @@ export function StationCard({
     codice ? hestiaApi.tvboxCodiceHealth : async () => ({ status: "idle" as const }),
     [codice],
   );
+  const tunnel = useApi(
+    tunnelMonitored
+      ? () => hestiaApi.stationTunnelStatus(id)
+      : async () => ({ status: "idle" as const }),
+    [id, tunnelMonitored],
+  );
   const refreshing =
     connection.refreshing ||
     system.refreshing ||
     (canonicalStorage && storage.refreshing) ||
     services.refreshing ||
-    (codice && codiceHealth.refreshing);
+    (codice && codiceHealth.refreshing) ||
+    (tunnelMonitored && tunnel.refreshing);
   const retry = () => {
     connection.retry();
     system.retry();
     if (canonicalStorage) storage.retry();
     services.retry();
     if (codice) codiceHealth.retry();
+    if (tunnelMonitored) tunnel.retry();
   };
   const connectionState =
     connection.state.status === "ok" ? connection.state.data.state : "loading";
@@ -381,6 +412,24 @@ export function StationCard({
         />
       )}
       {codice && <Row k="Biblioteca Códice" v={codiceLabel(codiceHealth.state)} />}
+      {tunnel.state.status === "ok" && tunnel.state.data.tunnel.connected && (
+        <>
+          <Row
+            k="Cloudflare Tunnel"
+            v={`${tunnel.state.data.tunnel.name} · ${tunnel.state.data.tunnel.haConnections}/4 HA (${tunnel.state.data.tunnel.protocol})`}
+          />
+          <Row
+            k="Rota Pública"
+            v={
+              tunnel.state.data.publicRoute.status === "ok"
+                ? `${tunnel.state.data.publicRoute.hostname} · PASS (${tunnel.state.data.publicRoute.latencyMs}ms)`
+                : tunnel.state.data.publicRoute.status === "not_configured"
+                  ? "não configurada"
+                  : `${tunnel.state.data.publicRoute.hostname || "pública"} · DEGRADADA`
+            }
+          />
+        </>
+      )}
       <Row k="Última atualização" v={latestCheckedAt(connection.state, system.state)} />
       {id === "desktop" && cardState.status !== "ok" && (
         <div className="mt-3">

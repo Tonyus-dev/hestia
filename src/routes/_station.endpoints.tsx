@@ -36,11 +36,7 @@ function EndpointsPage() {
   }, []);
 
   const copyCurl = async (path: string) => {
-    const e = HESTIA.endpoints.find((x) => x.path === path);
-    const cmd =
-      e?.method === "POST"
-        ? `curl -s -X POST ${hestiaApi.absoluteUrl(path)} | jq`
-        : `curl -s ${hestiaApi.absoluteUrl(path)} | jq`;
+    const cmd = `curl -s ${hestiaApi.absoluteUrl(path)} | jq`;
     try {
       await navigator.clipboard.writeText(cmd);
       setCopied(path);
@@ -96,13 +92,11 @@ function EndpointsPage() {
                         : "text-[color:var(--kaline-ember)]")
                   }
                 >
-                  {e.method === "POST"
-                    ? "manual"
-                    : p == null
-                      ? "consultando"
-                      : p.ok
-                        ? `ok ${p.status} · ${p.ms}ms`
-                        : `erro · ${p.ms}ms`}
+                  {p == null
+                    ? "consultando"
+                    : p.ok
+                      ? `ok ${p.status} · ${p.ms}ms`
+                      : `erro · ${p.ms}ms`}
                 </span>
               </div>
               <p className="text-[12.5px] text-[color:var(--kaline-muted)]">{e.purpose}</p>

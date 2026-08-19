@@ -18,7 +18,15 @@ export const STATION_CODES = Object.freeze({
   CONTRACT_MISMATCH: "STATION_CONTRACT_MISMATCH",
 });
 
-export const STATION_IDS = Object.freeze(["desktop", "tvbox", "pocket", "baby", "mini", "max"]);
+export const STATION_IDS = Object.freeze([
+  "desktop",
+  "tvbox",
+  "pocket",
+  "baby",
+  "mini",
+  "max",
+  "note",
+]);
 const STATION_ENV = Object.freeze({
   desktop: ["HESTIA_DESKTOP_BASE_URL", "HESTIA_DESKTOP_TOKEN"],
   tvbox: ["HESTIA_TVBOX_BASE_URL", "HESTIA_TVBOX_TOKEN"],
@@ -26,6 +34,7 @@ const STATION_ENV = Object.freeze({
   baby: ["HESTIA_BABY_BASE_URL", "HESTIA_BABY_TOKEN"],
   mini: ["HESTIA_MINI_BASE_URL", "HESTIA_MINI_TOKEN"],
   max: ["HESTIA_MAX_BASE_URL", "HESTIA_MAX_TOKEN"],
+  note: ["HESTIA_NOTE_BASE_URL", "HESTIA_NOTE_TOKEN"],
 });
 const LEGACY_KEYS = Object.freeze(["HESTIA_STATION_BASE_URL", "HESTIA_STATION_TOKEN"]);
 
@@ -36,6 +45,8 @@ const HEALTH_PATH = "/api/station/health";
 const STORAGE_PATH = "/api/station/storage/status";
 const SERVICES_PATH = "/api/station/services/status";
 const SYSTEM_PATH = "/api/station/system/status";
+const UPDATES_PATH = "/api/station/updates";
+const TUNNEL_PATH = "/api/station/tunnel/status";
 const CODICE_HEALTH_PATH = "/api/station/codice/health";
 const MAX_BODY_BYTES = 64 * 1024;
 const SERVICE = "hestia-station-agent";
@@ -48,7 +59,7 @@ const SERVICE_STATUSES = new Set([
   "unavailable",
   "unknown",
 ]);
-const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled", "hermes", "telegram-guard"];
+const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled", "telegram-guard"];
 
 function resolveTimeout(raw = process.env.HESTIA_STATION_TIMEOUT_MS) {
   const n = Number(raw);
@@ -361,6 +372,104 @@ function validateStationSystem(body) {
   };
 }
 
+function validateStationUpdates(body) {
+  if (!isPlainObject(body)) return null;
+  if (body.ok === false && body.status === "unsupported") {
+    return {
+      ok: false,
+      status: "unsupported",
+      reason: typeof body.reason === "string" ? body.reason : "APT_NOT_AVAILABLE",
+      checkedAt: isValidIsoDate(body.checkedAt) ? body.checkedAt : new Date().toISOString(),
+    };
+  }
+  if (body.ok === false && body.status === "error") {
+    return {
+      ok: false,
+      status: "error",
+      reason: typeof body.reason === "string" ? body.reason : "APT_EXEC_FAILED",
+      checkedAt: isValidIsoDate(body.checkedAt) ? body.checkedAt : new Date().toISOString(),
+    };
+  }
+  if (
+    body.ok !== true ||
+    body.schemaVersion !== 1 ||
+    body.status !== "ok" ||
+    !isValidIsoDate(body.checkedAt) ||
+    !Array.isArray(body.updates) ||
+    !Number.isInteger(body.totalUpdates) ||
+    typeof body.rebootRequired !== "boolean"
+  ) {
+    return null;
+  }
+  const updates = [];
+  for (const item of body.updates) {
+    if (
+      !isPlainObject(item) ||
+      typeof item.package !== "string" ||
+      !item.package.trim() ||
+      typeof item.installedVersion !== "string" ||
+      typeof item.candidateVersion !== "string" ||
+      !(item.security === true || item.security === null)
+    ) {
+      return null;
+    }
+    updates.push({
+      package: item.package,
+      installedVersion: item.installedVersion,
+      candidateVersion: item.candidateVersion,
+      security: item.security,
+    });
+  }
+  return {
+    ok: true,
+    schemaVersion: 1,
+    status: "ok",
+    checkedAt: body.checkedAt,
+    updates,
+    totalUpdates: body.totalUpdates,
+    securityUpdates:
+      typeof body.securityUpdates === "number"
+        ? body.securityUpdates
+        : updates.filter((item) => item.security === true).length,
+    rebootRequired: body.rebootRequired,
+  };
+}
+
+function validateStationTunnel(body) {
+  if (!isPlainObject(body)) return null;
+  if (body.ok !== true || body.schemaVersion !== 1 || !isValidIsoDate(body.checkedAt)) {
+    return null;
+  }
+  if (!isPlainObject(body.tunnel) || !isPlainObject(body.publicRoute)) {
+    return null;
+  }
+  return {
+    ok: true,
+    schemaVersion: 1,
+    status: typeof body.status === "string" ? body.status : "ok",
+    checkedAt: body.checkedAt,
+    tunnel: {
+      name: typeof body.tunnel.name === "string" ? body.tunnel.name : "cloudflared",
+      connected: Boolean(body.tunnel.connected),
+      haConnections: Number.isInteger(body.tunnel.haConnections) ? body.tunnel.haConnections : 0,
+      protocol: typeof body.tunnel.protocol === "string" ? body.tunnel.protocol : "unknown",
+      edgeColo: typeof body.tunnel.edgeColo === "string" ? body.tunnel.edgeColo : null,
+    },
+    publicRoute: {
+      hostname: typeof body.publicRoute.hostname === "string" ? body.publicRoute.hostname : null,
+      status:
+        typeof body.publicRoute.status === "string" ? body.publicRoute.status : "not_configured",
+      httpStatus: Number.isInteger(body.publicRoute.httpStatus)
+        ? body.publicRoute.httpStatus
+        : null,
+      latencyMs: Number.isInteger(body.publicRoute.latencyMs) ? body.publicRoute.latencyMs : null,
+      checkedAt: isValidIsoDate(body.publicRoute.checkedAt)
+        ? body.publicRoute.checkedAt
+        : body.checkedAt,
+    },
+  };
+}
+
 function validateCodiceHealth(body) {
   if (
     !isPlainObject(body) ||
@@ -562,6 +671,23 @@ export async function fetchStationSystemStatus(stationConfig) {
   return { ...metadata, system: resource };
 }
 
+export async function fetchStationUpdates(stationConfig) {
+  const result = await fetchStationResource(UPDATES_PATH, validateStationUpdates, stationConfig);
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  if (resource?.status === "unsupported" || resource?.status === "error") {
+    return { ...metadata, ok: false, updates: resource };
+  }
+  return { ...metadata, updates: resource };
+}
+
+export async function fetchStationTunnelStatus(stationConfig) {
+  const result = await fetchStationResource(TUNNEL_PATH, validateStationTunnel, stationConfig);
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  return { ...metadata, tunnelStatus: resource };
+}
+
 export async function getStationConnectionStatus(stationConfig) {
   const result = await fetchStationHealth(stationConfig);
   return {
@@ -588,6 +714,7 @@ export function publicStationConfig(env = process.env) {
   const baby = resolveNamedStationConfig("baby", env);
   const mini = resolveNamedStationConfig("mini", env);
   const max = resolveNamedStationConfig("max", env);
+  const note = resolveNamedStationConfig("note", env);
   return {
     desktopConfigured: desktop.configured,
     desktopAuthConfigured: Boolean(env.HESTIA_DESKTOP_TOKEN?.trim()),
@@ -601,6 +728,8 @@ export function publicStationConfig(env = process.env) {
     miniAuthConfigured: Boolean(env.HESTIA_MINI_TOKEN?.trim()),
     maxConfigured: max.configured,
     maxAuthConfigured: Boolean(env.HESTIA_MAX_TOKEN?.trim()),
+    noteConfigured: note.configured,
+    noteAuthConfigured: Boolean(env.HESTIA_NOTE_TOKEN?.trim()),
     stationTimeoutMs: desktop.timeoutMs,
     legacyStationConfigDetected: hasLegacyStationConfig(env),
   };

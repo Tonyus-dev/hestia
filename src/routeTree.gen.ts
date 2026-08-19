@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StationRouteImport } from './routes/_station'
 import { Route as StationIndexRouteImport } from './routes/_station.index'
+import { Route as StationUpdatesRouteImport } from './routes/_station.updates'
 import { Route as StationStorageRouteImport } from './routes/_station.storage'
 import { Route as StationSistemaRouteImport } from './routes/_station.sistema'
 import { Route as StationServicosRouteImport } from './routes/_station.servicos'
@@ -19,7 +20,6 @@ import { Route as StationHistoricoRouteImport } from './routes/_station.historic
 import { Route as StationEndpointsRouteImport } from './routes/_station.endpoints'
 import { Route as StationConfigRouteImport } from './routes/_station.config'
 import { Route as StationCodiceRouteImport } from './routes/_station.codice'
-import { Route as StationAssistenteRouteImport } from './routes/_station.assistente'
 
 const StationRoute = StationRouteImport.update({
   id: '/_station',
@@ -28,6 +28,11 @@ const StationRoute = StationRouteImport.update({
 const StationIndexRoute = StationIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => StationRoute,
+} as any)
+const StationUpdatesRoute = StationUpdatesRouteImport.update({
+  id: '/updates',
+  path: '/updates',
   getParentRoute: () => StationRoute,
 } as any)
 const StationStorageRoute = StationStorageRouteImport.update({
@@ -70,15 +75,9 @@ const StationCodiceRoute = StationCodiceRouteImport.update({
   path: '/codice',
   getParentRoute: () => StationRoute,
 } as any)
-const StationAssistenteRoute = StationAssistenteRouteImport.update({
-  id: '/assistente',
-  path: '/assistente',
-  getParentRoute: () => StationRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof StationIndexRoute
-  '/assistente': typeof StationAssistenteRoute
   '/codice': typeof StationCodiceRoute
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
@@ -87,9 +86,9 @@ export interface FileRoutesByFullPath {
   '/servicos': typeof StationServicosRoute
   '/sistema': typeof StationSistemaRoute
   '/storage': typeof StationStorageRoute
+  '/updates': typeof StationUpdatesRoute
 }
 export interface FileRoutesByTo {
-  '/assistente': typeof StationAssistenteRoute
   '/codice': typeof StationCodiceRoute
   '/config': typeof StationConfigRoute
   '/endpoints': typeof StationEndpointsRoute
@@ -98,12 +97,12 @@ export interface FileRoutesByTo {
   '/servicos': typeof StationServicosRoute
   '/sistema': typeof StationSistemaRoute
   '/storage': typeof StationStorageRoute
+  '/updates': typeof StationUpdatesRoute
   '/': typeof StationIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_station': typeof StationRouteWithChildren
-  '/_station/assistente': typeof StationAssistenteRoute
   '/_station/codice': typeof StationCodiceRoute
   '/_station/config': typeof StationConfigRoute
   '/_station/endpoints': typeof StationEndpointsRoute
@@ -112,13 +111,13 @@ export interface FileRoutesById {
   '/_station/servicos': typeof StationServicosRoute
   '/_station/sistema': typeof StationSistemaRoute
   '/_station/storage': typeof StationStorageRoute
+  '/_station/updates': typeof StationUpdatesRoute
   '/_station/': typeof StationIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/assistente'
     | '/codice'
     | '/config'
     | '/endpoints'
@@ -127,9 +126,9 @@ export interface FileRouteTypes {
     | '/servicos'
     | '/sistema'
     | '/storage'
+    | '/updates'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/assistente'
     | '/codice'
     | '/config'
     | '/endpoints'
@@ -138,11 +137,11 @@ export interface FileRouteTypes {
     | '/servicos'
     | '/sistema'
     | '/storage'
+    | '/updates'
     | '/'
   id:
     | '__root__'
     | '/_station'
-    | '/_station/assistente'
     | '/_station/codice'
     | '/_station/config'
     | '/_station/endpoints'
@@ -151,6 +150,7 @@ export interface FileRouteTypes {
     | '/_station/servicos'
     | '/_station/sistema'
     | '/_station/storage'
+    | '/_station/updates'
     | '/_station/'
   fileRoutesById: FileRoutesById
 }
@@ -172,6 +172,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof StationIndexRouteImport
+      parentRoute: typeof StationRoute
+    }
+    '/_station/updates': {
+      id: '/_station/updates'
+      path: '/updates'
+      fullPath: '/updates'
+      preLoaderRoute: typeof StationUpdatesRouteImport
       parentRoute: typeof StationRoute
     }
     '/_station/storage': {
@@ -230,18 +237,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StationCodiceRouteImport
       parentRoute: typeof StationRoute
     }
-    '/_station/assistente': {
-      id: '/_station/assistente'
-      path: '/assistente'
-      fullPath: '/assistente'
-      preLoaderRoute: typeof StationAssistenteRouteImport
-      parentRoute: typeof StationRoute
-    }
   }
 }
 
 interface StationRouteChildren {
-  StationAssistenteRoute: typeof StationAssistenteRoute
   StationCodiceRoute: typeof StationCodiceRoute
   StationConfigRoute: typeof StationConfigRoute
   StationEndpointsRoute: typeof StationEndpointsRoute
@@ -250,11 +249,11 @@ interface StationRouteChildren {
   StationServicosRoute: typeof StationServicosRoute
   StationSistemaRoute: typeof StationSistemaRoute
   StationStorageRoute: typeof StationStorageRoute
+  StationUpdatesRoute: typeof StationUpdatesRoute
   StationIndexRoute: typeof StationIndexRoute
 }
 
 const StationRouteChildren: StationRouteChildren = {
-  StationAssistenteRoute: StationAssistenteRoute,
   StationCodiceRoute: StationCodiceRoute,
   StationConfigRoute: StationConfigRoute,
   StationEndpointsRoute: StationEndpointsRoute,
@@ -263,6 +262,7 @@ const StationRouteChildren: StationRouteChildren = {
   StationServicosRoute: StationServicosRoute,
   StationSistemaRoute: StationSistemaRoute,
   StationStorageRoute: StationStorageRoute,
+  StationUpdatesRoute: StationUpdatesRoute,
   StationIndexRoute: StationIndexRoute,
 }
 

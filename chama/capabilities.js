@@ -16,7 +16,6 @@ export function getCapabilities() {
       manageBackups: false,
       modifyStorage: false,
       manageUsers: false,
-      processHermes: true,
     },
     mode: "tvbox-console",
   };

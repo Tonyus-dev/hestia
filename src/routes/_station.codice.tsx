@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { hestiaLegacyApi, formatBytes } from "@/lib/hestia/api";
+import { hestiaApi, hestiaLegacyApi, formatBytes } from "@/lib/hestia/api";
 import { useApi } from "@/lib/hestia/useApi";
 import { UnavailableNote } from "@/components/hestia/shared/UnavailableNote";
 import {
@@ -55,12 +55,17 @@ function CodicePage() {
 
     try {
       const res = await hestiaLegacyApi.codiceImport(file, file.name);
-      if (res.status === "ok" && res.data.success) {
-        setSuccessMsg(`Lei "${file.name}" convertida e importada com sucesso!`);
-        retry(); // Recarrega a biblioteca
+      if (res.status === "unavailable") {
+        setErrorMsg(`Falha na importação: ${res.message}`);
+      } else if (res.status === "ok") {
+        if (res.data.success) {
+          setSuccessMsg(`Lei "${file.name}" convertida e importada com sucesso!`);
+          retry(); // Recarrega a biblioteca
+        } else {
+          setErrorMsg(`Falha na importação: ${res.data.filename || "erro desconhecido"}`);
+        }
       } else {
-        const detail = res.status === "unavailable" ? res.message : "Erro desconhecido";
-        setErrorMsg(`Falha na importação: ${detail}`);
+        setErrorMsg("Falha na importação: estado desconhecido");
       }
     } catch (err) {
       setErrorMsg(`Erro de conexão: ${err instanceof Error ? err.message : String(err)}`);
@@ -253,7 +258,7 @@ function CodicePage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredBooks.map((book) => {
-                  const downloadUrl = hestiaLegacyApi.absoluteUrl(book.url);
+                  const downloadUrl = hestiaApi.absoluteUrl(book.url);
                   return (
                     <div
                       key={book.id}

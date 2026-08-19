@@ -212,18 +212,6 @@ export type LlmChatResult = {
   checkedAt: string;
 };
 
-export type HermesStatus = {
-  ok: boolean;
-  root: string;
-  folders?: Record<string, boolean>;
-  pending?: number;
-  processed?: number;
-  failed?: number;
-  code?: string;
-  error?: string;
-  checkedAt: string;
-};
-
 export type StationState =
   | "not_configured"
   | "expected_offline"
@@ -233,7 +221,16 @@ export type StationState =
   | "unauthorized"
   | "incompatible";
 
-export type StationId = "desktop" | "tvbox" | "pocket" | "baby" | "mini" | "max";
+export type StationId = "desktop" | "tvbox" | "pocket" | "baby" | "mini" | "max" | "note";
+export const STATION_IDS: StationId[] = [
+  "desktop",
+  "tvbox",
+  "pocket",
+  "baby",
+  "mini",
+  "max",
+  "note",
+];
 
 export type PresenceEvent = {
   timestamp: string;
@@ -315,7 +312,7 @@ export type StationServices = {
   schemaVersion: 1;
   checkedAt: string;
   services: Array<{
-    id: "jellyfin" | "smbd" | "tailscaled" | "hermes" | "telegram-guard";
+    id: "jellyfin" | "smbd" | "tailscaled" | "telegram-guard";
     active: boolean;
     status: "active" | "inactive" | "failed" | "not-installed" | "unavailable" | "unknown";
   }>;
@@ -328,6 +325,62 @@ export type StationCodiceHealth = {
   formats: Array<"epub" | "pdf" | "txt">;
   checkedAt: string;
 };
+
+export type UpdatePackageItem = {
+  package: string;
+  installedVersion: string;
+  candidateVersion: string;
+  security: true | null;
+};
+
+export type TunnelConnectorInfo = {
+  name: string;
+  connected: boolean;
+  haConnections: number;
+  protocol: string;
+  edgeColo: string | null;
+};
+
+export type PublicRouteInfo = {
+  hostname: string | null;
+  status: "ok" | "degraded" | "unavailable" | "not_configured";
+  httpStatus: number | null;
+  latencyMs: number | null;
+  checkedAt: string;
+};
+
+export type StationTunnelStatus = {
+  ok: true;
+  schemaVersion: 1;
+  status: string;
+  checkedAt: string;
+  tunnel: TunnelConnectorInfo;
+  publicRoute: PublicRouteInfo;
+};
+
+export type StationUpdates =
+  | {
+      ok: true;
+      schemaVersion: 1;
+      status: "ok";
+      checkedAt: string;
+      updates: UpdatePackageItem[];
+      totalUpdates: number;
+      securityUpdates: number | null;
+      rebootRequired: boolean;
+    }
+  | {
+      ok: false;
+      status: "unsupported";
+      reason: string;
+      checkedAt?: string;
+    }
+  | {
+      ok: false;
+      status: "error";
+      reason: string;
+      checkedAt?: string;
+    };
 
 export type Config = {
   appName: string;
@@ -352,6 +405,8 @@ export type Config = {
   miniAuthConfigured: boolean;
   maxConfigured: boolean;
   maxAuthConfigured: boolean;
+  noteConfigured: boolean;
+  noteAuthConfigured: boolean;
   stationTimeoutMs: number;
   legacyStationConfigDetected: boolean;
   services: string[];
@@ -577,10 +632,7 @@ async function safePost<T>(
 
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
-  llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
-  llmChat: (message: string, model: string) =>
-    safePost<LlmChatResult>("/api/llm/chat", { message, model, facet: "kaline" }, {}, 90000),
-  hermesStatus: () => safeFetch<HermesStatus>("/api/hermes/status"),
+
   server: () => safeFetch<ServerStatus>("/api/server/status"),
   hardwareStatus: () => safeFetch<HardwareStatus>("/api/hardware/status"),
   hardwareConfig: () => safeFetch<HardwareConfig>("/api/hardware/config"),
@@ -601,6 +653,9 @@ export const hestiaApi = {
   stationSystem: (id: StationId) => safeFetch<StationSystem>(`/api/stations/${id}/system/status`),
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
+  stationUpdates: (id: StationId) => safeFetch<StationUpdates>(`/api/stations/${id}/updates`),
+  stationTunnelStatus: (id: StationId) =>
+    safeFetch<StationTunnelStatus>(`/api/stations/${id}/tunnel/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),
   wakeServer: () =>
     safePost<{ ok: boolean; state?: string; target?: string; message?: string; error?: string }>(
@@ -642,15 +697,9 @@ export const hestiaLegacyApi = {
   storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
   storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
-  llmChat: (message: string, model?: string, contextBlock?: string, facet?: string) =>
-    safePost<LlmChatResult>(
-      "/api/llm/chat",
-      { message, model, contextBlock, facet: facet || "kaline" },
-      {},
-      90000,
-    ),
+
   codiceLibrary: () => safeFetch<CodiceLibrary>("/api/codice/library"),
-  codiceImport: async (file: File, name: string) => {
+  codiceImport: async (file: File, name: string): Promise<ApiState<CodiceImportResult>> => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;
     const url = `${base}/api/codice/import?name=${encodeURIComponent(name)}`;
     const controller = new AbortController();

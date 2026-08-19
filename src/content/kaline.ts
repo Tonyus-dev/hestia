@@ -4,23 +4,23 @@
 export type NavItem = {
   to:
     | "/"
+    | "/updates"
     | "/sistema"
     | "/storage"
     | "/servicos"
     | "/historico"
     | "/config"
     | "/endpoints"
-    | "/codice"
-    | "/assistente";
+    | "/codice";
   label: string;
   hint?: string;
 };
 
 export const nav: NavItem[] = [
   { to: "/", label: "Painel", hint: "cockpit" },
+  { to: "/updates", label: "Updates", hint: "updates do dia" },
   { to: "/sistema", label: "Sistema", hint: "hardware real" },
   { to: "/storage", label: "Storage", hint: "/KALINE" },
-  { to: "/assistente", label: "Assistente", hint: "chat llm" },
   { to: "/servicos", label: "Serviços", hint: "status real" },
   { to: "/historico", label: "Histórico", hint: "runs e eventos" },
   { to: "/config", label: "Configuração", hint: "modo protegido" },
@@ -34,7 +34,7 @@ export const HESTIA = {
   subtitle: "Console visual da Héstia Console com Chama Local embutida",
   motto: "Héstia é o Console da TV Box. A Chama é o pulso local. Presence consulta. Kaline decide.",
   waiting: "Aguardando Chama Local",
-  readonly: "Modo protegido: leitura por padrão; apenas Hermes mantém escrita local controlada.",
+  readonly: "Modo protegido: leitura por padrão; console somente leitura sem escrita.",
   footer: "Héstia é o Console. Chama pulsa. Console mostra. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,

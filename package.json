@@ -26,13 +26,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "setup:local": "bash scripts/setup-local.sh",
     "install:service": "bash scripts/install.sh --service-only",
-    "doctor": "node scripts/console-doctor.mjs",
-    "llm:setup": "bash scripts/setup-ollama-qwen.sh",
-    "doctor:llm": "bash scripts/doctor.sh",
-    "hermes:setup": "bash scripts/setup-hermes.sh"
+    "doctor": "node scripts/console-doctor.mjs"
   },
   "dependencies": {
     "@fastify/static": "^9.1.3",

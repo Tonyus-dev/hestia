@@ -31,7 +31,7 @@ export function getManifest() {
       readonly: true,
       readonlyByDefault: true,
       controlledWrites: true,
-      writeCapabilities: ["hermes"],
+      writeCapabilities: [],
       metrics: true,
       events: true,
       snapshots: true,

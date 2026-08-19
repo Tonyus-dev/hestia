@@ -40,15 +40,6 @@ import { getPresenceSummary } from "./chama/presenceSummary.js";
 import { getBackupsPlan } from "./chama/backups.js";
 import { getCapabilities } from "./chama/capabilities.js";
 import { presenceRoute } from "./chama/presence.js";
-import {
-  ALLOWED_MODELS,
-  getLlmHealth,
-  generateLocalChat,
-  normalizeFacet,
-  validateChatInput,
-} from "./chama/llm.js";
-import { getHermesStatus, processHermesOnce } from "./chama/hermes.js";
-import { registerLlmCorsHooks, registerPromptForgeRoute } from "./chama/llmRoutes.js";
 import { createReadStream } from "node:fs";
 
 // --- CLI flags: --port <n> / --host <h> / --help ----------------------------
@@ -160,7 +151,10 @@ app.addHook("onRequest", async (req, reply) => {
 });
 
 // --- Rate limit simples para /api/* — evita martelamento acidental/abusivo. -
-const apiRateLimiter = new RateLimiter({ windowMs: 10_000, max: 60 });
+const apiRateLimiter = new RateLimiter({
+  windowMs: 10_000,
+  max: Number(process.env.HESTIA_RATE_LIMIT_MAX) || (process.env.NODE_ENV === "test" ? 500 : 200),
+});
 setInterval(() => apiRateLimiter.sweep(), 60_000).unref();
 app.addHook("onRequest", async (req, reply) => {
   if (!req.url.startsWith("/api/")) return;
@@ -175,19 +169,6 @@ app.addHook("onRequest", async (req, reply) => {
     at: new Date().toISOString(),
   });
 });
-
-app.addHook("onRequest", async (req, reply) => {
-  if (req.method !== "POST" || !req.url.startsWith("/api/hermes/process-once")) return;
-  if (req.headers["x-hestia-local-confirm"] === "hermes") return;
-  reply.code(403).send({
-    ok: false,
-    code: "HERMES_CONFIRMATION_REQUIRED",
-    error: "Confirmação local Hermes ausente.",
-  });
-});
-
-// --- CORS opt-in só para /api/llm/* (Kaline Workers, origem única). --------
-registerLlmCorsHooks(app);
 
 // --- CORS opt-in só para /api/codice/* (Códice Web App). --------
 app.addHook("onRequest", async (req, reply) => {
@@ -244,57 +225,6 @@ app.addHook("onSend", async (req, reply, payload) => {
 
 app.get("/api/health", async () => getHealth());
 
-app.get("/api/llm/health", async () => await getLlmHealth());
-app.post("/api/llm/chat", async (req, reply) => {
-  const body = req.body || {};
-  const facet = normalizeFacet(body.facet);
-  try {
-    validateChatInput({
-      message: body.message,
-      facet,
-      contextBlock: body.contextBlock,
-      structuredPrompt: body.structuredPrompt,
-    });
-  } catch (err) {
-    reply.code(400).send({ ok: false, code: err.code || "INVALID_CHAT_INPUT", error: err.message });
-    return;
-  }
-  try {
-    return await generateLocalChat({
-      message: body.message,
-      facet,
-      presencaRegime: body.presencaRegime,
-      contextBlock: body.contextBlock,
-      structuredPrompt: body.structuredPrompt,
-      model: body.model,
-    });
-  } catch (err) {
-    if (err.code === "EMODELNOTALLOWED") {
-      reply.code(400).send({
-        ok: false,
-        code: "MODEL_NOT_ALLOWED",
-        error: "Modelo local não permitido.",
-        allowedModels: ALLOWED_MODELS,
-      });
-      return;
-    }
-    if (err.code === "ELLMUNAVAILABLE") {
-      reply.code(503).send({
-        ok: false,
-        code: err.reasonCode === "LLM_TIMEOUT" ? "LLM_TIMEOUT" : "OLLAMA_UNAVAILABLE",
-        error: "Runtime local indisponível.",
-        runtime: "hestia-llm",
-        detail: err.detail,
-      });
-      return;
-    }
-    throw err;
-  }
-});
-
-registerPromptForgeRoute(app);
-app.get("/api/hermes/status", async () => getHermesStatus(config));
-app.post("/api/hermes/process-once", async () => processHermesOnce(config));
 app.get("/api/server/status", async () => getServerStatus());
 app.get("/api/storage/status", async () => await getStorageStatus());
 app.get("/api/storage/discover", async () => await discoverVolumes());

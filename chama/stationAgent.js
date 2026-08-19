@@ -17,6 +17,8 @@ import { getStorageStatus } from "./storage.js";
 import { ensureDataDir, resolveDataDir } from "./dataDir.js";
 import { createCodiceHealthHandler, registerCodiceReadOnlyRoutes } from "./codiceReadOnlyRoutes.js";
 import { authenticateCodiceRequest, isValidCodiceUserId } from "./codiceAuth.js";
+import { getStationUpdates } from "./updates.js";
+import { getStationTunnelStatus } from "./tunnels.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -223,6 +225,8 @@ export function createStationAgent(config, providers = {}) {
   const readStorage = providers.getStorageStatus || getStorageStatus;
   const readServices = providers.getServicesStatus || getServicesStatus;
   const readSystem = providers.getStationSystemStatus || getStationSystemStatus;
+  const readUpdates = providers.getStationUpdates || getStationUpdates;
+  const readTunnel = providers.getStationTunnelStatus || getStationTunnelStatus;
   const authFetch = providers.fetch || globalThis.fetch;
 
   app.addHook("onRequest", async (request, reply) => {
@@ -298,6 +302,10 @@ export function createStationAgent(config, providers = {}) {
   app.get("/api/station/services/status", async () =>
     publicServices(await readServices(config.services || DEFAULT_SERVICES)),
   );
+
+  app.get("/api/station/updates", async () => readUpdates());
+
+  app.get("/api/station/tunnel/status", async () => readTunnel());
 
   if (config.codiceEnabled === true) {
     const storageRoot = config.storagePath || "/KALINE";

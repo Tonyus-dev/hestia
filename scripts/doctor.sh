@@ -9,7 +9,6 @@ if [ -z "$DATA_DIR" ] && [ -n "${STATE_DIRECTORY:-}" ]; then
   DATA_DIR="${STATE_DIRECTORY%%:*}"
 fi
 DATA_DIR="${DATA_DIR:-${HOME:-/tmp}/.chama/data}"
-HERMES_ROOT="${HESTIA_HERMES_ROOT:-$DATA_DIR/hermes}"
 fail=0
 ok(){ echo "ok: $*"; }
 warn(){ echo "warn: $*"; }
@@ -44,18 +43,8 @@ else
   warn "$KALINE_ROOT ausente"
 fi
 
-if [ -d "$HERMES_ROOT" ]; then
-  ok "$HERMES_ROOT existe"
-  for dir in inbox outbox archive errors; do
-    [ -d "$HERMES_ROOT/$dir" ] && ok "$HERMES_ROOT/$dir existe" || warn "$HERMES_ROOT/$dir ausente; rode npm run hermes:setup"
-  done
-  [ -w "$HERMES_ROOT/outbox" ] && ok "$HERMES_ROOT/outbox gravável" || warn "$HERMES_ROOT/outbox sem escrita"
-  [ -w "$HERMES_ROOT/errors" ] && ok "$HERMES_ROOT/errors gravável" || warn "$HERMES_ROOT/errors sem escrita"
-else
-  if [ "${HESTIA_REQUIRE_HERMES:-0}" = "1" ]; then bad "$HERMES_ROOT ausente"; else warn "$HERMES_ROOT ausente; rode npm run hermes:setup"; fi
-fi
 [ -w "$KALINE_ROOT" ] && ok "$KALINE_ROOT gravável pelo usuário atual" || warn "$KALINE_ROOT não é gravável pelo usuário atual"
-[ -d "$KALINE_ROOT/entrada" ] && ok "$KALINE_ROOT/entrada existe" || warn "$KALINE_ROOT/entrada ausente; rode npm run kaline:init"
+[ -d "$KALINE_ROOT/entrada" ] && ok "$KALINE_ROOT/entrada existe" || warn "$KALINE_ROOT/entrada ausente; crie o diretório manualmente ou configure HESTIA_STORAGE_PATH"
 if command -v findmnt >/dev/null 2>&1 && findmnt -n -T "$KALINE_ROOT" >/dev/null 2>&1; then
   fs="$(findmnt -n -T "$KALINE_ROOT" -o FSTYPE 2>/dev/null | head -n1)"
   ok "$KALINE_ROOT fstype=$fs"
@@ -64,22 +53,12 @@ fi
 if command -v curl >/dev/null 2>&1; then
   if curl -fsS "$BASE_URL/api/health" >/dev/null 2>&1; then
     ok "$BASE_URL/api/health responde"
-    curl -fsS "$BASE_URL/api/llm/health" >/dev/null && ok "$BASE_URL/api/llm/health responde" || warn "$BASE_URL/api/llm/health não respondeu"
-    curl -fsS "$BASE_URL/api/hermes/status" >/dev/null && ok "$BASE_URL/api/hermes/status responde" || warn "$BASE_URL/api/hermes/status não respondeu"
   elif [ "${active:-0}" -eq 1 ]; then
     bad "$BASE_URL/api/health não respondeu com serviço ativo"
   else
     warn "$BASE_URL/api/health não respondeu; serviço local aparentemente inativo"
   fi
-  if curl -fsS "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
-    ok "Ollama responde em 127.0.0.1:11434"
-  elif [ "${HESTIA_REQUIRE_LLM:-0}" = "1" ]; then
-    bad "Ollama não respondeu em 127.0.0.1:11434"
-  else
-    warn "Ollama não respondeu em 127.0.0.1:11434; LLM local ficará indisponível"
-  fi
 else
-  warn "curl indisponível; pulando checagens HTTP/LLM"
+  warn "curl indisponível; pulando checagens HTTP"
 fi
-if command -v ollama >/dev/null 2>&1; then ok "ollama instalado ($(ollama --version 2>/dev/null || echo versão indisponível))"; elif [ "${HESTIA_REQUIRE_LLM:-0}" = "1" ]; then bad "ollama ausente"; else warn "ollama ausente; Héstia sobe sem LLM local"; fi
 exit "$fail"
