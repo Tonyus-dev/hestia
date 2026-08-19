@@ -571,7 +571,7 @@ export async function fetchStationHealth(stationConfig) {
   return { ...metadata, station: resource };
 }
 
-async function fetchStationResource(path, validate, cfg, timeoutMs) {
+async function fetchStationResource(path, validate, cfg, timeoutMs, method = "GET") {
   if (!cfg || typeof cfg !== "object") throw new TypeError("configuração da Station é obrigatória");
   if (!cfg.configured) return failure("not_configured", STATION_CODES.NOT_CONFIGURED);
   if (!cfg.valid) return failure("misconfigured", cfg.errorCode || STATION_CODES.MISCONFIGURED);
@@ -588,7 +588,7 @@ async function fetchStationResource(path, validate, cfg, timeoutMs) {
   const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
   try {
     const res = await fetch(finalUrl, {
-      method: "GET",
+      method,
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${cfg.token}`,
