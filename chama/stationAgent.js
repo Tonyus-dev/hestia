@@ -18,6 +18,7 @@ import { ensureDataDir, resolveDataDir } from "./dataDir.js";
 import { createCodiceHealthHandler, registerCodiceReadOnlyRoutes } from "./codiceReadOnlyRoutes.js";
 import { authenticateCodiceRequest, isValidCodiceUserId } from "./codiceAuth.js";
 import { getStationUpdates } from "./updates.js";
+import { getStationSoftwareInventory, updateStationApplication } from "./softwareInventory.js";
 import { getStationTunnelStatus } from "./tunnels.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -226,6 +227,8 @@ export function createStationAgent(config, providers = {}) {
   const readServices = providers.getServicesStatus || getServicesStatus;
   const readSystem = providers.getStationSystemStatus || getStationSystemStatus;
   const readUpdates = providers.getStationUpdates || getStationUpdates;
+  const readApps = providers.getStationSoftwareInventory || getStationSoftwareInventory;
+  const updateApp = providers.updateStationApplication || updateStationApplication;
   const readTunnel = providers.getStationTunnelStatus || getStationTunnelStatus;
   const authFetch = providers.fetch || globalThis.fetch;
 
@@ -304,6 +307,20 @@ export function createStationAgent(config, providers = {}) {
   );
 
   app.get("/api/station/updates", async () => readUpdates());
+
+  app.get("/api/station/apps", async () => readApps());
+
+  app.post("/api/station/apps/:appId/update", async (request, reply) => {
+    const appId = request.params?.appId;
+    const sudoPassword = request.body?.authorization?.secret || request.body?.secret || "";
+    const result = await updateApp(appId, { sudoPassword });
+    if (!result.ok) {
+      if (result.code === "AUTHORIZATION_FAILED") reply.code(401);
+      else if (result.code === "APP_NOT_FOUND" || result.code === "NO_UPDATE_AVAILABLE" || result.code === "UPDATE_NOT_SUPPORTED") reply.code(400);
+      else reply.code(500);
+    }
+    return result;
+  });
 
   app.get("/api/station/tunnel/status", async () => readTunnel());
 

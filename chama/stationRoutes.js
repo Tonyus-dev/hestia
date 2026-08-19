@@ -1,5 +1,6 @@
 import {
   STATION_IDS,
+  fetchStationApps,
   fetchStationHealth,
   fetchStationServicesStatus,
   fetchStationStorageStatus,
@@ -11,6 +12,7 @@ import {
   getStationConnectionStatus,
   resolveNamedStationConfig,
   stationHealthHttpStatus,
+  updateStationApp,
 } from "./stationClient.js";
 import { executeWakeServerAction } from "./wakeServer.js";
 import { appendEvent } from "./events.js";
@@ -54,6 +56,23 @@ function registerNamedStationRoutes(app, stationId, env) {
       result.updates?.status === "error"
       ? result.updates
       : unavailable(reply, result, `${stationId} updates`);
+  });
+  app.get(`${prefix}/apps`, async (_request, reply) => {
+    const result = await fetchStationApps(config());
+    return result.ok ||
+      result.apps?.status === "unsupported" ||
+      result.apps?.status === "error"
+      ? result.apps
+      : unavailable(reply, result, `${stationId} apps`);
+  });
+  app.post(`${prefix}/apps/:appId/update`, async (request, reply) => {
+    const appId = request.params?.appId;
+    const secret = request.body?.authorization?.secret || request.body?.secret || "";
+    const result = await updateStationApp(config(), appId, { secret });
+    if (!result.ok) {
+      return reply.code(result.remoteStatus || 400).send(result);
+    }
+    return result;
   });
   app.get(`${prefix}/tunnel/status`, async (_request, reply) => {
     const result = await fetchStationTunnelStatus(config());

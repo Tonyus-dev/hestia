@@ -358,6 +358,51 @@ export type StationTunnelStatus = {
   publicRoute: PublicRouteInfo;
 };
 
+export type UpdateStatus = "up_to_date" | "update_available" | "unknown" | "unsupported" | "error";
+export type AppSource = "apt" | "flatpak" | "snap" | "appimage" | "manual";
+
+export type ApplicationItem = {
+  id: string;
+  name: string;
+  installedVersion: string | null;
+  availableVersion: string | null;
+  updateStatus: UpdateStatus;
+  source: AppSource;
+  packageId: string | null;
+  executable: string | null;
+  desktopEntry: string | null;
+  managed: boolean;
+  updateCapability: "controlled" | "manual" | "none" | "unsupported";
+  checkedAt: string;
+};
+
+export type StationAppsResult =
+  | {
+      ok: true;
+      schemaVersion: 1;
+      status: "ok";
+      checkedAt: string;
+      applications: ApplicationItem[];
+      summary: {
+        totalInstalled: number;
+        upToDate: number;
+        updateAvailable: number;
+        unknownVerification: number;
+      };
+      providers: {
+        apt: boolean;
+        desktopEntry: boolean;
+        flatpak: boolean;
+        snap: boolean;
+      };
+    }
+  | {
+      ok: false;
+      status: "unsupported" | "error";
+      reason: string;
+      checkedAt: string;
+    };
+
 export type StationUpdates =
   | {
       ok: true;
@@ -654,6 +699,12 @@ export const hestiaApi = {
   stationServices: (id: StationId) =>
     safeFetch<StationServices>(`/api/stations/${id}/services/status`),
   stationUpdates: (id: StationId) => safeFetch<StationUpdates>(`/api/stations/${id}/updates`),
+  stationApps: (id: StationId) => safeFetch<StationAppsResult>(`/api/stations/${id}/apps`),
+  updateStationApp: (id: StationId, appId: string, secret?: string) =>
+    safePost<{ ok: boolean; status?: string; appId?: string; name?: string; installedVersion?: string; error?: string; code?: string }>(
+      `/api/stations/${id}/apps/${encodeURIComponent(appId)}/update`,
+      secret ? { authorization: { type: "sudo-password", secret } } : {},
+    ),
   stationTunnelStatus: (id: StationId) =>
     safeFetch<StationTunnelStatus>(`/api/stations/${id}/tunnel/status`),
   tvboxCodiceHealth: () => safeFetch<StationCodiceHealth>("/api/stations/tvbox/codice/health"),

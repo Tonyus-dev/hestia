@@ -46,6 +46,7 @@ const STORAGE_PATH = "/api/station/storage/status";
 const SERVICES_PATH = "/api/station/services/status";
 const SYSTEM_PATH = "/api/station/system/status";
 const UPDATES_PATH = "/api/station/updates";
+const APPS_PATH = "/api/station/apps";
 const TUNNEL_PATH = "/api/station/tunnel/status";
 const CODICE_HEALTH_PATH = "/api/station/codice/health";
 const MAX_BODY_BYTES = 64 * 1024;
@@ -571,7 +572,7 @@ export async function fetchStationHealth(stationConfig) {
   return { ...metadata, station: resource };
 }
 
-async function fetchStationResource(path, validate, cfg, timeoutMs, method = "GET") {
+async function fetchStationResource(path, validate, cfg, timeoutMs, method = "GET", bodyPayload = null) {
   if (!cfg || typeof cfg !== "object") throw new TypeError("configuração da Station é obrigatória");
   if (!cfg.configured) return failure("not_configured", STATION_CODES.NOT_CONFIGURED);
   if (!cfg.valid) return failure("misconfigured", cfg.errorCode || STATION_CODES.MISCONFIGURED);
@@ -587,17 +588,27 @@ async function fetchStationResource(path, validate, cfg, timeoutMs, method = "GE
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
   try {
-    const res = await fetch(finalUrl, {
+    const headers = {
+      Accept: "application/json",
+      Authorization: `Bearer ${cfg.token}`,
+      "X-Hestia-Console-Version": pkg.version || "0.1.0",
+      "X-Hestia-Request-Id": randomUUID(),
+    };
+    if (bodyPayload) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    const fetchOpts = {
       method,
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${cfg.token}`,
-        "X-Hestia-Console-Version": pkg.version || "0.1.0",
-        "X-Hestia-Request-Id": randomUUID(),
-      },
+      headers,
       redirect: "manual",
       signal: controller.signal,
-    });
+    };
+    if (bodyPayload) {
+      fetchOpts.body = JSON.stringify(bodyPayload);
+    }
+
+    const res = await fetch(finalUrl, fetchOpts);
     const latencyMs = Math.max(0, Math.round(performance.now() - started));
     if (res.status === 401 || res.status === 403)
       return failure("unauthorized", STATION_CODES.AUTH_FAILED);
@@ -694,6 +705,99 @@ export function resolveUpdatesConsoleTimeoutMs(
     return fallback;
   }
   return n;
+}
+
+function validateStationApps(body) {
+  if (!isPlainObject(body)) return null;
+  if (body.ok === false) {
+    if (
+      (body.status === "unsupported" || body.status === "error") &&
+      isValidIsoDate(body.checkedAt)
+    ) {
+      return {
+        ok: false,
+        status: body.status,
+        reason: typeof body.reason === "string" ? body.reason : "APPS_CHECK_FAILED",
+        checkedAt: body.checkedAt,
+      };
+    }
+    return null;
+  }
+  if (
+    body.ok !== true ||
+    body.schemaVersion !== 1 ||
+    body.status !== "ok" ||
+    !isValidIsoDate(body.checkedAt) ||
+    !Array.isArray(body.applications)
+  ) {
+    return null;
+  }
+  return {
+    ok: true,
+    schemaVersion: 1,
+    status: "ok",
+    checkedAt: body.checkedAt,
+    applications: body.applications,
+    summary: isPlainObject(body.summary)
+      ? body.summary
+      : {
+          totalInstalled: body.applications.length,
+          upToDate: body.applications.filter((a) => a.updateStatus === "up_to_date").length,
+          updateAvailable: body.applications.filter((a) => a.updateStatus === "update_available").length,
+          unknownVerification: body.applications.filter((a) => a.updateStatus === "unknown").length,
+        },
+    providers: isPlainObject(body.providers) ? body.providers : {},
+  };
+}
+
+export function resolveAppsConsoleTimeoutMs(
+  env = process.env,
+  fallback = UPDATES_CONSOLE_TIMEOUT_MS,
+) {
+  const raw = env.HESTIA_STATION_APPS_TIMEOUT_MS;
+  const n = Number(raw);
+  if (
+    !Number.isInteger(n) ||
+    n < UPDATES_CONSOLE_MIN_TIMEOUT_MS ||
+    n > UPDATES_CONSOLE_MAX_TIMEOUT_MS
+  ) {
+    return fallback;
+  }
+  return n;
+}
+
+export async function fetchStationApps(stationConfig) {
+  const timeoutMs = resolveAppsConsoleTimeoutMs();
+  const result = await fetchStationResource(
+    APPS_PATH,
+    validateStationApps,
+    stationConfig,
+    timeoutMs,
+  );
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  if (resource?.status === "unsupported" || resource?.status === "error") {
+    return { ...metadata, ok: false, apps: resource };
+  }
+  return { ...metadata, apps: resource };
+}
+
+export async function updateStationApp(stationConfig, appId, options = {}) {
+  const timeoutMs = resolveAppsConsoleTimeoutMs();
+  const path = `/api/station/apps/${encodeURIComponent(appId)}/update`;
+  const secret = typeof options.secret === "string" ? options.secret : "";
+  const bodyPayload = secret ? { authorization: { type: "sudo-password", secret } } : {};
+  const result = await fetchStationResource(
+    path,
+    (body) => (body && typeof body === "object" ? body : null),
+    stationConfig,
+    timeoutMs * 2,
+    "POST",
+    bodyPayload,
+  );
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  return { ...metadata, ...resource };
 }
 
 export async function fetchStationUpdates(stationConfig) {
