@@ -235,4 +235,15 @@ describe("monitoramento visual das sete Stations", () => {
     expect(roles.max).toBe("Cauldron / Kallistis VTT");
     expect(roles.note).toBe("Workstation principal de desenvolvimento");
   });
+
+  it("valida declaração de onDemand para desktop e max", () => {
+    const onDemandMap = Object.fromEntries(STATION_UI.map((item) => [item.id, item.onDemand]));
+    expect(onDemandMap.desktop).toBe(true);
+    expect(onDemandMap.max).toBe(true);
+    expect(onDemandMap.tvbox).toBe(false);
+    expect(onDemandMap.pocket).toBe(false);
+    expect(onDemandMap.baby).toBe(false);
+    expect(onDemandMap.mini).toBe(false);
+    expect(onDemandMap.note).toBe(false);
+  });
 });

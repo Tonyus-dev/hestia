@@ -24,6 +24,7 @@ export const STATION_UI: Array<{
   canonicalStorage: boolean;
   codice: boolean;
   tunnelMonitored: boolean;
+  onDemand: boolean;
 }> = [
   {
     id: "desktop",
@@ -32,6 +33,7 @@ export const STATION_UI: Array<{
     canonicalStorage: true,
     codice: false,
     tunnelMonitored: false,
+    onDemand: true,
   },
   {
     id: "tvbox",
@@ -40,6 +42,7 @@ export const STATION_UI: Array<{
     canonicalStorage: true,
     codice: false,
     tunnelMonitored: true,
+    onDemand: false,
   },
   {
     id: "pocket",
@@ -48,6 +51,7 @@ export const STATION_UI: Array<{
     canonicalStorage: false,
     codice: false,
     tunnelMonitored: false,
+    onDemand: false,
   },
   {
     id: "baby",
@@ -56,6 +60,7 @@ export const STATION_UI: Array<{
     canonicalStorage: false,
     codice: false,
     tunnelMonitored: false,
+    onDemand: false,
   },
   {
     id: "mini",
@@ -64,6 +69,7 @@ export const STATION_UI: Array<{
     canonicalStorage: false,
     codice: false,
     tunnelMonitored: false,
+    onDemand: false,
   },
   {
     id: "max",
@@ -72,6 +78,7 @@ export const STATION_UI: Array<{
     canonicalStorage: false,
     codice: false,
     tunnelMonitored: true,
+    onDemand: true,
   },
   {
     id: "note",
@@ -80,6 +87,7 @@ export const STATION_UI: Array<{
     canonicalStorage: false,
     codice: false,
     tunnelMonitored: false,
+    onDemand: false,
   },
 ];
 
@@ -94,6 +102,8 @@ function formatDuration(ms?: number) {
   const remMinutes = minutes % 60;
   return `${hours}h ${remMinutes}m`;
 }
+
+const ON_DEMAND_IDS = new Set(STATION_UI.filter((s) => s.onDemand).map((s) => s.id as string));
 
 function computeGuardianSummary(events: PresenceEvent[]) {
   const activeIncidents: Array<{ type: string; name: string; timestamp: string; code?: string }> =
@@ -133,7 +143,10 @@ function computeGuardianSummary(events: PresenceEvent[]) {
       }
     } else if (isDown) {
       const isResolved = seen.has(event.type.replace(".down", ".up"));
-      if (!isResolved && !seen.has(key)) {
+      const isExplicitWakeFailed = event.data?.code === "WAKE_FAILED";
+      const isOnDemandResting = isStation && ON_DEMAND_IDS.has(name) && !isExplicitWakeFailed;
+
+      if (!isResolved && !seen.has(key) && !isOnDemandResting) {
         seen.add(key);
         activeIncidents.push({
           type: event.type,
@@ -310,6 +323,7 @@ export function StationCard({
   canonicalStorage,
   codice,
   tunnelMonitored,
+  onDemand,
 }: {
   id: StationId;
   title: string;
@@ -317,6 +331,7 @@ export function StationCard({
   canonicalStorage: boolean;
   codice: boolean;
   tunnelMonitored: boolean;
+  onDemand: boolean;
 }) {
   const connection = useApi(() => hestiaApi.stationConnection(id), [id]);
   const system = useApi(() => hestiaApi.stationSystem(id), [id]);
@@ -355,7 +370,7 @@ export function StationCard({
   const connectionState =
     connection.state.status === "ok" ? connection.state.data.state : "loading";
   const agent = connection.state.status === "ok" ? connection.state.data.station : null;
-  const cardState = stationCardState(connection.state);
+  const cardState = stationCardState(connection.state, onDemand);
 
   const [wakeState, setWakeState] = useState<{
     loading: boolean;
@@ -461,20 +476,29 @@ export function StationCard({
   );
 }
 
-export function stationCardState(state: ApiState<StationConnection>): {
+export function stationCardState(
+  state: ApiState<StationConnection>,
+  onDemand = false,
+): {
   summary: string;
   status: "ok" | "loading" | "unavailable" | "warn" | "error";
 } {
   if (state.status === "loading") return { summary: "consultando…", status: "loading" };
-  if (state.status !== "ok") return { summary: "offline", status: "unavailable" };
+  if (state.status !== "ok") {
+    return onDemand
+      ? { summary: "repouso (sob demanda)", status: "warn" }
+      : { summary: "offline", status: "unavailable" };
+  }
   const meta: Record<
     StationConnection["state"],
     { summary: string; status: "ok" | "unavailable" | "warn" | "error" }
   > = {
     available: { summary: "online", status: "ok" },
-    unavailable: { summary: "offline", status: "unavailable" },
+    unavailable: onDemand
+      ? { summary: "repouso (sob demanda)", status: "warn" }
+      : { summary: "offline", status: "unavailable" },
     not_configured: { summary: "não configurada", status: "warn" },
-    expected_offline: { summary: "offline por escolha", status: "warn" },
+    expected_offline: { summary: "repouso (sob demanda)", status: "warn" },
     misconfigured: { summary: "configuração inválida", status: "error" },
     unauthorized: { summary: "não autorizada", status: "error" },
     incompatible: { summary: "incompatible", status: "error" },
