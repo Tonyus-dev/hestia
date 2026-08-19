@@ -777,10 +777,21 @@ export function stationHealthHttpStatus(code) {
   return 502;
 }
 
+function validateStationSuspend(body) {
+  if (!isPlainObject(body)) return null;
+  if (body.ok !== true) return null;
+  return { ok: true, state: body.state || "suspending", message: body.message || "em suspensão" };
+}
+
 export async function fetchStationSuspend(config, options = {}) {
-  return stationRequest(config, {
-    path: "/api/station/suspend",
-    method: "POST",
-    fetchImpl: options.fetchImpl,
-  });
+  const result = await fetchStationResource(
+    "/api/station/suspend",
+    validateStationSuspend,
+    config,
+    options.timeoutMs,
+    "POST",
+  );
+  if (!result.ok) return result;
+  const { resource, ...metadata } = result;
+  return { ...metadata, suspend: resource };
 }

@@ -5,6 +5,7 @@ import {
   fetchStationServicesStatus,
   fetchStationStorageStatus,
   fetchStationUpdates,
+  fetchStationSuspend,
   fetchTvboxCodiceHealth,
   hasLegacyStationConfig,
   resolveNamedStationConfig,
@@ -415,5 +416,30 @@ describe("cliente reutilizável e isolado", () => {
     expect(fastCaptures).toHaveLength(3);
     // Todos devem ter signal presente (timeoutMs aplicado)
     for (const c of fastCaptures) expect(c.signal).toBeDefined();
+  });
+
+  it("fetchStationSuspend dispara POST /api/station/suspend e retorna o status de suspensão", async () => {
+    const fetchMock = vi.fn(async () =>
+      json({
+        ok: true,
+        state: "suspending",
+        message: "em suspensão",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const config = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+    });
+    const res = await fetchStationSuspend(config);
+    expect(res.ok).toBe(true);
+    expect(res.suspend).toEqual({
+      ok: true,
+      state: "suspending",
+      message: "em suspensão",
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("https://desktop.example/api/station/suspend");
+    expect(init.method).toBe("POST");
   });
 });
