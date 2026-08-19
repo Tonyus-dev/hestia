@@ -395,7 +395,11 @@ export function StationCard({
   }, []);
 
   useEffect(() => {
-    if (wakeState.waking && connection.state.status === "ok" && connection.state.data.state === "available") {
+    if (
+      wakeState.waking &&
+      connection.state.status === "ok" &&
+      connection.state.data.state === "available"
+    ) {
       clearPollTimer();
       setWakeState({ loading: false, waking: false, message: "Servidor online e pronto!" });
     } else if (wakeState.sleeping && connection.state.status !== "ok") {

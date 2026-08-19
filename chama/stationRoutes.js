@@ -59,9 +59,7 @@ function registerNamedStationRoutes(app, stationId, env) {
   });
   app.get(`${prefix}/apps`, async (_request, reply) => {
     const result = await fetchStationApps(config());
-    return result.ok ||
-      result.apps?.status === "unsupported" ||
-      result.apps?.status === "error"
+    return result.ok || result.apps?.status === "unsupported" || result.apps?.status === "error"
       ? result.apps
       : unavailable(reply, result, `${stationId} apps`);
   });

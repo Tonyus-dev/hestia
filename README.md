@@ -1,149 +1,178 @@
 # Héstia
 
-Héstia é a Console local da TV Box que monitora, em modo somente leitura, seis Stations headless: desktop/servidor, TV Box, Pocket, Baby, Mini e MAX. A implantação operacional canônica está em [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Héstia é o console de observabilidade e operação controlada da infraestrutura Kaline. A Console canônica roda na TV Box e agrega **sete Stations**: `desktop`, `tvbox`, `pocket`, `baby`, `mini`, `max` e `note`.
 
-> **Héstia permite que recursos computacionais permaneçam desligados ou suspensos quando não são necessários, sem perder sua operabilidade. Quando o Guardião precisa de um recurso, Héstia pode solicitar seu despertar por um fluxo explicitamente autorizado e verificar se ele realmente retornou.**
->
-> **Héstia observa, apresenta e solicita. Ela não executa arbitrariamente.**
->
-> *Héstia não mantém as máquinas acordadas. Ela mantém a infraestrutura disponível para ser acordada.*
+> **Héstia observa, apresenta e solicita ações estritamente delimitadas. Ela não oferece shell remoto nem execução arbitrária.**
 
-```text
-Héstia mostra.
-Baby controla.
-TV Box age dentro da LAN.
-Mini verifica de fora.
-Servidor trabalha e preserva.
-Pocket hospeda Khora.
-MAX processa sob demanda.
-O Guardião autoriza.
-```
+A arquitetura permite que recursos permaneçam desligados ou suspensos quando não são necessários. Quando uma ação operacional é necessária, a Héstia usa contratos explícitos, autenticação por Station e validação posterior do estado real.
 
-## Arquitetura final
+## Topologia canônica
 
-| Máquina          | Papel                                         | Bind canônico    |
-| ---------------- | --------------------------------------------- | ---------------- |
-| TV Box           | Héstia Console visual                         | `127.0.0.1:4517` |
-| desktop/servidor | Station Agent monitor-only                    | `127.0.0.1:4518` |
-| TV Box           | Station Agent monitor-only + Códice read-only | `127.0.0.1:4519` |
-| Pocket           | Station Agent monitor-only (Khora)            | `127.0.0.1:4518` |
-| Baby             | Station Agent monitor-only (Controle/WoL)     | `127.0.0.1:4518` |
-| Mini             | Station Agent sentinela externa               | `127.0.0.1:4518` |
-| MAX              | Station Agent computação cloud sob demanda    | `127.0.0.1:4518` |
+| Station | Papel canônico | Bind local do Agent |
+| --- | --- | --- |
+| `desktop` | **SERVIDOR i7** — `/KALINE`, backup, processamento e serviços pesados sob demanda; Ash Gate | `127.0.0.1:4518` |
+| `tvbox` | TV Box — Héstia Console, Station local, executor LAN/WoL restrito e runtime canônico da Ash | `127.0.0.1:4519` |
+| `pocket` | Pocket — ZeroClaw + Khora | `127.0.0.1:4518` |
+| `baby` | Baby — computação de reserva/worker | `127.0.0.1:4518` |
+| `mini` | Mini — host canônico do Kódice | `127.0.0.1:4518` |
+| `max` | MAX — Cauldron / Kallistis VTT | `127.0.0.1:4518` |
+| `note` | Notebook principal de desenvolvimento | `127.0.0.1:4518` |
 
-A Console não copia arquivos. A Station não copia arquivos. O Códice não copia arquivos. A sincronização desktop → TV Box continua externa, por rsync/SSH.
+A Console canônica usa `127.0.0.1:4517` na TV Box. O acesso remoto entre Console e Stations deve usar origens HTTPS privadas, normalmente via Tailscale Serve. Não versionar IPs, hostnames reais ou tokens.
+
+### Limites arquiteturais
+
+- **Ash runtime:** TV Box.
+- **Ash Gate:** SERVIDOR i7.
+- **Kódice:** Mini.
+- **Khora + ZeroClaw:** Pocket.
+- **Cauldron / Kallistis VTT:** MAX.
+- **Héstia AI runtime:** nenhum.
+- **Execução remota genérica:** ausente.
 
 ## Requisitos
 
 - Node.js `>=22.13.0` e npm;
 - Linux com systemd para instalação dos serviços;
-- Tailscale e SSH configurados manualmente quando usados.
+- Tailscale e SSH configurados separadamente quando usados.
 
-Nenhum instalador configura Tailscale, sincroniza arquivos ou instala LibreOffice.
+Os instaladores não configuram Tailscale, não sincronizam arquivos e não instalam componentes externos ao runtime da Héstia.
 
-## Desenvolvimento
+## Desenvolvimento e gates
 
 ```bash
 npm ci
-npm run dev
-```
-
-Validação local:
-
-```bash
 npm test
 npm run lint
+npm run typecheck
 npm run build
+```
+
+Gates adicionais relevantes:
+
+```bash
+npm run station:doctor
 npm run station:smoke
 npm run build-deb
 ```
 
-O frontend nunca inventa métricas: estados indisponíveis continuam indisponíveis.
+O frontend nunca inventa métricas. Estado indisponível permanece indisponível; Station não configurada é diferente de Station offline; erro de autenticação é diferente de indisponibilidade.
 
 ## Configuração da Console
 
-As cinco Stations são explícitas e independentes:
+Cada Station tem URL e token independentes:
 
 ```dotenv
 HESTIA_DESKTOP_BASE_URL=https://<DESKTOP_PRIVADO>
 HESTIA_DESKTOP_TOKEN=<TOKEN_DESKTOP>
+
 HESTIA_TVBOX_BASE_URL=https://<TVBOX_PRIVADA>
 HESTIA_TVBOX_TOKEN=<TOKEN_TVBOX>
-HESTIA_POCKET_BASE_URL=https://<HOST_PRIVADO_DA_POCKET>
-HESTIA_POCKET_TOKEN=<TOKEN_DA_STATION>
-HESTIA_BABY_BASE_URL=https://<HOST_PRIVADO_DA_BABY>
-HESTIA_BABY_TOKEN=<TOKEN_DA_STATION>
-HESTIA_MINI_BASE_URL=https://<HOST_PRIVADO_DA_MINI>
-HESTIA_MINI_TOKEN=<TOKEN_DA_STATION>
-HESTIA_STATION_TIMEOUT_MS=5000
+
+HESTIA_POCKET_BASE_URL=https://<POCKET_PRIVADA>
+HESTIA_POCKET_TOKEN=<TOKEN_POCKET>
+
+HESTIA_BABY_BASE_URL=https://<BABY_PRIVADA>
+HESTIA_BABY_TOKEN=<TOKEN_BABY>
+
+HESTIA_MINI_BASE_URL=https://<MINI_PRIVADA>
+HESTIA_MINI_TOKEN=<TOKEN_MINI>
+
+HESTIA_MAX_BASE_URL=https://<MAX_PRIVADA>
+HESTIA_MAX_TOKEN=<TOKEN_MAX>
+
+HESTIA_NOTE_BASE_URL=https://<NOTE_PRIVADA>
+HESTIA_NOTE_TOKEN=<TOKEN_NOTE>
 ```
 
-As variáveis legadas singulares não são migradas nem usadas pelo runtime. O Doctor rejeita sua presença com uma orientação de correção. Tokens e URLs ficam somente no processo server-side e nunca são devolvidos ao navegador.
+Rotas remotas exigem HTTPS. HTTP é aceito apenas em loopback quando explicitamente permitido pelo runtime. Tokens ficam somente no backend da Console e nunca devem ser devolvidos ao navegador.
 
-## API da Console para as Stations
+## API da Console
+
+Para cada Station canônica (`desktop`, `tvbox`, `pocket`, `baby`, `mini`, `max`, `note`):
 
 ```http
-GET /api/stations/desktop/connection
-GET /api/stations/desktop/health
-GET /api/stations/desktop/storage/status
-GET /api/stations/desktop/services/status
-GET /api/stations/desktop/system/status
-
-GET /api/stations/tvbox/connection
-GET /api/stations/tvbox/health
-GET /api/stations/tvbox/storage/status
-GET /api/stations/tvbox/services/status
-GET /api/stations/tvbox/system/status
-GET /api/stations/tvbox/codice/health
-
-GET /api/stations/pocket/connection
-GET /api/stations/pocket/health
-GET /api/stations/pocket/system/status
-GET /api/stations/pocket/storage/status
-GET /api/stations/pocket/services/status
-
-GET /api/stations/baby/connection
-GET /api/stations/baby/health
-GET /api/stations/baby/system/status
-GET /api/stations/baby/storage/status
-GET /api/stations/baby/services/status
-
-GET /api/stations/mini/connection
-GET /api/stations/mini/health
-GET /api/stations/mini/system/status
-GET /api/stations/mini/storage/status
-GET /api/stations/mini/services/status
+GET /api/stations/:id/connection
+GET /api/stations/:id/health
+GET /api/stations/:id/system/status
+GET /api/stations/:id/storage/status
+GET /api/stations/:id/services/status
+GET /api/stations/:id/updates
+GET /api/stations/:id/apps
+GET /api/stations/:id/tunnel/status
+POST /api/stations/:id/apps/:appId/update
 ```
 
-Não existe endpoint de descoberta, overview ou escrita na Console. O Códice health existe somente para a TV Box.
+Ações operacionais adicionais permanecem específicas e nomeadas; não existe endpoint de `exec`, shell, comando arbitrário ou pacote arbitrário.
 
-## API interna do Station Agent
+## Station Agent
 
-Com Bearer válido:
+Com Bearer válido, o Agent expõe:
 
 ```http
 GET /api/station/health
-GET /api/station/storage/status
 GET /api/station/system/status
+GET /api/station/storage/status
 GET /api/station/services/status
-GET /api/station/codice/health
+GET /api/station/updates
+GET /api/station/apps
+GET /api/station/tunnel/status
+POST /api/station/apps/:appId/update
 ```
 
-Stations: `desktop` monitora armazenamento principal; `tvbox` monitora Códice read-only; `pocket` é monitor-only para Hermes experimental e vigilância; `baby` é monitor-only para Telegram, monitoramento e Wake-on-LAN; `mini` é sentinela externa monitor-only; `max` é computação cloud sob demanda. Pocket, Baby, Mini e Max não habilitam Códice nem ações de escrita local direta; monitoram apenas o Agent, sistema, disco raiz e serviços configurados.
+Cada host usa seu Agent local em loopback. O transporte privado fica na frente do Agent e não altera o bind local.
 
-Cada host de Station pode usar a porta local `4518` porque roda em máquina distinta. O Console Doctor percorre as seis Stations canônicas; Station temporariamente offline gera aviso e não bloqueia atualização da Console, mas configuração inválida, autenticação quebrada e contrato incompatível continuam bloqueando.
+## Updates do Dia e inventário de aplicativos
 
-Variáveis opcionais da Console para as novas Stations: `HESTIA_POCKET_BASE_URL`, `HESTIA_POCKET_TOKEN`, `HESTIA_BABY_BASE_URL`, `HESTIA_BABY_TOKEN`, `HESTIA_MINI_BASE_URL`, `HESTIA_MINI_TOKEN`, `HESTIA_MAX_BASE_URL`, `HESTIA_MAX_TOKEN`. Use origens HTTPS privadas exatas; não versionar IPs, hostnames reais ou tokens.
+A Héstia separa duas coisas:
 
-### Contrato do Wake-Server
-- **Ação:** Acionamento de Wake-on-LAN (WoL) para estações adormecidas.
-- **Rota:** `POST /api/stations/:id/wake` (Consumidor: Héstia Console; Executor: Baby/WoL relay).
-- **Parâmetros:** Rota com o ID da estação a ser acordada.
-- **Resposta Esperada:** `202 Accepted` com corpo `{ "ok": true, "status": "pending", "station": "<id>" }` em caso de envio agendado de WoL, ou `501 Not Implemented` nesta etapa.
+1. **Pacotes do sistema:** observação de atualizações disponíveis, inclusive sinalização de segurança quando comprovável.
+2. **Aplicativos monitorados:** descoberta dinâmica e atualização controlada por aplicativo quando o provider permite.
 
-O Agent inicia com `HESTIA_STATION_CODICE_ENABLED=0`. Na TV Box, o Códice read-only é ativado explicitamente e expõe somente health, library e streaming HEAD/GET de livros. As requisições públicas `GET` e `HEAD` de `/api/codice/*` exigem Bearer Supabase válido, `user.id` na allowlist `HESTIA_CODICE_ALLOWED_USER_IDS` e a origem exata configurada. As requisições `OPTIONS` validam apenas o preflight CORS, não exigem Bearer e não consultam o Supabase. Somente chave `sb_publishable_` é aceita; service-role não é usada. Console e Doctor monitoram apenas `GET /api/station/codice/health` com o token da Station, sem JWT de usuário. EPUB e PDF são obrigatórios e TXT é opcional. Não há Range, resposta 206, upload, import ou escrita.
+O inventário não usa catálogo hardcoded. Ele descobre aplicativos a partir do host e classifica, quando possível:
 
-Esta proteção não deve ser implantada isoladamente: o cliente Kódice ainda precisa ser atualizado para enviar o Bearer Supabase, e a implantação deve ser coordenada com essa mudança.
+```text
+source: apt | flatpak | snap | appimage | manual
+updateStatus: up_to_date | update_available | unknown | unsupported | error
+updateCapability: controlled | none | external | unknown
+```
+
+Uma atualização só pode ser oferecida quando o item descoberto é gerenciável e a ação é determinística. O navegador envia apenas o `stationId`, o `appId` e uma autorização transitória; a Station resolve provider e package ID no servidor. A UI não envia comandos de shell.
+
+### Senha sudo efêmera
+
+Ao clicar para atualizar um aplicativo controlado, a interface abre um **modal flutuante de autorização**. A senha sudo:
+
+- vale somente para aquela operação;
+- não é persistida em arquivo, banco, cookie, `localStorage` ou `sessionStorage`;
+- não deve aparecer em logs;
+- não deve ser colocada em argv ou variável de ambiente do processo de atualização;
+- é descartada pela UI imediatamente após o envio;
+- autorização incorreta resulta em `AUTHORIZATION_FAILED`, sem repetição automática.
+
+Fluxo esperado:
+
+```text
+UPDATE_REQUESTED
+→ UPDATING
+→ rescan do inventário
+→ UP_TO_DATE
+```
+
+ou:
+
+```text
+UPDATE_REQUESTED
+→ UPDATE_FAILED / AUTHORIZATION_FAILED
+```
+
+Invariante de segurança:
+
+```text
+SOFTWARE_INVENTORY=READ_ONLY
+SOFTWARE_UPDATE=CONTROLLED_WRITE
+GENERIC_REMOTE_EXEC=ABSENT
+```
 
 ## Instalação
 
@@ -153,22 +182,45 @@ Console:
 sudo npm run install:local
 ```
 
-Desktop:
+Station padrão:
 
 ```bash
 sudo HESTIA_STATION_PORT=4518 npm run station:install
 ```
 
-TV Box:
+Station local da TV Box:
 
 ```bash
 sudo HESTIA_STATION_PORT=4519 npm run station:install
 ```
 
-Os instaladores partem de um clone limpo, executam npm como usuário não-root, instalam runtimes estáveis em `/opt`, preservam env/tokens existentes e exigem Doctor após o start. O runtime da Station usa lockfile próprio e apenas `fastify` como dependência externa.
+O instalador da Station monta um runtime mínimo em `/opt/hestia-station`, preserva a configuração existente em `/etc/default/hestia-station-agent`, executa npm como usuário não-root e exige o Station Doctor após o start.
 
-O `.deb` continua sendo da Console, usa em produção somente a arquitetura nativa informada por `dpkg --print-architecture` e não é necessário para instalar a Station. Metadata `armhf` testada em CI não equivale a execução em ARM.
+O runtime mínimo deve conter **todos os módulos `chama/*.js` importados transitivamente por `station.js`**. Existe teste de regressão para impedir que um módulo novo seja importado pelo Agent e esquecido no manifest de empacotamento do instalador.
 
-## Estado operacional
+O `.deb` continua sendo da Console; ele não é necessário para instalar uma Station.
 
-Testes automatizados e smoke com fixtures sintéticas não validam TV Box, desktop, TV Box (Station), Pocket, Baby ou Mini físicas. Até executar o checklist completo de [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): **RESULTADO OPERACIONAL: PENDENTE**.
+## Segurança operacional
+
+- nenhuma senha de Station deve ser versionada;
+- nenhum token deve ser impresso em logs ou copiado para o frontend;
+- atualização de aplicativo é uma capacidade específica, não um shell disfarçado;
+- Tailscale/Funnel/Cloudflare são configurados fora dos instaladores;
+- métricas e estados não comprovados devem ser reportados como indisponíveis ou não configurados;
+- mudanças de topologia devem seguir o mapa de percurso canônico antes de alterar código ou documentação.
+
+## Validação física
+
+CI, fixtures e smokes não substituem validação nos hosts reais. A aceitação de uma Station exige, no mínimo:
+
+```text
+service active
+runtime completo
+Doctor PASS
+endpoint local protegido
+transporte privado funcionando
+Console autenticando
+health/updates/apps coerentes
+```
+
+Para a MAX, qualquer manutenção de host deve preservar Cauldron / Kallistis e ser validada antes e depois da intervenção.

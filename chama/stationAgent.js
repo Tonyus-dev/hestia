@@ -316,7 +316,12 @@ export function createStationAgent(config, providers = {}) {
     const result = await updateApp(appId, { sudoPassword });
     if (!result.ok) {
       if (result.code === "AUTHORIZATION_FAILED") reply.code(401);
-      else if (result.code === "APP_NOT_FOUND" || result.code === "NO_UPDATE_AVAILABLE" || result.code === "UPDATE_NOT_SUPPORTED") reply.code(400);
+      else if (
+        result.code === "APP_NOT_FOUND" ||
+        result.code === "NO_UPDATE_AVAILABLE" ||
+        result.code === "UPDATE_NOT_SUPPORTED"
+      )
+        reply.code(400);
       else reply.code(500);
     }
     return result;

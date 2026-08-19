@@ -68,16 +68,23 @@ function UpdatesDoDia() {
         secret,
       );
 
-      if (res.status === "ok" && res.data.ok === true) {
-        handleCloseAuthorizeModal();
-        setRefreshTrigger((prev) => prev + 1);
+      if (res.status === "ok") {
+        if (res.data.ok === true) {
+          handleCloseAuthorizeModal();
+          setRefreshTrigger((prev) => prev + 1);
+        } else {
+          const errorMsg =
+            res.data.code === "AUTHORIZATION_FAILED"
+              ? "Senha sudo incorreta ou autorização negada."
+              : res.data.error || "Falha ao executar a atualização.";
+          setAuthError(errorMsg);
+          setUpdateExecuting(false);
+        }
+      } else if (res.status === "unavailable") {
+        setAuthError(res.message || "Erro de comunicação ao enviar autorização.");
+        setUpdateExecuting(false);
       } else {
-        const errorMsg =
-          res.data?.error ||
-          (res.data?.code === "AUTHORIZATION_FAILED"
-            ? "Senha sudo incorreta ou autorização negada."
-            : "Falha ao executar a atualização.");
-        setAuthError(errorMsg);
+        setAuthError("Estado inesperado ao enviar autorização.");
         setUpdateExecuting(false);
       }
     } catch {
@@ -219,7 +226,10 @@ function UpdatesDoDia() {
               <p className="text-[10px] uppercase tracking-[0.28em] text-[color:var(--kaline-faint)]">
                 Autorizar atualização
               </p>
-              <h3 id="authorize-modal-title" className="serif text-xl text-[color:var(--kaline-text)]">
+              <h3
+                id="authorize-modal-title"
+                className="serif text-xl text-[color:var(--kaline-text)]"
+              >
                 {authorizeModal.app.name}
               </h3>
             </div>
@@ -377,7 +387,9 @@ function UpdatesSummary({ refreshTrigger }: { refreshTrigger: number }) {
         <p className="mt-2 text-xs font-mono text-emerald-400 font-medium uppercase">
           Ação Controlada
         </p>
-        <p className="mt-1 text-[10px] text-[color:var(--kaline-faint)]">Senha efêmera por operação</p>
+        <p className="mt-1 text-[10px] text-[color:var(--kaline-faint)]">
+          Senha efêmera por operação
+        </p>
       </div>
 
       <div className="p-4 rounded border border-[color:var(--kaline-border-copper)] bg-[#121212]">
@@ -472,9 +484,7 @@ function StationUpdateCard({
               <Row
                 k="Atualizações"
                 v={`${updatesData.totalUpdates} ${
-                  updatesData.securityUpdates
-                    ? `(${updatesData.securityUpdates} de segurança)`
-                    : ""
+                  updatesData.securityUpdates ? `(${updatesData.securityUpdates} de segurança)` : ""
                 }`}
               />
               {updatesData.rebootRequired && (
@@ -526,7 +536,11 @@ function StationUpdateCard({
                 onClick={() => setShowAppsList(!showAppsList)}
                 className="mt-1 text-[11px] font-medium text-emerald-400 hover:underline"
               >
-                [ {showAppsList ? "Ocultar aplicativos" : `Ver aplicativos (${appsData.applications.length})`} ]
+                [{" "}
+                {showAppsList
+                  ? "Ocultar aplicativos"
+                  : `Ver aplicativos (${appsData.applications.length})`}{" "}
+                ]
               </button>
 
               {showAppsList && (
@@ -560,21 +574,27 @@ function StationUpdateCard({
                         </div>
                         <p className="text-[11px] text-[color:var(--kaline-muted)] mt-1">
                           Instalada: {app.installedVersion || "—"}
-                          {app.availableVersion && app.availableVersion !== app.installedVersion && (
-                            <span> → Disponível: <span className="text-amber-400">{app.availableVersion}</span></span>
-                          )}
+                          {app.availableVersion &&
+                            app.availableVersion !== app.installedVersion && (
+                              <span>
+                                {" "}
+                                → Disponível:{" "}
+                                <span className="text-amber-400">{app.availableVersion}</span>
+                              </span>
+                            )}
                         </p>
                       </div>
 
-                      {app.updateStatus === "update_available" && app.updateCapability === "controlled" && (
-                        <button
-                          type="button"
-                          onClick={() => onStartUpdateApp(app)}
-                          className="px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider bg-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper-hover)] text-white shadow-sm transition-colors self-start sm:self-center"
-                        >
-                          Atualizar
-                        </button>
-                      )}
+                      {app.updateStatus === "update_available" &&
+                        app.updateCapability === "controlled" && (
+                          <button
+                            type="button"
+                            onClick={() => onStartUpdateApp(app)}
+                            className="px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider bg-[color:var(--kaline-copper)] hover:bg-[color:var(--kaline-copper-hover)] text-white shadow-sm transition-colors self-start sm:self-center"
+                          >
+                            Atualizar
+                          </button>
+                        )}
                     </div>
                   ))}
                 </div>

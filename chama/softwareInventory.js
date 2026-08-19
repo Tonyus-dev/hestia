@@ -1,5 +1,9 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { existsSync as existsSyncDefault, readFileSync as readFileSyncDefault, readdirSync as readdirSyncDefault } from "node:fs";
+import {
+  existsSync as existsSyncDefault,
+  readFileSync as readFileSyncDefault,
+  readdirSync as readdirSyncDefault,
+} from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -14,11 +18,7 @@ export function resolveAppsTimeoutMs(
   fallback = DEFAULT_STATION_APPS_TIMEOUT_MS,
 ) {
   const n = Number(raw);
-  if (
-    !Number.isInteger(n) ||
-    n < MIN_STATION_APPS_TIMEOUT_MS ||
-    n > MAX_STATION_APPS_TIMEOUT_MS
-  ) {
+  if (!Number.isInteger(n) || n < MIN_STATION_APPS_TIMEOUT_MS || n > MAX_STATION_APPS_TIMEOUT_MS) {
     return fallback;
   }
   return n;
@@ -31,9 +31,7 @@ export function resolveAppsTimeoutMs(
 export function cleanDesktopExec(rawExec) {
   if (typeof rawExec !== "string" || !rawExec.trim()) return "";
   // Strip field codes %f, %F, %u, %U, %d, %D, %n, %N, %i, %c, %k, %v, %m
-  const cleaned = rawExec
-    .replace(/%[fFuUdDnNiIckvm]/g, "")
-    .trim();
+  const cleaned = rawExec.replace(/%[fFuUdDnNiIckvm]/g, "").trim();
   if (!cleaned) return "";
 
   // Split into arguments safely respecting quotes to get the executable
@@ -84,7 +82,12 @@ export function parseDesktopFile(content, filePath = "") {
     if (key === "Comment" && !comment) comment = value;
     if (key === "NoDisplay") noDisplay = value.toLowerCase() === "true";
     if (key === "Categories" && categories.length === 0) {
-      categories.push(...value.split(";").map((c) => c.trim()).filter(Boolean));
+      categories.push(
+        ...value
+          .split(";")
+          .map((c) => c.trim())
+          .filter(Boolean),
+      );
     }
   }
 
@@ -241,9 +244,13 @@ export async function getFlatpakApps(options = {}) {
   const execTimeoutMs = options.timeoutMs || DEFAULT_STATION_APPS_TIMEOUT_MS;
 
   try {
-    const { stdout } = await runExecFile("flatpak", ["list", "--app", "--columns=application,name,version,origin"], {
-      timeout: execTimeoutMs,
-    });
+    const { stdout } = await runExecFile(
+      "flatpak",
+      ["list", "--app", "--columns=application,name,version,origin"],
+      {
+        timeout: execTimeoutMs,
+      },
+    );
     if (!stdout || !stdout.trim()) return [];
 
     const apps = [];
@@ -592,7 +599,9 @@ export async function updateStationApplication(appId, options = {}) {
             err.code = "AUTHORIZATION_FAILED";
             reject(err);
           } else {
-            reject(new Error(stderr.trim() || stdout.trim() || `Processo finalizou com código ${code}`));
+            reject(
+              new Error(stderr.trim() || stdout.trim() || `Processo finalizou com código ${code}`),
+            );
           }
         }
       });
@@ -608,18 +617,40 @@ export async function updateStationApplication(appId, options = {}) {
   try {
     if (app.source === "apt") {
       if (!app.packageId || typeof app.packageId !== "string") {
-        return { ok: false, code: "INVALID_PACKAGE_ID", error: "PackageId inválido para o app.", checkedAt: now };
+        return {
+          ok: false,
+          code: "INVALID_PACKAGE_ID",
+          error: "PackageId inválido para o app.",
+          checkedAt: now,
+        };
       }
       // Execute whitelisted apt-get install command ONLY on the discovered packageId
       await executeCommand("apt-get", ["install", "-y", "--only-upgrade", app.packageId]);
     } else if (app.source === "flatpak") {
-      if (!app.packageId) return { ok: false, code: "INVALID_PACKAGE_ID", error: "AppId flatpak inválido.", checkedAt: now };
+      if (!app.packageId)
+        return {
+          ok: false,
+          code: "INVALID_PACKAGE_ID",
+          error: "AppId flatpak inválido.",
+          checkedAt: now,
+        };
       await executeCommand("flatpak", ["update", "-y", app.packageId]);
     } else if (app.source === "snap") {
-      if (!app.packageId) return { ok: false, code: "INVALID_PACKAGE_ID", error: "SnapName inválido.", checkedAt: now };
+      if (!app.packageId)
+        return {
+          ok: false,
+          code: "INVALID_PACKAGE_ID",
+          error: "SnapName inválido.",
+          checkedAt: now,
+        };
       await executeCommand("snap", ["refresh", app.packageId]);
     } else {
-      return { ok: false, code: "UNSUPPORTED_PROVIDER", error: "Provider não suportado para atualização.", checkedAt: now };
+      return {
+        ok: false,
+        code: "UNSUPPORTED_PROVIDER",
+        error: "Provider não suportado para atualização.",
+        checkedAt: now,
+      };
     }
   } catch (err) {
     if (err?.code === "AUTHORIZATION_FAILED") {
@@ -632,7 +663,10 @@ export async function updateStationApplication(appId, options = {}) {
     }
 
     // Ensure secrets are never leaked in error messages
-    const safeErrorMessage = String(err.message || "").replace(new RegExp(sudoPassword || "____", "g"), "***");
+    const safeErrorMessage = String(err.message || "").replace(
+      new RegExp(sudoPassword || "____", "g"),
+      "***",
+    );
 
     return {
       ok: false,

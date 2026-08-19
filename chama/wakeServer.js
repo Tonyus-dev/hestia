@@ -46,7 +46,13 @@ export async function sendWakeOnLanPacket({
   try {
     const cleanMac = macAddress.replace(/[:-]/g, "").trim();
     const formattedMac = cleanMac.match(/.{1,2}/g)?.join(":") || macAddress;
-    await execFileAsync("wakeonlan", ["-i", broadcastAddress, "-p", String(port), formattedMac]).catch(() => {});
+    await execFileAsync("wakeonlan", [
+      "-i",
+      broadcastAddress,
+      "-p",
+      String(port),
+      formattedMac,
+    ]).catch(() => {});
     await execFileAsync("wakeonlan", [formattedMac]).catch(() => {});
   } catch {
     // Utilitário CLI opcional
