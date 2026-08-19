@@ -98,9 +98,67 @@ export async function checkPublicRoute(urlStr, options = {}) {
 }
 
 export async function getStationTunnelStatus(options = {}) {
-  const metricsUrl = options.metricsUrl || "http://127.0.0.1:20242/metrics";
-  const publicRouteUrl = options.publicRouteUrl || process.env.HESTIA_PUBLIC_HEALTH_URL || "";
-  const tunnelName = options.tunnelName || process.env.HESTIA_TUNNEL_NAME || "cloudflared";
+  const env = options.env || process.env;
+  const stationId = options.stationId || env.HESTIA_STATION_ID || "tvbox";
+
+  // Cloudflare Tunnel só existe por padrão na TV Box (hestia-kaline-box) e no MAX (kallistis-max).
+  const isTunnelStation =
+    stationId === "tvbox" ||
+    stationId === "max" ||
+    Boolean(options.tunnelName) ||
+    Boolean(env.HESTIA_STATION_TUNNEL_NAME) ||
+    Boolean(options.metricsUrl) ||
+    Boolean(env.HESTIA_STATION_TUNNEL_METRICS_URL);
+
+  if (!isTunnelStation) {
+    const now = new Date().toISOString();
+    return {
+      ok: true,
+      schemaVersion: 1,
+      status: "unsupported",
+      checkedAt: now,
+      tunnel: {
+        name: "",
+        connected: false,
+        haConnections: 0,
+        protocol: "unknown",
+        edgeColo: null,
+      },
+      publicRoute: {
+        hostname: null,
+        status: "not_configured",
+        httpStatus: null,
+        latencyMs: null,
+        checkedAt: now,
+      },
+    };
+  }
+
+  const defaultTunnelName =
+    stationId === "tvbox"
+      ? "hestia-kaline-box"
+      : stationId === "max"
+        ? "kallistis-max"
+        : "cloudflared";
+  const defaultPublicUrl =
+    stationId === "tvbox"
+      ? "https://hestia.nomosludens.ia.br/api/health"
+      : stationId === "max"
+        ? "https://cauldron.nomosludens.ia.br/health"
+        : "";
+
+  const metricsUrl =
+    options.metricsUrl || env.HESTIA_STATION_TUNNEL_METRICS_URL || "http://127.0.0.1:20242/metrics";
+  const publicRouteUrl =
+    options.publicRouteUrl ||
+    env.HESTIA_PUBLIC_HEALTH_URL ||
+    env.HESTIA_STATION_PUBLIC_HEALTH_URL ||
+    defaultPublicUrl;
+  const tunnelName =
+    options.tunnelName ||
+    env.HESTIA_STATION_TUNNEL_NAME ||
+    env.HESTIA_TUNNEL_NAME ||
+    defaultTunnelName;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const now = new Date().toISOString();
 
@@ -123,7 +181,9 @@ export async function getStationTunnelStatus(options = {}) {
   let status = "ok";
   if (!metricsAvailable && publicRoute.status === "not_configured") {
     status = "unsupported";
-  } else if (!connectorInfo.connected || publicRoute.status === "unavailable") {
+  } else if (!connectorInfo.connected || connectorInfo.haConnections === 0) {
+    status = publicRoute.status === "ok" ? "degraded" : "down";
+  } else if (publicRoute.status !== "ok" && publicRoute.status !== "not_configured") {
     status = "degraded";
   } else if (connectorInfo.haConnections > 0 && connectorInfo.haConnections < 4) {
     status = "degraded";
