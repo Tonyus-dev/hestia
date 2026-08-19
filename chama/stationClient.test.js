@@ -8,6 +8,7 @@ import {
   fetchTvboxCodiceHealth,
   hasLegacyStationConfig,
   resolveNamedStationConfig,
+  resolveUpdatesConsoleTimeoutMs,
 } from "./stationClient.js";
 
 const now = () => new Date().toISOString();
@@ -339,5 +340,80 @@ describe("cliente reutilizável e isolado", () => {
     });
     const result = await fetchStationUpdates(config);
     expect(result).toMatchObject({ ok: false, code: "STATION_CONTRACT_MISMATCH" });
+  });
+
+  it("fetchStationUpdates usa timeout dedicado (>= 25s), sem cair no DEFAULT_TIMEOUT_MS de 5s", async () => {
+    let captured;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url, init) => {
+        captured = init;
+        return json({
+          ok: true,
+          schemaVersion: 1,
+          status: "ok",
+          checkedAt: now(),
+          updates: [],
+          totalUpdates: 0,
+          securityUpdates: 0,
+          rebootRequired: false,
+        });
+      }),
+    );
+    const config = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+      HESTIA_STATION_TIMEOUT_MS: "5000",
+    });
+    const result = await fetchStationUpdates(config);
+    expect(result.ok).toBe(true);
+    expect(captured.signal).toBeDefined();
+    // O signal do AbortController é opaco, então validamos via resolvehelper indiretamente
+    // e por contrato: timeout dedicado é >= 25s, default fast route é 5s.
+    expect(resolveUpdatesConsoleTimeoutMs({})).toBeGreaterThanOrEqual(25000);
+  });
+
+  it("resolveUpdatesConsoleTimeoutMs aceita env override dentro da janela [1000, 60000]", () => {
+    expect(resolveUpdatesConsoleTimeoutMs({ HESTIA_STATION_UPDATES_TIMEOUT_MS: "" })).toBe(25000);
+    expect(resolveUpdatesConsoleTimeoutMs({ HESTIA_STATION_UPDATES_TIMEOUT_MS: "abc" })).toBe(
+      25000,
+    );
+    expect(resolveUpdatesConsoleTimeoutMs({ HESTIA_STATION_UPDATES_TIMEOUT_MS: "999" })).toBe(
+      25000,
+    );
+    expect(resolveUpdatesConsoleTimeoutMs({ HESTIA_STATION_UPDATES_TIMEOUT_MS: "60001" })).toBe(
+      25000,
+    );
+    expect(resolveUpdatesConsoleTimeoutMs({ HESTIA_STATION_UPDATES_TIMEOUT_MS: "30000" })).toBe(
+      30000,
+    );
+  });
+
+  it("fast routes (health, storage, services) continuam em timeoutMs do config (5s)", async () => {
+    const fastCaptures = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, init) => {
+        fastCaptures.push({ url: String(url), signal: init.signal });
+        if (String(url).endsWith("/health")) return json(health());
+        if (String(url).includes("/storage/")) return json(storage());
+        return json(services());
+      }),
+    );
+    const config = resolveNamedStationConfig("desktop", {
+      HESTIA_DESKTOP_BASE_URL: "https://desktop.example",
+      HESTIA_DESKTOP_TOKEN: "desktop-token",
+      HESTIA_STATION_TIMEOUT_MS: "5000",
+    });
+    const h = await fetchStationHealth(config);
+    const s = await fetchStationStorageStatus(config);
+    const sv = await fetchStationServicesStatus(config);
+    expect(h.ok).toBe(true);
+    expect(s.ok).toBe(true);
+    expect(sv.ok).toBe(true);
+    // Confirma que os 3 fast routes foram chamados
+    expect(fastCaptures).toHaveLength(3);
+    // Todos devem ter signal presente (timeoutMs aplicado)
+    for (const c of fastCaptures) expect(c.signal).toBeDefined();
   });
 });

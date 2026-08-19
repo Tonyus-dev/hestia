@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getStationUpdates, parseAptUpgradeOutput } from "./updates.js";
+import {
+  DEFAULT_STATION_UPDATES_TIMEOUT_MS,
+  getStationUpdates,
+  parseAptUpgradeOutput,
+  resolveUpdatesTimeoutMs,
+} from "./updates.js";
 
 const APT_FIXTURE = `
 Reading package lists... Done
@@ -90,5 +95,57 @@ describe("getStationUpdates", () => {
     expect(result.status).toBe("error");
     expect(result.status).not.toBe("unsupported");
     expect(result.reason).toBe("APT_EXEC_FAILED");
+  });
+
+  it("usa o timeout dedicado para apt-get (>= 14s reais) em vez do antigo 10s hardcoded", async () => {
+    let captured;
+    const fakeExec = async (_cmd, _args, opts) => {
+      captured = opts;
+      return { stdout: APT_FIXTURE };
+    };
+    const result = await getStationUpdates({ execFileImpl: fakeExec, existsSyncImpl: () => false });
+    expect(result.ok).toBe(true);
+    expect(captured.timeout).toBeGreaterThanOrEqual(14000);
+    expect(captured.timeout).toBeGreaterThan(10000);
+    expect(captured.timeout).toBe(DEFAULT_STATION_UPDATES_TIMEOUT_MS);
+  });
+
+  it("respeita timeoutMs injetado por opção e ignora env quando o option é fornecido", async () => {
+    let captured;
+    const fakeExec = async (_cmd, _args, opts) => {
+      captured = opts;
+      return { stdout: APT_FIXTURE };
+    };
+    const previous = process.env.HESTIA_STATION_UPDATES_TIMEOUT_MS;
+    process.env.HESTIA_STATION_UPDATES_TIMEOUT_MS = "15000";
+    try {
+      const result = await getStationUpdates({
+        execFileImpl: fakeExec,
+        existsSyncImpl: () => false,
+        timeoutMs: 30000,
+      });
+      expect(result.ok).toBe(true);
+      expect(captured.timeout).toBe(30000);
+    } finally {
+      if (previous === undefined) delete process.env.HESTIA_STATION_UPDATES_TIMEOUT_MS;
+      else process.env.HESTIA_STATION_UPDATES_TIMEOUT_MS = previous;
+    }
+  });
+});
+
+describe("resolveUpdatesTimeoutMs", () => {
+  it("usa o default de 20s quando env é vazio ou inválido", () => {
+    expect(resolveUpdatesTimeoutMs("")).toBe(DEFAULT_STATION_UPDATES_TIMEOUT_MS);
+    expect(resolveUpdatesTimeoutMs(undefined)).toBe(DEFAULT_STATION_UPDATES_TIMEOUT_MS);
+    expect(resolveUpdatesTimeoutMs("abc")).toBe(DEFAULT_STATION_UPDATES_TIMEOUT_MS);
+    expect(resolveUpdatesTimeoutMs("0")).toBe(DEFAULT_STATION_UPDATES_TIMEOUT_MS);
+    expect(resolveUpdatesTimeoutMs("999")).toBe(DEFAULT_STATION_UPDATES_TIMEOUT_MS);
+    expect(resolveUpdatesTimeoutMs("60001")).toBe(DEFAULT_STATION_UPDATES_TIMEOUT_MS);
+  });
+
+  it("aceita valores válidos dentro da janela [1000, 60000]", () => {
+    expect(resolveUpdatesTimeoutMs("14000")).toBe(14000);
+    expect(resolveUpdatesTimeoutMs("20000")).toBe(20000);
+    expect(resolveUpdatesTimeoutMs("60000")).toBe(60000);
   });
 });

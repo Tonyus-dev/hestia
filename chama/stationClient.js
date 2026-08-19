@@ -51,6 +51,13 @@ const CODICE_HEALTH_PATH = "/api/station/codice/health";
 const MAX_BODY_BYTES = 64 * 1024;
 const SERVICE = "hestia-station-agent";
 const STORAGE_STATUSES = new Set(["ok", "missing", "unavailable"]);
+// Budget dedicado para /api/station/updates: apt-get -s upgrade medido em
+// ~14s na TV Box (ARMv7, Debian/Armbian). O Station Agent usa 20s internamente;
+// a Console concede 25s para acomodar a latência de rede e margem de segurança.
+// Fast routes (health, storage, services, system, tunnel, codice) permanecem em DEFAULT_TIMEOUT_MS.
+const UPDATES_CONSOLE_TIMEOUT_MS = 25000;
+const UPDATES_CONSOLE_MIN_TIMEOUT_MS = 1000;
+const UPDATES_CONSOLE_MAX_TIMEOUT_MS = 60000;
 const SERVICE_STATUSES = new Set([
   "active",
   "inactive",
@@ -564,7 +571,7 @@ export async function fetchStationHealth(stationConfig) {
   return { ...metadata, station: resource };
 }
 
-async function fetchStationResource(path, validate, cfg) {
+async function fetchStationResource(path, validate, cfg, timeoutMs) {
   if (!cfg || typeof cfg !== "object") throw new TypeError("configuração da Station é obrigatória");
   if (!cfg.configured) return failure("not_configured", STATION_CODES.NOT_CONFIGURED);
   if (!cfg.valid) return failure("misconfigured", cfg.errorCode || STATION_CODES.MISCONFIGURED);
@@ -574,9 +581,11 @@ async function fetchStationResource(path, validate, cfg) {
     return failure("misconfigured", STATION_CODES.MISCONFIGURED);
   }
 
+  const effectiveTimeoutMs =
+    Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : cfg.timeoutMs;
   const started = performance.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
+  const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
   try {
     const res = await fetch(finalUrl, {
       method: "GET",
@@ -671,8 +680,30 @@ export async function fetchStationSystemStatus(stationConfig) {
   return { ...metadata, system: resource };
 }
 
+export function resolveUpdatesConsoleTimeoutMs(
+  env = process.env,
+  fallback = UPDATES_CONSOLE_TIMEOUT_MS,
+) {
+  const raw = env.HESTIA_STATION_UPDATES_TIMEOUT_MS;
+  const n = Number(raw);
+  if (
+    !Number.isInteger(n) ||
+    n < UPDATES_CONSOLE_MIN_TIMEOUT_MS ||
+    n > UPDATES_CONSOLE_MAX_TIMEOUT_MS
+  ) {
+    return fallback;
+  }
+  return n;
+}
+
 export async function fetchStationUpdates(stationConfig) {
-  const result = await fetchStationResource(UPDATES_PATH, validateStationUpdates, stationConfig);
+  const timeoutMs = resolveUpdatesConsoleTimeoutMs();
+  const result = await fetchStationResource(
+    UPDATES_PATH,
+    validateStationUpdates,
+    stationConfig,
+    timeoutMs,
+  );
   if (!result.ok) return result;
   const { resource, ...metadata } = result;
   if (resource?.status === "unsupported" || resource?.status === "error") {
