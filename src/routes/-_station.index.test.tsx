@@ -16,6 +16,7 @@ vi.mock("@/lib/hestia/api", async (original) => {
       stationServices: vi.fn(),
       tvboxCodiceHealth: vi.fn(),
       stationTunnelStatus: vi.fn(),
+      wakeServer: vi.fn(),
     },
   };
 });
@@ -245,5 +246,32 @@ describe("monitoramento visual das sete Stations", () => {
     expect(onDemandMap.baby).toBe(false);
     expect(onDemandMap.mini).toBe(false);
     expect(onDemandMap.note).toBe(false);
+  });
+
+  it("exibe repouso (sob demanda) e botão Acordar servidor quando desktop está offline", async () => {
+    prepare("desktop", "unavailable");
+    vi.mocked(hestiaApi.wakeServer).mockResolvedValue(
+      ok({ ok: true, state: "wake_requested", target: "desktop" }),
+    );
+
+    renderCard("desktop");
+    expect(await screen.findByText("Servidor")).toBeTruthy();
+    expect(await screen.findByText("repouso (sob demanda)")).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: /Servidor/i }));
+
+    const wakeBtn = await screen.findByRole("button", { name: /Acordar servidor/i });
+    expect(wakeBtn).toBeTruthy();
+
+    await userEvent.click(wakeBtn);
+    expect(hestiaApi.wakeServer).toHaveBeenCalled();
+  });
+
+  it("exibe offline para host always_on quando indisponível", async () => {
+    prepare("mini", "unavailable");
+    renderCard("mini");
+    expect(await screen.findByText("Mini")).toBeTruthy();
+    expect(await screen.findByText("offline")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Acordar servidor/i })).toBeNull();
   });
 });
