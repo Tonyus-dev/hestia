@@ -36,7 +36,7 @@ type AuthorizeUpdateModalState = {
   app: ApplicationItem;
 } | null;
 
-function UpdatesDoDia() {
+export function UpdatesDoDia() {
   const [systemModal, setSystemModal] = useState<SelectedSystemPackagesModal>(null);
   const [authorizeModal, setAuthorizeModal] = useState<AuthorizeUpdateModalState>(null);
   const [passwordInput, setPasswordInput] = useState("");
