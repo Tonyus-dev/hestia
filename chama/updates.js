@@ -4,6 +4,25 @@ import { promisify } from "node:util";
 
 const execFileDefault = promisify(execFileCallback);
 
+export const DEFAULT_STATION_UPDATES_TIMEOUT_MS = 20000;
+export const MIN_STATION_UPDATES_TIMEOUT_MS = 1000;
+export const MAX_STATION_UPDATES_TIMEOUT_MS = 60000;
+
+export function resolveUpdatesTimeoutMs(
+  raw = process.env.HESTIA_STATION_UPDATES_TIMEOUT_MS,
+  fallback = DEFAULT_STATION_UPDATES_TIMEOUT_MS,
+) {
+  const n = Number(raw);
+  if (
+    !Number.isInteger(n) ||
+    n < MIN_STATION_UPDATES_TIMEOUT_MS ||
+    n > MAX_STATION_UPDATES_TIMEOUT_MS
+  ) {
+    return fallback;
+  }
+  return n;
+}
+
 export function parseAptUpgradeOutput(text) {
   if (typeof text !== "string" || !text.trim()) return [];
 
@@ -39,11 +58,12 @@ export function parseAptUpgradeOutput(text) {
 export async function getStationUpdates(options = {}) {
   const runExecFile = options.execFileImpl || execFileDefault;
   const checkExists = options.existsSyncImpl || existsSyncDefault;
+  const execTimeoutMs = resolveUpdatesTimeoutMs(options.timeoutMs);
   const now = new Date().toISOString();
 
   let stdout = "";
   try {
-    const result = await runExecFile("apt-get", ["-s", "upgrade"], { timeout: 10000 });
+    const result = await runExecFile("apt-get", ["-s", "upgrade"], { timeout: execTimeoutMs });
     stdout = typeof result === "string" ? result : String(result?.stdout || "");
   } catch (error) {
     if (error?.code === "ENOENT") {
