@@ -1,4 +1,8 @@
 import dgram from "node:dgram";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 function parseMacAddress(macStr) {
   if (typeof macStr !== "string") return null;
@@ -32,6 +36,21 @@ export async function sendWakeOnLanPacket({
   }
 
   const packet = buildMagicPacket(macBytes);
+
+  // Alvos de broadcast (endereço de sub-rede + broadcast global)
+  const targets = new Set([broadcastAddress, "255.255.255.255"]);
+  // Portas padrão para WoL (porta configurada + alternativa 7)
+  const ports = new Set([Number(port) || 9, 7]);
+
+  // Se o utilitário wakeonlan do sistema operacional estiver disponível, executa também
+  try {
+    const cleanMac = macAddress.replace(/[:-]/g, "").trim();
+    const formattedMac = cleanMac.match(/.{1,2}/g)?.join(":") || macAddress;
+    await execFileAsync("wakeonlan", ["-i", broadcastAddress, "-p", String(port), formattedMac]).catch(() => {});
+    await execFileAsync("wakeonlan", [formattedMac]).catch(() => {});
+  } catch {
+    // Utilitário CLI opcional
+  }
 
   return new Promise((resolve) => {
     const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
@@ -73,26 +92,36 @@ export async function sendWakeOnLanPacket({
     socket.bind(() => {
       try {
         socket.setBroadcast(true);
-        socket.send(packet, 0, packet.length, port, broadcastAddress, (err) => {
-          if (!resolved) {
-            resolved = true;
-            cleanup();
-            if (err) {
-              resolve({
-                ok: false,
-                code: "WAKE_FAILED",
-                error: `Falha ao transmitir Magic Packet: ${err.message}`,
-              });
-            } else {
-              resolve({
-                ok: true,
-                target: "desktop",
-                macAddressSent: true,
-                sentAt: new Date().toISOString(),
-              });
-            }
+        let sendCount = 0;
+        let errors = 0;
+        const totalOps = targets.size * ports.size;
+
+        for (const targetIp of targets) {
+          for (const targetPort of ports) {
+            socket.send(packet, 0, packet.length, targetPort, targetIp, (err) => {
+              sendCount += 1;
+              if (err) errors += 1;
+              if (sendCount >= totalOps && !resolved) {
+                resolved = true;
+                cleanup();
+                if (errors >= totalOps) {
+                  resolve({
+                    ok: false,
+                    code: "WAKE_FAILED",
+                    error: "Falha ao transmitir Magic Packet WoL para todos os alvos.",
+                  });
+                } else {
+                  resolve({
+                    ok: true,
+                    target: "desktop",
+                    macAddressSent: true,
+                    sentAt: new Date().toISOString(),
+                  });
+                }
+              }
+            });
           }
-        });
+        }
       } catch (err) {
         if (!resolved) {
           resolved = true;
