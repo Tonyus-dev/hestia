@@ -212,18 +212,6 @@ export type LlmChatResult = {
   checkedAt: string;
 };
 
-export type HermesStatus = {
-  ok: boolean;
-  root: string;
-  folders?: Record<string, boolean>;
-  pending?: number;
-  processed?: number;
-  failed?: number;
-  code?: string;
-  error?: string;
-  checkedAt: string;
-};
-
 export type StationState =
   | "not_configured"
   | "expected_offline"
@@ -324,7 +312,7 @@ export type StationServices = {
   schemaVersion: 1;
   checkedAt: string;
   services: Array<{
-    id: "jellyfin" | "smbd" | "tailscaled" | "hermes" | "telegram-guard";
+    id: "jellyfin" | "smbd" | "tailscaled" | "telegram-guard";
     active: boolean;
     status: "active" | "inactive" | "failed" | "not-installed" | "unavailable" | "unknown";
   }>;
@@ -636,10 +624,7 @@ async function safePost<T>(
 
 export const hestiaApi = {
   health: () => safeFetch<Health>("/api/health"),
-  llmHealth: () => safeFetch<LlmHealth>("/api/llm/health"),
-  llmChat: (message: string, model: string) =>
-    safePost<LlmChatResult>("/api/llm/chat", { message, model, facet: "kaline" }, {}, 90000),
-  hermesStatus: () => safeFetch<HermesStatus>("/api/hermes/status"),
+
   server: () => safeFetch<ServerStatus>("/api/server/status"),
   hardwareStatus: () => safeFetch<HardwareStatus>("/api/hardware/status"),
   hardwareConfig: () => safeFetch<HardwareConfig>("/api/hardware/config"),
@@ -704,13 +689,7 @@ export const hestiaLegacyApi = {
   storageModel: () => safeFetch<StorageModel>("/api/storage/model"),
   storageSources: () => safeFetch<StorageSources>("/api/storage/sources"),
   storageScan: () => safeFetch<StorageScan>("/api/storage/scan"),
-  llmChat: (message: string, model?: string, contextBlock?: string, facet?: string) =>
-    safePost<LlmChatResult>(
-      "/api/llm/chat",
-      { message, model, contextBlock, facet: facet || "kaline" },
-      {},
-      90000,
-    ),
+
   codiceLibrary: () => safeFetch<CodiceLibrary>("/api/codice/library"),
   codiceImport: async (file: File, name: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;

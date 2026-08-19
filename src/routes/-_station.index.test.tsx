@@ -15,6 +15,7 @@ vi.mock("@/lib/hestia/api", async (original) => {
       stationSystem: vi.fn(),
       stationServices: vi.fn(),
       tvboxCodiceHealth: vi.fn(),
+      stationTunnelStatus: vi.fn(),
     },
   };
 });
@@ -89,6 +90,28 @@ function prepare(id: StationId, state: "available" | "unavailable" = "available"
       checkedAt: at,
     }),
   );
+  vi.mocked(hestiaApi.stationTunnelStatus).mockResolvedValue(
+    ok({
+      ok: true,
+      schemaVersion: 1,
+      status: "unsupported",
+      checkedAt: at,
+      tunnel: {
+        name: "",
+        connected: false,
+        haConnections: 0,
+        protocol: "unknown",
+        edgeColo: null,
+      },
+      publicRoute: {
+        hostname: null,
+        status: "not_configured",
+        httpStatus: null,
+        latencyMs: null,
+        checkedAt: at,
+      },
+    }),
+  );
 }
 
 function renderCard(id: StationId) {
@@ -126,13 +149,12 @@ describe("monitoramento visual das sete Stations", () => {
     expect(hestiaApi.tvboxCodiceHealth).not.toHaveBeenCalled();
   });
 
-  it("mantém TV Box e Códice independentes da falha do Servidor", async () => {
+  it("mantém TV Box independente da falha do Servidor sem apresentar Códice", async () => {
     prepare("tvbox");
     renderCard("tvbox");
     expect(await screen.findByText("TV Box")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /TV Box/i }));
-    expect(await screen.findByText("Biblioteca Códice")).toBeTruthy();
-    expect(await screen.findByText("epub, pdf")).toBeTruthy();
+    expect(screen.queryByText("Biblioteca Códice")).toBeNull();
   });
 
   it("Pocket, Baby, Mini e Max não consultam Códice, Organizer nem /KALINE", async () => {
@@ -180,5 +202,36 @@ describe("monitoramento visual das sete Stations", () => {
     await waitFor(() => expect(hestiaApi.stationConnection).toHaveBeenCalledWith("baby"));
     expect(screen.getAllByText("offline").length).toBeGreaterThan(0);
     expect(screen.getAllByText("online").length).toBeGreaterThan(0);
+  });
+
+  it("somente tvbox e max consultam stationTunnelStatus", async () => {
+    prepare("desktop");
+    renderCard("desktop");
+    renderCard("pocket");
+    renderCard("baby");
+    renderCard("mini");
+    renderCard("note");
+    expect(hestiaApi.stationTunnelStatus).not.toHaveBeenCalled();
+
+    renderCard("tvbox");
+    expect(hestiaApi.stationTunnelStatus).toHaveBeenCalledWith("tvbox");
+
+    renderCard("max");
+    expect(hestiaApi.stationTunnelStatus).toHaveBeenCalledWith("max");
+  });
+
+  it("valida papéis reais das 7 Stations", () => {
+    const roles = Object.fromEntries(STATION_UI.map((item) => [item.id, item.role]));
+    expect(roles.desktop).toBe(
+      "/KALINE · backup · processamento · serviços pesados sob demanda · Ash Gate",
+    );
+    expect(roles.tvbox).toBe(
+      "Héstia Console · Ash runtime · executor LAN/WoL · infraestrutura doméstica",
+    );
+    expect(roles.pocket).toBe("ZeroClaw · Khora");
+    expect(roles.baby).toBe("Reserva cloud");
+    expect(roles.mini).toBe("Kódice");
+    expect(roles.max).toBe("Cauldron / Kallistis VTT");
+    expect(roles.note).toBe("Workstation principal de desenvolvimento");
   });
 });

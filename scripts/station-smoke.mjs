@@ -231,7 +231,7 @@ async function main() {
     HESTIA_STATION_PORT: String(pocketPort),
     HESTIA_STATION_TOKEN: pocketToken,
     HESTIA_STATION_CODICE_ENABLED: "0",
-    HESTIA_STATION_SERVICES: "tailscaled,hermes",
+    HESTIA_STATION_SERVICES: "tailscaled,telegram-guard",
     HESTIA_STORAGE_PATH: join(root, "pocket", "root-disk"),
     HESTIA_DATA_DIR: join(root, "pocket", "data"),
   });

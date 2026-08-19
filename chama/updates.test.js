@@ -79,7 +79,7 @@ describe("getStationUpdates", () => {
     expect(result.rebootRequired).toBe(false);
   });
 
-  it("retorna status unsupported com razão APT_EXEC_FAILED em falhas genéricas de execução", async () => {
+  it("retorna status error com razão APT_EXEC_FAILED em falhas genéricas de execução", async () => {
     const fakeExec = async () => {
       const err = new Error("EACCES: permission denied");
       err.code = "EACCES";
@@ -87,7 +87,8 @@ describe("getStationUpdates", () => {
     };
     const result = await getStationUpdates({ execFileImpl: fakeExec });
     expect(result.ok).toBe(false);
-    expect(result.status).toBe("unsupported");
+    expect(result.status).toBe("error");
+    expect(result.status).not.toBe("unsupported");
     expect(result.reason).toBe("APT_EXEC_FAILED");
   });
 });

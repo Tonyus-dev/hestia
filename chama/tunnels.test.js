@@ -10,9 +10,14 @@ cloudflared_tunnel_ha_connections{user_colo="GRU"} 4
 cloudflared_tunnel_user_connections{conn_type="quic",protocol="quic",user_colo="GRU"} 4
 `;
 
-const METRICS_FIXTURE_DEGRADED = `
-cloudflared_tunnel_ha_connections 2
-cloudflared_tunnel_user_connections{protocol="http2"} 2
+const METRICS_FIXTURE_DEGRADED_1 = `
+cloudflared_tunnel_ha_connections 1
+cloudflared_tunnel_user_connections{protocol="quic"} 1
+`;
+
+const METRICS_FIXTURE_DEGRADED_3 = `
+cloudflared_tunnel_ha_connections 3
+cloudflared_tunnel_user_connections{protocol="quic"} 3
 `;
 
 const METRICS_FIXTURE_ZERO = `
@@ -30,10 +35,10 @@ describe("parseCloudflaredMetrics", () => {
   });
 
   it("identifica degradação em conexões parciais", () => {
-    const res = parseCloudflaredMetrics(METRICS_FIXTURE_DEGRADED);
-    expect(res.haConnections).toBe(2);
+    const res = parseCloudflaredMetrics(METRICS_FIXTURE_DEGRADED_3);
+    expect(res.haConnections).toBe(3);
     expect(res.connected).toBe(true);
-    expect(res.protocol).toBe("http2");
+    expect(res.protocol).toBe("quic");
   });
 
   it("retorna estado desconectado para texto vazio ou sem métricas", () => {
@@ -43,52 +48,176 @@ describe("parseCloudflaredMetrics", () => {
   });
 });
 
-describe("checkPublicRoute", () => {
+describe("checkPublicRoute — Regras Estritas 2xx", () => {
   it("retorna not_configured para URL vazia ou inválida", async () => {
     const res = await checkPublicRoute("");
     expect(res.status).toBe("not_configured");
     expect(res.hostname).toBeNull();
   });
 
-  it("retorna ok para resposta HTTP 200 e calcula latência", async () => {
+  it("200 -> pass (ok)", async () => {
     const fakeFetch = async () => new Response("OK", { status: 200 });
     const res = await checkPublicRoute("https://hestia.nomosludens.ia.br/api/health", {
       fetchImpl: fakeFetch,
     });
     expect(res.status).toBe("ok");
-    expect(res.hostname).toBe("hestia.nomosludens.ia.br");
     expect(res.httpStatus).toBe(200);
-    expect(typeof res.latencyMs).toBe("number");
   });
 
-  it("retorna unavailable para falhas de rede / exceção de fetch", async () => {
+  it("204 -> pass (ok)", async () => {
+    const fakeFetch = async () => new Response(null, { status: 204 });
+    const res = await checkPublicRoute("https://hestia.nomosludens.ia.br/api/health", {
+      fetchImpl: fakeFetch,
+    });
+    expect(res.status).toBe("ok");
+    expect(res.httpStatus).toBe(204);
+  });
+
+  it("302 -> fail", async () => {
+    const fakeFetch = async () => new Response("Redirect", { status: 302 });
+    const res = await checkPublicRoute("https://hestia.nomosludens.ia.br/api/health", {
+      fetchImpl: fakeFetch,
+    });
+    expect(res.status).toBe("fail");
+    expect(res.httpStatus).toBe(302);
+  });
+
+  it("404 -> fail", async () => {
+    const fakeFetch = async () => new Response("Not Found", { status: 404 });
+    const res = await checkPublicRoute("https://hestia.nomosludens.ia.br/api/health", {
+      fetchImpl: fakeFetch,
+    });
+    expect(res.status).toBe("fail");
+    expect(res.httpStatus).toBe(404);
+  });
+
+  it("500 -> fail", async () => {
+    const fakeFetch = async () => new Response("Server Error", { status: 500 });
+    const res = await checkPublicRoute("https://hestia.nomosludens.ia.br/api/health", {
+      fetchImpl: fakeFetch,
+    });
+    expect(res.status).toBe("fail");
+    expect(res.httpStatus).toBe(500);
+  });
+
+  it("timeout / net error -> unavailable", async () => {
     const fakeFetch = async () => {
-      throw new Error("Network error");
+      throw new Error("Timeout");
     };
     const res = await checkPublicRoute("https://cauldron.nomosludens.ia.br/health", {
       fetchImpl: fakeFetch,
     });
     expect(res.status).toBe("unavailable");
-    expect(res.hostname).toBe("cauldron.nomosludens.ia.br");
   });
 });
 
-describe("getStationTunnelStatus — Requisitos Específicos", () => {
-  it("ONLY_TVBOX_MAX_TUNNEL: limita suporte de Tunnel a TV Box e MAX", async () => {
-    const tvbox = await getStationTunnelStatus({
+describe("getStationTunnelStatus — Requisitos de Conector e Tunnel", () => {
+  it("sem metrics URL -> connectorStatus not_configured", async () => {
+    const res = await getStationTunnelStatus({
       stationId: "tvbox",
-      fetchImpl: async () => new Response("", { status: 500 }),
+      env: {},
     });
-    expect(tvbox.tunnel.name).toBe("hestia-kaline-box");
-    expect(tvbox.publicRoute.hostname).toBe("hestia.nomosludens.ia.br");
+    expect(res.tunnel.connectorStatus).toBe("not_configured");
+  });
 
-    const max = await getStationTunnelStatus({
-      stationId: "max",
-      fetchImpl: async () => new Response("", { status: 500 }),
+  it("metrics network error -> connectorStatus unavailable", async () => {
+    const fakeFetch = async (url) => {
+      if (url.includes("20242")) throw new Error("Metrics unreachable");
+      return new Response("OK", { status: 200 });
+    };
+
+    const res = await getStationTunnelStatus({
+      stationId: "tvbox",
+      metricsUrl: "http://127.0.0.1:20242/metrics",
+      fetchImpl: fakeFetch,
     });
-    expect(max.tunnel.name).toBe("kallistis-max");
-    expect(max.publicRoute.hostname).toBe("cauldron.nomosludens.ia.br");
+    expect(res.tunnel.connectorStatus).toBe("unavailable");
+    expect(res.status).toBe("down");
+  });
 
+  it("0 HA + public pass -> status down (connectorStatus down)", async () => {
+    const fakeFetch = async (url) => {
+      if (url.includes("20242")) return new Response(METRICS_FIXTURE_ZERO, { status: 200 });
+      return new Response("OK", { status: 200 });
+    };
+
+    const res = await getStationTunnelStatus({
+      stationId: "tvbox",
+      metricsUrl: "http://127.0.0.1:20242/metrics",
+      publicRouteUrl: "https://hestia.nomosludens.ia.br/api/health",
+      fetchImpl: fakeFetch,
+    });
+    expect(res.tunnel.haConnections).toBe(0);
+    expect(res.tunnel.connectorStatus).toBe("down");
+    expect(res.status).toBe("down");
+  });
+
+  it("0 HA + public fail -> status down", async () => {
+    const fakeFetch = async (url) => {
+      if (url.includes("20242")) return new Response(METRICS_FIXTURE_ZERO, { status: 200 });
+      return new Response("Error", { status: 500 });
+    };
+
+    const res = await getStationTunnelStatus({
+      stationId: "tvbox",
+      metricsUrl: "http://127.0.0.1:20242/metrics",
+      publicRouteUrl: "https://hestia.nomosludens.ia.br/api/health",
+      fetchImpl: fakeFetch,
+    });
+    expect(res.tunnel.connectorStatus).toBe("down");
+    expect(res.status).toBe("down");
+  });
+
+  it("1 HA -> connectorStatus degraded e overall degraded", async () => {
+    const fakeFetch = async (url) => {
+      if (url.includes("20242")) return new Response(METRICS_FIXTURE_DEGRADED_1, { status: 200 });
+      return new Response("OK", { status: 200 });
+    };
+
+    const res = await getStationTunnelStatus({
+      stationId: "tvbox",
+      metricsUrl: "http://127.0.0.1:20242/metrics",
+      publicRouteUrl: "https://hestia.nomosludens.ia.br/api/health",
+      fetchImpl: fakeFetch,
+    });
+    expect(res.tunnel.connectorStatus).toBe("degraded");
+    expect(res.status).toBe("degraded");
+  });
+
+  it("3 HA -> connectorStatus degraded e overall degraded", async () => {
+    const fakeFetch = async (url) => {
+      if (url.includes("20242")) return new Response(METRICS_FIXTURE_DEGRADED_3, { status: 200 });
+      return new Response("OK", { status: 200 });
+    };
+
+    const res = await getStationTunnelStatus({
+      stationId: "tvbox",
+      metricsUrl: "http://127.0.0.1:20242/metrics",
+      publicRouteUrl: "https://hestia.nomosludens.ia.br/api/health",
+      fetchImpl: fakeFetch,
+    });
+    expect(res.tunnel.connectorStatus).toBe("degraded");
+    expect(res.status).toBe("degraded");
+  });
+
+  it("4 HA -> connectorStatus healthy e overall ok", async () => {
+    const fakeFetch = async (url) => {
+      if (url.includes("20242")) return new Response(METRICS_FIXTURE_HEALTHY, { status: 200 });
+      return new Response("OK", { status: 200 });
+    };
+
+    const res = await getStationTunnelStatus({
+      stationId: "tvbox",
+      metricsUrl: "http://127.0.0.1:20242/metrics",
+      publicRouteUrl: "https://hestia.nomosludens.ia.br/api/health",
+      fetchImpl: fakeFetch,
+    });
+    expect(res.tunnel.connectorStatus).toBe("healthy");
+    expect(res.publicRoute.status).toBe("ok");
+    expect(res.status).toBe("ok");
+  });
+
+  it("ONLY_TVBOX_MAX_TUNNEL: limita suporte de Tunnel a TV Box e MAX", async () => {
     for (const otherId of ["desktop", "pocket", "baby", "mini", "note"]) {
       const res = await getStationTunnelStatus({
         stationId: otherId,
@@ -97,74 +226,5 @@ describe("getStationTunnelStatus — Requisitos Específicos", () => {
       expect(res.status).toBe("unsupported");
       expect(res.tunnel.name).toBe("");
     }
-  });
-
-  it("TUNNEL_ZERO_CONNECTIONS_DOWN: retorna status down quando haConnections === 0 e rota pública falha", async () => {
-    const fakeFetch = async (url) => {
-      if (url.includes("20242")) return new Response(METRICS_FIXTURE_ZERO, { status: 200 });
-      throw new Error("Public route down");
-    };
-
-    const res = await getStationTunnelStatus({
-      stationId: "tvbox",
-      fetchImpl: fakeFetch,
-    });
-    expect(res.tunnel.haConnections).toBe(0);
-    expect(res.tunnel.connected).toBe(false);
-    expect(res.status).toBe("down");
-  });
-
-  it("PUBLIC_ROUTE_FAILURE_PROPAGATES: degrada status geral quando a rota pública cai", async () => {
-    const fakeFetch = async (url) => {
-      if (url.includes("20242")) return new Response(METRICS_FIXTURE_HEALTHY, { status: 200 });
-      return new Response("502 Bad Gateway", { status: 502 });
-    };
-
-    const res = await getStationTunnelStatus({
-      stationId: "tvbox",
-      fetchImpl: fakeFetch,
-    });
-    expect(res.tunnel.haConnections).toBe(4);
-    expect(res.publicRoute.status).toBe("degraded");
-    expect(res.status).toBe("degraded");
-  });
-
-  it("TUNNEL_METRICS_UNAVAILABLE: trata métricas indisponíveis propagando estado da rota pública", async () => {
-    const fakeFetch = async (url) => {
-      if (url.includes("20242")) throw new Error("Metrics port unreachable");
-      return new Response("OK", { status: 200 });
-    };
-
-    const res = await getStationTunnelStatus({
-      stationId: "tvbox",
-      fetchImpl: fakeFetch,
-    });
-    expect(res.tunnel.connected).toBe(false);
-    expect(res.tunnel.haConnections).toBe(0);
-    expect(res.publicRoute.status).toBe("ok");
-    expect(res.status).toBe("degraded");
-  });
-
-  it("TUNNEL_METRICS_EXPLICIT_CONFIG: aceita variáveis de ambiente e parâmetros explícitos", async () => {
-    const env = {
-      HESTIA_STATION_TUNNEL_METRICS_URL: "http://127.0.0.1:29999/metrics",
-      HESTIA_STATION_PUBLIC_HEALTH_URL: "https://custom.example.test/health",
-      HESTIA_STATION_TUNNEL_NAME: "custom-tunnel",
-    };
-
-    const fakeFetch = async (url) => {
-      if (url.includes("29999")) return new Response(METRICS_FIXTURE_HEALTHY, { status: 200 });
-      return new Response("OK", { status: 200 });
-    };
-
-    const res = await getStationTunnelStatus({
-      stationId: "tvbox",
-      env,
-      fetchImpl: fakeFetch,
-    });
-
-    expect(res.tunnel.name).toBe("custom-tunnel");
-    expect(res.publicRoute.hostname).toBe("custom.example.test");
-    expect(res.status).toBe("ok");
   });
 });

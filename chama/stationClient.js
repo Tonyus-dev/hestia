@@ -59,7 +59,7 @@ const SERVICE_STATUSES = new Set([
   "unavailable",
   "unknown",
 ]);
-const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled", "hermes", "telegram-guard"];
+const ALLOWED_SERVICES = ["jellyfin", "smbd", "tailscaled", "telegram-guard"];
 
 function resolveTimeout(raw = process.env.HESTIA_STATION_TIMEOUT_MS) {
   const n = Number(raw);

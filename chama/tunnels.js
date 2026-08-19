@@ -1,5 +1,15 @@
 import { URL } from "node:url";
 
+function isLoopbackUrl(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    const h = u.hostname;
+    return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
 export function parseCloudflaredMetrics(text) {
   if (typeof text !== "string" || !text.trim()) {
     return { connected: false, haConnections: 0, protocol: "unknown", edgeColo: null };
@@ -76,11 +86,11 @@ export async function checkPublicRoute(urlStr, options = {}) {
     });
 
     const latencyMs = Math.max(0, Math.round(performance.now() - start));
-    const isOk = res.status >= 200 && res.status < 400;
+    const isOk = res.status >= 200 && res.status < 300;
 
     return {
       hostname,
-      status: isOk ? "ok" : "degraded",
+      status: isOk ? "ok" : "fail",
       httpStatus: res.status,
       latencyMs,
       checkedAt: new Date().toISOString(),
@@ -101,7 +111,6 @@ export async function getStationTunnelStatus(options = {}) {
   const env = options.env || process.env;
   const stationId = options.stationId || env.HESTIA_STATION_ID || "tvbox";
 
-  // Cloudflare Tunnel só existe por padrão na TV Box (hestia-kaline-box) e no MAX (kallistis-max).
   const isTunnelStation =
     stationId === "tvbox" ||
     stationId === "max" ||
@@ -123,6 +132,7 @@ export async function getStationTunnelStatus(options = {}) {
         haConnections: 0,
         protocol: "unknown",
         edgeColo: null,
+        connectorStatus: "unsupported",
       },
       publicRoute: {
         hostname: null,
@@ -140,53 +150,74 @@ export async function getStationTunnelStatus(options = {}) {
       : stationId === "max"
         ? "kallistis-max"
         : "cloudflared";
-  const defaultPublicUrl =
-    stationId === "tvbox"
-      ? "https://hestia.nomosludens.ia.br/api/health"
-      : stationId === "max"
-        ? "https://cauldron.nomosludens.ia.br/health"
-        : "";
 
-  const metricsUrl =
-    options.metricsUrl || env.HESTIA_STATION_TUNNEL_METRICS_URL || "http://127.0.0.1:20242/metrics";
+  const metricsUrl = options.metricsUrl || env.HESTIA_STATION_TUNNEL_METRICS_URL || "";
   const publicRouteUrl =
     options.publicRouteUrl ||
-    env.HESTIA_PUBLIC_HEALTH_URL ||
     env.HESTIA_STATION_PUBLIC_HEALTH_URL ||
-    defaultPublicUrl;
+    env.HESTIA_PUBLIC_HEALTH_URL ||
+    "";
+
   const tunnelName =
     options.tunnelName ||
     env.HESTIA_STATION_TUNNEL_NAME ||
     env.HESTIA_TUNNEL_NAME ||
     defaultTunnelName;
+
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const now = new Date().toISOString();
 
+  let connectorStatus = "not_configured";
   let connectorInfo = { connected: false, haConnections: 0, protocol: "unknown", edgeColo: null };
-  let metricsAvailable = false;
 
-  try {
-    const res = await fetchImpl(metricsUrl, { signal: AbortSignal.timeout(3000) });
-    if (res.ok) {
-      const text = await res.text();
-      connectorInfo = parseCloudflaredMetrics(text);
-      metricsAvailable = true;
+  if (metricsUrl && isLoopbackUrl(metricsUrl)) {
+    try {
+      const res = await fetchImpl(metricsUrl, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const text = await res.text();
+        connectorInfo = parseCloudflaredMetrics(text);
+        if (connectorInfo.haConnections === 0) {
+          connectorStatus = "down";
+        } else if (connectorInfo.haConnections < 4) {
+          connectorStatus = "degraded";
+        } else {
+          connectorStatus = "healthy";
+        }
+      } else {
+        connectorStatus = "unavailable";
+      }
+    } catch {
+      connectorStatus = "unavailable";
     }
-  } catch {
-    // Métricas indisponíveis localmente
+  } else if (metricsUrl) {
+    connectorStatus = "not_configured";
   }
 
   const publicRoute = await checkPublicRoute(publicRouteUrl, { fetchImpl, timeoutMs: 5000 });
 
   let status = "ok";
-  if (!metricsAvailable && publicRoute.status === "not_configured") {
-    status = "unsupported";
-  } else if (!connectorInfo.connected || connectorInfo.haConnections === 0) {
-    status = publicRoute.status === "ok" ? "degraded" : "down";
-  } else if (publicRoute.status !== "ok" && publicRoute.status !== "not_configured") {
+  if (connectorStatus === "not_configured" && publicRoute.status === "not_configured") {
+    status = "not_configured";
+  } else if (
+    connectorStatus === "down" ||
+    (connectorStatus !== "not_configured" && !connectorInfo.connected)
+  ) {
+    status = "down";
+  } else if (
+    connectorStatus === "unavailable" ||
+    connectorStatus === "degraded" ||
+    publicRoute.status === "fail" ||
+    publicRoute.status === "unavailable" ||
+    publicRoute.status === "degraded"
+  ) {
     status = "degraded";
-  } else if (connectorInfo.haConnections > 0 && connectorInfo.haConnections < 4) {
-    status = "degraded";
+  } else if (
+    connectorStatus === "healthy" &&
+    (publicRoute.status === "ok" || publicRoute.status === "not_configured")
+  ) {
+    status = "ok";
+  } else if (connectorStatus === "not_configured" && publicRoute.status === "ok") {
+    status = "ok";
   }
 
   return {
@@ -200,6 +231,7 @@ export async function getStationTunnelStatus(options = {}) {
       haConnections: connectorInfo.haConnections,
       protocol: connectorInfo.protocol,
       edgeColo: connectorInfo.edgeColo,
+      connectorStatus,
     },
     publicRoute,
   };

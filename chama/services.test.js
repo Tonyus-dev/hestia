@@ -67,14 +67,14 @@ describe("getServicesStatus", () => {
       "evil.service",
       "jellyfin",
       "tailscaled",
-      "hermes",
+      "smbd",
       "telegram-guard",
     ]);
 
     expect(items.map((item) => item.name)).toEqual([
       "jellyfin",
+      "smbd",
       "tailscaled",
-      "hermes",
       "telegram-guard",
     ]);
     expect(execFile).toHaveBeenCalledTimes(4);

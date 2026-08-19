@@ -34,7 +34,7 @@ export const HESTIA = {
   subtitle: "Console visual da Héstia Console com Chama Local embutida",
   motto: "Héstia é o Console da TV Box. A Chama é o pulso local. Presence consulta. Kaline decide.",
   waiting: "Aguardando Chama Local",
-  readonly: "Modo protegido: leitura por padrão; apenas Hermes mantém escrita local controlada.",
+  readonly: "Modo protegido: leitura por padrão; console somente leitura sem escrita.",
   footer: "Héstia é o Console. Chama pulsa. Console mostra. Presence consulta.",
   defaultHost: "127.0.0.1",
   defaultPort: 4517,

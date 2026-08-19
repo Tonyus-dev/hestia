@@ -23,34 +23,39 @@ export const STATION_UI: Array<{
   role: string;
   canonicalStorage: boolean;
   codice: boolean;
+  tunnelMonitored: boolean;
 }> = [
   {
     id: "desktop",
     title: "Servidor",
-    role: "Host do Console · Docker, SMB, Pi-hole & serviços sob demanda",
+    role: "/KALINE · backup · processamento · serviços pesados sob demanda · Ash Gate",
     canonicalStorage: true,
     codice: false,
+    tunnelMonitored: false,
   },
   {
     id: "tvbox",
     title: "TV Box",
-    role: "Host canônico Héstia · Ash & Códice read-only",
+    role: "Héstia Console · Ash runtime · executor LAN/WoL · infraestrutura doméstica",
     canonicalStorage: true,
-    codice: true,
+    codice: false,
+    tunnelMonitored: true,
   },
   {
     id: "pocket",
     title: "Pocket",
-    role: "ZeroClaw & Khora",
+    role: "ZeroClaw · Khora",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: false,
   },
   {
     id: "baby",
     title: "Baby",
-    role: "Station genérica",
+    role: "Reserva cloud",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: false,
   },
   {
     id: "mini",
@@ -58,20 +63,23 @@ export const STATION_UI: Array<{
     role: "Kódice",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: false,
   },
   {
     id: "max",
     title: "Max",
-    role: "Cauldron, Cauldron DB & WebSocket relay",
+    role: "Cauldron / Kallistis VTT",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: true,
   },
   {
     id: "note",
     title: "Notebook",
-    role: "Workstation & serviços sob demanda",
+    role: "Workstation principal de desenvolvimento",
     canonicalStorage: false,
     codice: false,
+    tunnelMonitored: false,
   },
 ];
 
@@ -163,7 +171,7 @@ function GuardianSummaryCard({
 
   const { activeIncidents, recentRecoveries, wakeRequestedEvent } = computeGuardianSummary(events);
 
-  const stationsKeys = ["desktop", "tvbox", "pocket", "baby", "mini", "max"] as const;
+  const stationsKeys = ["desktop", "tvbox", "pocket", "baby", "mini", "max", "note"] as const;
   const configuredCount = stationsKeys.filter((k) => config[`${k}Configured`]).length;
   const activeStationIncidents = activeIncidents.filter((i) => i.type.startsWith("station"));
   const onlineCount = Math.max(0, configuredCount - activeStationIncidents.length);
@@ -301,12 +309,14 @@ export function StationCard({
   role,
   canonicalStorage,
   codice,
+  tunnelMonitored,
 }: {
   id: StationId;
   title: string;
   role: string;
   canonicalStorage: boolean;
   codice: boolean;
+  tunnelMonitored: boolean;
 }) {
   const connection = useApi(() => hestiaApi.stationConnection(id), [id]);
   const system = useApi(() => hestiaApi.stationSystem(id), [id]);
@@ -321,21 +331,26 @@ export function StationCard({
     codice ? hestiaApi.tvboxCodiceHealth : async () => ({ status: "idle" as const }),
     [codice],
   );
-  const tunnel = useApi(() => hestiaApi.stationTunnelStatus(id), [id]);
+  const tunnel = useApi(
+    tunnelMonitored
+      ? () => hestiaApi.stationTunnelStatus(id)
+      : async () => ({ status: "idle" as const }),
+    [id, tunnelMonitored],
+  );
   const refreshing =
     connection.refreshing ||
     system.refreshing ||
     (canonicalStorage && storage.refreshing) ||
     services.refreshing ||
     (codice && codiceHealth.refreshing) ||
-    tunnel.refreshing;
+    (tunnelMonitored && tunnel.refreshing);
   const retry = () => {
     connection.retry();
     system.retry();
     if (canonicalStorage) storage.retry();
     services.retry();
     if (codice) codiceHealth.retry();
-    tunnel.retry();
+    if (tunnelMonitored) tunnel.retry();
   };
   const connectionState =
     connection.state.status === "ok" ? connection.state.data.state : "loading";

@@ -57,7 +57,7 @@ export async function getStationUpdates(options = {}) {
 
     return {
       ok: false,
-      status: "unsupported",
+      status: "error",
       reason: "APT_EXEC_FAILED",
       checkedAt: now,
     };
