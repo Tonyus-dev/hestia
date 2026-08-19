@@ -17,6 +17,7 @@ vi.mock("@/lib/hestia/api", async (original) => {
       tvboxCodiceHealth: vi.fn(),
       stationTunnelStatus: vi.fn(),
       wakeServer: vi.fn(),
+      sleepServer: vi.fn(),
     },
   };
 });
@@ -273,5 +274,24 @@ describe("monitoramento visual das sete Stations", () => {
     expect(await screen.findByText("Mini")).toBeTruthy();
     expect(await screen.findByText("offline")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Acordar servidor/i })).toBeNull();
+  });
+
+  it("exibe botão Dormir servidor quando desktop está online", async () => {
+    prepare("desktop", "available");
+    vi.mocked(hestiaApi.sleepServer).mockResolvedValue(
+      ok({ ok: true, state: "sleep_requested", target: "desktop" }),
+    );
+
+    renderCard("desktop");
+    expect(await screen.findByText("Servidor")).toBeTruthy();
+
+    const cardToggle = await screen.findByRole("button", { name: /Servidor/i });
+    await userEvent.click(cardToggle);
+
+    const sleepBtn = await screen.findByRole("button", { name: /Dormir servidor/i });
+    expect(sleepBtn).toBeTruthy();
+
+    await userEvent.click(sleepBtn);
+    expect(hestiaApi.sleepServer).toHaveBeenCalled();
   });
 });

@@ -307,6 +307,18 @@ export function createStationAgent(config, providers = {}) {
 
   app.get("/api/station/tunnel/status", async () => readTunnel());
 
+  app.post("/api/station/suspend", async (_request, reply) => {
+    reply.send({ ok: true, state: "suspending", message: "Suspendendo estação" });
+    setImmediate(async () => {
+      try {
+        const { exec } = await import("node:child_process");
+        exec("systemctl suspend", () => {});
+      } catch {
+        // ignore
+      }
+    });
+  });
+
   if (config.codiceEnabled === true) {
     const storageRoot = config.storagePath || "/KALINE";
     const healthHandler = createCodiceHealthHandler(storageRoot);

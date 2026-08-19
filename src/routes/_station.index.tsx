@@ -395,6 +395,23 @@ export function StationCard({
     }
   };
 
+  const handleSleepServer = async () => {
+    setWakeState({ loading: true });
+    const res = await hestiaApi.sleepServer();
+    if (res.status === "ok" && res.data.ok) {
+      setWakeState({ loading: false, message: "Solicitação de repouso enviada!" });
+      retry();
+    } else {
+      const err =
+        res.status === "unavailable"
+          ? res.message
+          : res.status === "ok"
+            ? res.data.error || "Falha ao solicitar repouso"
+            : "Erro de conexão";
+      setWakeState({ loading: false, error: err });
+    }
+  };
+
   return (
     <DataCard title={title} eyebrow={role} status={cardState.status} summary={cardState.summary}>
       <ConnectionRows state={connection.state} />
@@ -446,16 +463,27 @@ export function StationCard({
         </>
       )}
       <Row k="Última atualização" v={latestCheckedAt(connection.state, system.state)} />
-      {id === "desktop" && cardState.status !== "ok" && (
+      {id === "desktop" && (
         <div className="mt-3">
-          <button
-            type="button"
-            onClick={handleWakeServer}
-            disabled={wakeState.loading}
-            className="w-full rounded bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-60 transition-colors"
-          >
-            {wakeState.loading ? "Enviando Magic Packet WoL…" : "Acordar servidor"}
-          </button>
+          {cardState.status !== "ok" ? (
+            <button
+              type="button"
+              onClick={handleWakeServer}
+              disabled={wakeState.loading}
+              className="w-full rounded bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-60 transition-colors"
+            >
+              {wakeState.loading ? "Enviando Magic Packet WoL…" : "Acordar servidor"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSleepServer}
+              disabled={wakeState.loading}
+              className="w-full rounded bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-600/40 px-3 py-2 text-xs font-semibold text-zinc-300 disabled:opacity-60 transition-colors"
+            >
+              {wakeState.loading ? "Enviando comando de repouso…" : "Dormir servidor"}
+            </button>
+          )}
           {wakeState.message && (
             <p className="mt-1.5 text-[11px] text-emerald-400 font-mono">{wakeState.message}</p>
           )}

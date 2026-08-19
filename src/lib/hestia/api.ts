@@ -662,6 +662,11 @@ export const hestiaApi = {
       "/api/actions/wake-server",
       {},
     ),
+  sleepServer: () =>
+    safePost<{ ok: boolean; state?: string; target?: string; message?: string; error?: string }>(
+      "/api/actions/sleep-server",
+      {},
+    ),
   /** Usa a mesma origem do Console quando disponível; em SSR usa fallback local. */
   absoluteUrl: (path: string) => {
     const base = resolveBase() ?? `http://localhost:${CHAMA_PORT}`;

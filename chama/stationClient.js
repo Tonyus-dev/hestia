@@ -776,3 +776,11 @@ export function stationHealthHttpStatus(code) {
     return 503;
   return 502;
 }
+
+export async function fetchStationSuspend(config, options = {}) {
+  return stationRequest(config, {
+    path: "/api/station/suspend",
+    method: "POST",
+    fetchImpl: options.fetchImpl,
+  });
+}

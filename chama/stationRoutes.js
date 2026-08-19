@@ -3,6 +3,7 @@ import {
   fetchStationHealth,
   fetchStationServicesStatus,
   fetchStationStorageStatus,
+  fetchStationSuspend,
   fetchStationSystemStatus,
   fetchStationTunnelStatus,
   fetchStationUpdates,
@@ -101,6 +102,36 @@ export function registerStationRoutes(app, env = process.env, options = {}) {
       target: "desktop",
       message: "Despertar solicitado para o Servidor",
       sentAt: result.sentAt,
+    };
+  });
+
+  app.post("/api/actions/sleep-server", async (_request, _reply) => {
+    const desktopConfig = resolveNamedStationConfig("desktop", env);
+    const result = await fetchStationSuspend(desktopConfig);
+    const dataDir = options.dataDir || process.env.HESTIA_DATA_DIR;
+    if (dataDir) {
+      try {
+        await appendEvent(
+          {
+            type: "sleep.requested",
+            data: {
+              target: "desktop",
+              sentAt: new Date().toISOString(),
+            },
+          },
+          dataDir,
+        );
+      } catch {
+        // ignora se dataDir não estiver gravável no teste
+      }
+    }
+
+    return {
+      ok: true,
+      state: "sleep_requested",
+      target: "desktop",
+      message: "Solicitação de repouso enviada para o Servidor",
+      result,
     };
   });
 }
