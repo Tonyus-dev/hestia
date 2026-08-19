@@ -701,7 +701,15 @@ export const hestiaApi = {
   stationUpdates: (id: StationId) => safeFetch<StationUpdates>(`/api/stations/${id}/updates`),
   stationApps: (id: StationId) => safeFetch<StationAppsResult>(`/api/stations/${id}/apps`),
   updateStationApp: (id: StationId, appId: string, secret?: string) =>
-    safePost<{ ok: boolean; status?: string; appId?: string; name?: string; installedVersion?: string; error?: string; code?: string }>(
+    safePost<{
+      ok: boolean;
+      status?: string;
+      appId?: string;
+      name?: string;
+      installedVersion?: string;
+      error?: string;
+      code?: string;
+    }>(
       `/api/stations/${id}/apps/${encodeURIComponent(appId)}/update`,
       secret ? { authorization: { type: "sudo-password", secret } } : {},
     ),

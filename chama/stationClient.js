@@ -572,7 +572,14 @@ export async function fetchStationHealth(stationConfig) {
   return { ...metadata, station: resource };
 }
 
-async function fetchStationResource(path, validate, cfg, timeoutMs, method = "GET", bodyPayload = null) {
+async function fetchStationResource(
+  path,
+  validate,
+  cfg,
+  timeoutMs,
+  method = "GET",
+  bodyPayload = null,
+) {
   if (!cfg || typeof cfg !== "object") throw new TypeError("configuração da Station é obrigatória");
   if (!cfg.configured) return failure("not_configured", STATION_CODES.NOT_CONFIGURED);
   if (!cfg.valid) return failure("misconfigured", cfg.errorCode || STATION_CODES.MISCONFIGURED);
@@ -743,7 +750,8 @@ function validateStationApps(body) {
       : {
           totalInstalled: body.applications.length,
           upToDate: body.applications.filter((a) => a.updateStatus === "up_to_date").length,
-          updateAvailable: body.applications.filter((a) => a.updateStatus === "update_available").length,
+          updateAvailable: body.applications.filter((a) => a.updateStatus === "update_available")
+            .length,
           unknownVerification: body.applications.filter((a) => a.updateStatus === "unknown").length,
         },
     providers: isPlainObject(body.providers) ? body.providers : {},
